@@ -6,7 +6,9 @@
     "mock": "python scripts/mock_data_generator.py",
     "build": "node frontend/build.cjs",
     "serve": "npx serve frontend/dist -l 5173",
-    "demo": "npm run mock && npm run build && npm run serve"
+    "agent": "cd agent && python server.py",
+    "demo": "npm run mock && npm run build && npm run serve",
+    "demo:full": "npm run mock && npm run build && echo 'Start agent: cd agent && python server.py' && npm run serve"
   },
   "dependencies": {
     "xlsx": "^0.18.5"

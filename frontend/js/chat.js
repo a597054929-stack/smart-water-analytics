@@ -1,7 +1,7 @@
 // === AI Assistant Chat Module ===
 // Optional: connect to a LangChain / AI backend for natural language queries
 // Set AI_API_URL to your backend endpoint, or leave empty to disable
-const AI_API_URL = "";  // e.g. "http://localhost:8000/api/chat"
+const AI_API_URL = "http://localhost:8000/api/chat";
 let _chatInited = false;
 
 function toggleChat() {

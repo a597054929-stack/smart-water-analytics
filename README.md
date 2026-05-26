@@ -61,27 +61,32 @@ A full-stack data analytics platform for monitoring and predicting urban water c
 
 ## Quick Start
 
-### 1. Generate Demo Data
-```bash
-python scripts/mock_data_generator.py
-```
-
-### 2. Build Dashboard
+### Dashboard Only (no AI)
 ```bash
 npm install
-npm run build
+npm run demo        # generates mock data + builds + serves at localhost:5173
 ```
 
-### 3. Preview
+### Full Demo (Dashboard + AI Agent)
 ```bash
-npm run serve
-# Opens at http://localhost:5173
-```
-
-### One-Command Demo
-```bash
+# Terminal 1: Generate data and build dashboard
+npm install
 npm run demo
+
+# Terminal 2: Start AI Agent server
+pip install -r requirements.txt
+cd agent
+export LLM_API_KEY="your-api-key"    # or set in ~/.openclaw/openclaw.json
+python server.py                      # runs at localhost:8000
+
+# Open http://localhost:5173 and click the chat icon
 ```
+
+### Supported LLM Providers
+Set `LLM_PROVIDER` env var to switch:
+- `openai` (default) — needs `LLM_API_KEY`
+- `deepseek` — needs `LLM_API_KEY` or openclaw.json config
+- `mimo` — needs openclaw.json config
 
 ## Project Structure
 

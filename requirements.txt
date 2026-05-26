@@ -1,0 +1,20 @@
+# Smart Water Analytics - AI Agent Dependencies
+# Install: pip install -r requirements.txt
+
+# LangChain core
+langchain>=0.3.0
+langchain-openai>=0.3.0
+langgraph>=0.4.0
+
+# Web server
+fastapi>=0.115.0
+uvicorn>=0.34.0
+pydantic>=2.0.0
+
+# ML (for prediction scripts)
+scikit-learn>=1.5.0
+numpy>=1.26.0
+openpyxl>=3.1.0
+
+# Data processing
+xlsx>=0.18.5
