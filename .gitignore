@@ -3,3 +3,4 @@ backend/data/output/
 frontend/dist/data/
 *.log
 .DS_Store
+*.bat
