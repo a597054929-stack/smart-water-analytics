@@ -71,6 +71,14 @@ def get_llm_config():
             "model": model or default_model,
         }
 
+    if provider == "anthropic":
+        return {
+            "provider": "anthropic",
+            "api_key": api_key or "",
+            "base_url": base_url or "",
+            "model": model or "claude-sonnet-4-6",
+        }
+
     raise ValueError(
         f"No API key found for provider '{provider}'. "
         f"Set LLM_API_KEY env var or configure ~/.openclaw/openclaw.json"

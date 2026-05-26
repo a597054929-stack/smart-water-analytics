@@ -13,11 +13,36 @@ Interview points:
 import sys
 sys.stdout.reconfigure(encoding="utf-8")
 
-from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
 
 from config import get_llm_config
 from agent_tools import ALL_TOOLS
+
+
+def _create_llm(cfg):
+    """Create LLM instance based on provider type."""
+    provider = cfg.get("provider", "openai")
+
+    if provider == "anthropic":
+        from langchain_anthropic import ChatAnthropic
+        kwargs = {
+            "model": cfg["model"],
+            "api_key": cfg["api_key"],
+            "temperature": 0,
+            "max_tokens": 2048,
+        }
+        if cfg.get("base_url"):
+            kwargs["base_url"] = cfg["base_url"]
+        return ChatAnthropic(**kwargs)
+    else:
+        from langchain_openai import ChatOpenAI
+        return ChatOpenAI(
+            model=cfg["model"],
+            api_key=cfg["api_key"],
+            base_url=cfg.get("base_url"),
+            temperature=0,
+            max_tokens=2048,
+        )
 
 
 SYSTEM_PROMPT = """You are a Smart Water Analytics AI Assistant. You help users analyze water consumption data using the available tools.
@@ -29,6 +54,9 @@ Your capabilities:
 4. Retrieve daily/weekly consumption data and comparisons
 5. Analyze Non-Revenue Water (NRW) via main-sub meter differences
 6. Generate ECharts visualizations (trends, distributions)
+7. Compare water consumption between two months
+8. Deep-dive analysis of specific meter anomalies with root cause hypotheses
+9. Auto-generate summary reports combining consumption, anomalies, and rankings
 
 Rules:
 - Always use tools to get actual data. Never fabricate numbers.
@@ -37,20 +65,15 @@ Rules:
 - For anomaly data: anomalyScore ranges 0-1, where 0.7+ needs attention.
 - If asked to visualize, use the generate_chart tool and explain what the chart shows.
 - If a tool returns no results, say so clearly and suggest alternative queries.
+- For reports, combine insights from multiple tools into a coherent summary.
+- For anomaly investigation, use analyze_anomaly to provide root cause hypotheses.
 """
 
 
 def create_water_agent():
     """Create the water analytics agent."""
     cfg = get_llm_config()
-
-    llm = ChatOpenAI(
-        model=cfg["model"],
-        api_key=cfg["api_key"],
-        base_url=cfg.get("base_url"),
-        temperature=0,
-        max_tokens=2048,
-    )
+    llm = _create_llm(cfg)
 
     agent = create_react_agent(
         model=llm,

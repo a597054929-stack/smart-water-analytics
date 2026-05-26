@@ -59,6 +59,10 @@
     <span class="chat-popup-close" onclick="toggleChat()">✕</span>
   </div>
   <div class="chat-popup-msgs" id="chatMsgs"></div>
+  <div style="padding:4px 12px;border-top:1px solid var(--border);display:flex;gap:6px;align-items:center">
+    <button id="chatModeBtn" onclick="toggleChatMode()" style="background:var(--surface2);border:1px solid var(--border);color:var(--accent);padding:3px 8px;border-radius:6px;font-size:11px;cursor:pointer">Agent</button>
+    <span style="color:var(--muted);font-size:10px">Toggle mode</span>
+  </div>
   <div class="chat-popup-bar">
     <input type="text" id="chatInput" placeholder="輸入問題..." onkeydown="if(event.key==='Enter')sendChat()">
     <button onclick="sendChat()">發送</button>
