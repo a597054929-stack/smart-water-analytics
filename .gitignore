@@ -4,3 +4,4 @@ frontend/dist/data/
 *.log
 .DS_Store
 *.bat
+__pycache__/
