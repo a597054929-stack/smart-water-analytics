@@ -1,0 +1,1925 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>澳門用水分析</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0a0a0f;
+  --surface:#13131a;
+  --surface2:#1a1a24;
+  --border:#252532;
+  --text:#e4e4ed;
+  --muted:#6b6b80;
+  --accent:#818cf8;
+  --accent2:#a78bfa;
+  --green:#34d399;
+  --red:#f87171;
+  --orange:#fb923c;
+  --yellow:#facc15;
+  --pink:#f472b6;
+  --ember:#fb923c;
+}
+body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;line-height:1.6;letter-spacing:-0.01em}
+.hdr{background:var(--surface);padding:14px 20px;position:sticky;top:0;z-index:10;border-bottom:1px solid var(--border);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+.hdr h1{font-size:18px;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;text-align:center;margin-bottom:10px;font-weight:700;letter-spacing:-0.02em}
+.tabs{display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.tab{background:var(--surface2);border:1px solid var(--border);color:var(--muted);padding:7px 14px;border-radius:10px;cursor:pointer;font-size:12px;white-space:nowrap;flex-shrink:0;transition:all .2s;font-weight:500}
+.tab:hover{color:var(--text);border-color:#3a3a50}
+.tab.active{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border-color:transparent;font-weight:600;box-shadow:0 2px 12px rgba(129,140,248,.25)}
+.main{max-width:1100px;margin:0 auto;padding:16px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px;margin-bottom:16px;transition:border-color .2s}
+.card:hover{border-color:#303048}
+.card h2{font-size:15px;color:var(--text);margin:0 0 14px 0;font-weight:600;letter-spacing:-0.01em;display:flex;align-items:center;gap:8px}
+.card h2::before{content:'';width:4px;height:18px;background:linear-gradient(180deg,var(--accent),var(--accent2));border-radius:2px}
+.hint{font-size:11px;color:var(--muted);font-weight:normal}
+.hidden{display:none}
+.dc{display:flex;flex-direction:column;gap:10px}
+.di{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:10px 14px;border-radius:10px;font-size:14px;width:100%;transition:border-color .2s}
+.di:focus{border-color:var(--accent);outline:none;box-shadow:0 0 0 3px rgba(129,140,248,.15)}
+.di::-webkit-calendar-picker-indicator{filter:invert(0.7)}
+.dn{display:flex;align-items:center;justify-content:space-between}
+.nb{background:var(--surface2);border:1px solid var(--border);color:var(--muted);padding:8px 18px;border-radius:10px;cursor:pointer;font-size:13px;transition:all .2s;font-weight:500}
+.nb:hover{color:var(--text);border-color:#3a3a50;background:#212132}
+.nb:active{transform:scale(.97)}.nb:disabled{opacity:.3;cursor:default}
+.dd{color:var(--muted);font-size:13px}.qd{display:flex;gap:8px}.qb{flex:1;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:none;padding:10px;border-radius:10px;cursor:pointer;font-size:13px;font-weight:600;transition:all .2s;box-shadow:0 2px 12px rgba(129,140,248,.2)}
+.qb:hover{transform:translateY(-1px);box-shadow:0 4px 16px rgba(129,140,248,.35)}
+.qb:active{transform:scale(.97)}
+.dg{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.dc2{background:var(--surface2);border-radius:12px;padding:16px;cursor:pointer;transition:all .2s;border:1px solid var(--border)}
+.dc2:hover{border-color:#3a3a50;transform:translateY(-1px);box-shadow:0 4px 20px rgba(0,0,0,.3)}
+.dc2:active{transform:scale(.97)}
+.dn2{font-size:12px;font-weight:600;color:var(--text);margin-bottom:6px;letter-spacing:-0.01em}
+.dv{font-size:22px;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:6px}
+.ds{font-size:11px;color:var(--muted)}.ds span{display:block;margin:3px 0}
+.chart{width:100%;height:400px}
+table{width:100%;border-collapse:collapse;font-size:12px}th{color:var(--muted);text-align:left;padding:8px 6px;border-bottom:1px solid var(--border);font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.05em}
+td{color:var(--text);padding:8px 6px;border-bottom:1px solid var(--border)}.num{text-align:right;font-variant-numeric:tabular-nums}
+.contract{font-weight:600;color:var(--yellow)}.tag{font-size:10px;padding:2px 8px;border-radius:5px;color:#fff;font-weight:500}
+.ptag{font-size:10px;padding:2px 8px;border-radius:5px;background:var(--surface2);color:var(--muted)}.ptag.res{background:rgba(52,211,153,.12);color:var(--green)}
+.warn{background:rgba(248,113,113,.08)}.neg{color:var(--red)}.up{color:var(--green)}.down{color:var(--red)}
+.back{color:var(--accent);cursor:pointer;font-size:14px;transition:opacity .2s}.back:hover{opacity:.8}
+.sr{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.si{background:var(--surface2);border-radius:12px;padding:18px;text-align:center;border:1px solid var(--border)}
+.sl{font-size:11px;color:var(--muted);margin-bottom:6px;font-weight:500;text-transform:uppercase;letter-spacing:0.05em}
+.sv{font-size:22px;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.ss{font-size:11px;color:var(--muted);margin-top:6px}.si.res .sv{color:var(--green)}.si.nonres .sv{color:var(--pink)}
+.cg{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;font-size:10px}
+.cc{aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;transition:all .2s}
+.cc:hover{outline:2px solid var(--accent);outline-offset:-2px;transform:scale(1.04);z-index:2}
+.cdt{font-size:9px;color:var(--muted);line-height:1;margin-top:2px;font-weight:400;max-width:90%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ch{color:var(--muted);text-align:center;font-size:10px;padding:6px 0;font-weight:600;text-transform:uppercase;letter-spacing:0.05em}
+.cc:hover{outline:2px solid var(--accent)}.ch{color:var(--muted);text-align:center;font-size:10px;padding:4px 0}
+.si2{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:10px 14px;border-radius:10px;font-size:14px;width:100%;margin-bottom:14px;transition:border-color .2s}
+.si2:focus{border-color:var(--accent);outline:none;box-shadow:0 0 0 3px rgba(129,140,248,.15)}
+.ms{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+.mb{background:var(--surface2);border:1px solid var(--border);color:var(--muted);padding:7px 16px;border-radius:10px;cursor:pointer;font-size:12px;transition:all .2s;font-weight:500}
+.mb:hover{color:var(--text);border-color:#3a3a50}
+.mb.active{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border-color:transparent;font-weight:600;box-shadow:0 2px 12px rgba(129,140,248,.25)}
+
+/* 敏感資料遮罩 */
+.masked{filter:blur(6px);user-select:none;cursor:pointer;transition:filter 0.3s}
+.masked:hover{filter:blur(4px)}
+.masked.revealed{filter:none;cursor:default}
+.pwd-bar{background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:12px 18px;margin-bottom:16px;display:flex;align-items:center;gap:12px}
+.pwd-bar input{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:8px 14px;border-radius:8px;font-size:13px;width:160px;transition:border-color .2s}
+.pwd-bar input:focus{border-color:var(--accent);outline:none}
+.pwd-bar button{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:none;padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;transition:all .2s}
+.pwd-bar button:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(129,140,248,.3)}
+.pwd-bar .status{font-size:12px;color:var(--muted)}
+.pwd-bar .status.unlocked{color:var(--green)}
+
+/* overlay彈窗 */
+.ov{position:fixed;top:0;left:0;right:0;bottom:0;z-index:100;display:flex;align-items:center;justify-content:center}
+.ov-bg{position:absolute;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
+.ov-box{position:relative;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px;width:90vw;max-width:700px;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.ov-close{position:absolute;top:12px;right:16px;color:var(--muted);cursor:pointer;font-size:20px;transition:color .2s}
+.ov-close:hover{color:var(--text)}
+.loading{text-align:center;padding:40px;color:var(--muted)}
+.leaflet-container{background:var(--bg)}.dma-tooltip{background:rgba(19,19,26,0.9)!important;color:var(--text)!important;border:1px solid var(--border)!important;border-radius:8px!important;padding:8px 12px!important;font-size:13px!important}.dma-tooltip::before{border-right-color:rgba(19,19,26,0.9)!important}.loading::after{content:'';display:inline-block;width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;margin-left:8px;vertical-align:middle}@keyframes spin{to{transform:rotate(360deg)}}
+/* 設定面板 */
+.cf{overflow:hidden;transition:max-height .3s;max-height:0;margin-bottom:12px}
+.cf.open{max-height:300px}
+.cf-inner{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px 16px}
+.cf-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;font-size:12px;color:var(--muted)}
+.cf-row label{min-width:80px;text-align:right}
+.cf-row input[type=range]{flex:1;accent-color:var(--accent);height:6px}
+.cf-row span.val{min-width:36px;color:var(--text);font-weight:600;font-size:13px}
+.cf-toggle{cursor:pointer;color:var(--accent);font-size:12px;margin-bottom:10px;display:inline-block;user-select:none}
+.cf-toggle:hover{opacity:.8}
+/* 搜索對比 */
+.ck{width:16px;height:16px;accent-color:var(--accent);cursor:pointer}
+.compare-bar{display:none;position:sticky;bottom:16px;background:var(--surface);border:1px solid var(--accent);border-radius:12px;padding:12px 18px;margin-top:12px;align-items:center;gap:12px;z-index:10}
+.compare-bar .sel{color:var(--accent);font-weight:600;font-size:13px}
+/* 異常翻頁 */
+.anom-nav{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.anom-nav button{background:var(--surface2);border:1px solid var(--border);color:var(--muted);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:13px;transition:all .2s}
+.anom-nav button:hover{color:var(--text);border-color:var(--accent)}
+.anom-nav button:disabled{opacity:.3;cursor:default}
+
+/* === 全屏 Loading === */
+.global-loading{position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;transition:opacity .3s}
+.global-loading.fade-out{opacity:0;pointer-events:none}
+.global-loading .spinner{width:40px;height:40px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite}
+.global-loading .text{color:var(--muted);font-size:14px}
+
+/* === 刷新按钮 === */
+.refresh-btn{background:var(--surface2);border:1px solid var(--border);color:var(--muted);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px;transition:all .2s;margin-left:auto;white-space:nowrap}
+.refresh-btn:hover{color:var(--text);border-color:var(--accent)}
+.refresh-btn:active{transform:scale(.95)}
+.refresh-btn.spinning{pointer-events:none;opacity:.6}
+.refresh-btn.spinning::before{content:'';display:inline-block;width:12px;height:12px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.6s linear infinite;margin-right:4px;vertical-align:middle}
+
+/* === KPI 卡片 === */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px}
+.kpi{background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center;transition:border-color .2s}
+.kpi:hover{border-color:var(--accent)}
+.kpi .label{font-size:11px;color:var(--muted);font-weight:500;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px}
+.kpi .value{font-size:22px;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.kpi .sub{font-size:11px;color:var(--muted);margin-top:4px}
+.kpi .change{font-size:12px;font-weight:600;margin-top:4px}
+.kpi .change.up{color:var(--red)}.kpi .change.down{color:var(--green)}
+
+/* === 面包屑 === */
+.breadcrumb{display:flex;align-items:center;gap:6px;margin-bottom:14px;font-size:13px;flex-wrap:wrap}
+.breadcrumb span{color:var(--muted);cursor:pointer;transition:color .2s}
+.breadcrumb span:hover{color:var(--accent)}
+.breadcrumb span.current{color:var(--text);cursor:default;font-weight:600}
+.breadcrumb .sep{color:var(--border);cursor:default}
+
+/* === 匯出按鈕 === */
+.chart-actions{display:flex;gap:6px;margin-bottom:8px;justify-content:flex-end}
+.export-btn{background:var(--surface2);border:1px solid var(--border);color:var(--muted);padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px;transition:all .2s}
+.export-btn:hover{color:var(--text);border-color:var(--accent)}
+
+/* === 地圖佈局 === */
+#mapLayout{display:flex;gap:16px;align-items:flex-start}
+#mapContainer{width:420px;height:560px;flex-shrink:0;border-radius:12px;overflow:hidden}
+#mapDetail{flex:1;min-width:0;max-height:560px;overflow-y:auto;position:sticky;top:80px}
+#mapDetail::-webkit-scrollbar{width:6px}
+#mapDetail::-webkit-scrollbar-track{background:#13131a;border-radius:3px}
+#mapDetail::-webkit-scrollbar-thumb{background:#252532;border-radius:3px}
+#mapDetail .card{margin-bottom:0}
+#mapDetail h2::before{display:none}
+.map-placeholder{display:flex;align-items:center;justify-content:center;height:200px;color:var(--muted);font-size:13px;text-align:center;padding:20px}
+
+/* === 响应式 === */
+@media(max-width:1024px){
+  #mapLayout{flex-direction:column}
+  #mapDetail{width:100%;max-height:400px;position:static}
+  #mapContainer{width:100%;height:400px}
+}
+@media(max-width:640px){
+  #mapContainer{height:320px}
+  #mapDetail{max-height:300px}
+  .hdr{padding:10px 14px}
+  .hdr{padding:10px 14px}
+  .hdr h1{font-size:16px;margin-bottom:8px}
+  .tabs{gap:4px;padding-bottom:2px}
+  .tab{padding:6px 10px;font-size:11px}
+  .main{padding:10px}
+  .card{padding:14px;border-radius:12px}
+  .dg{grid-template-columns:1fr}
+  .sr{grid-template-columns:1fr}
+  .di{padding:12px 14px;font-size:16px}
+  .nb{padding:10px 14px;font-size:14px}
+  .qb{padding:12px;font-size:14px}
+  table{font-size:11px}
+  th,td{padding:6px 4px}
+  .chart{height:300px}
+  .pwd-bar{flex-wrap:wrap;gap:8px}
+  .pwd-bar input{width:100%}
+  .ov-box{padding:16px;width:95vw}
+}
+
+/* === AI 浮動聊天 === */
+.chat-fab{position:fixed;bottom:24px;right:24px;z-index:200;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:none;font-size:22px;cursor:pointer;box-shadow:0 4px 20px rgba(129,140,248,.4);transition:all .3s}
+.chat-fab:hover{transform:scale(1.1);box-shadow:0 6px 28px rgba(129,140,248,.55)}
+.chat-fab.active{transform:rotate(90deg)}
+.chat-popup{position:fixed;bottom:88px;right:24px;z-index:200;width:380px;height:520px;background:var(--surface);border:1px solid var(--border);border-radius:16px;display:flex;flex-direction:column;box-shadow:0 12px 48px rgba(0,0,0,.5);transform:scale(0) translateY(20px);transform-origin:bottom right;opacity:0;pointer-events:none;transition:all .25s cubic-bezier(.4,0,.2,1)}
+.chat-popup.open{transform:scale(1) translateY(0);opacity:1;pointer-events:auto}
+.chat-popup-hdr{padding:14px 16px;display:flex;justify-content:space-between;align-items:center;font-size:14px;font-weight:600;color:var(--text);border-bottom:1px solid var(--border);background:var(--surface2);border-radius:16px 16px 0 0}
+.chat-popup-close{cursor:pointer;color:var(--muted);font-size:16px;transition:color .2s}
+.chat-popup-close:hover{color:var(--text)}
+.chat-popup-msgs{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px}
+.chat-msg{display:flex}.chat-msg.user{justify-content:flex-end}.chat-msg.ai{justify-content:flex-start}
+.chat-bubble{max-width:88%;padding:9px 13px;border-radius:12px;font-size:13px;line-height:1.65;word-break:break-word}
+.chat-msg.user .chat-bubble{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border-bottom-right-radius:4px}
+.chat-msg.ai .chat-bubble{background:var(--surface2);color:var(--text);border:1px solid var(--border);border-bottom-left-radius:4px}
+.chat-popup-bar{display:flex;gap:6px;padding:10px 12px;border-top:1px solid var(--border)}
+.chat-popup-bar input{flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:8px;font-size:13px;outline:none;transition:border-color .2s}
+.chat-popup-bar input:focus{border-color:var(--accent)}
+.chat-popup-bar button{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:none;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s}
+.chat-popup-bar button:hover{box-shadow:0 2px 12px rgba(129,140,248,.3)}
+.chat-chart{width:100%;height:260px;margin-top:6px}
+@media(max-width:640px){
+  .chat-popup{width:calc(100vw - 32px);right:16px;bottom:80px;height:60vh}
+  .chat-fab{bottom:16px;right:16px}
+}
+
+</style>
+<link rel="stylesheet" href="lib/leaflet/leaflet.css" />
+<script src="lib/leaflet/leaflet.js"></script>
+</head>
+<body>
+
+<!-- Loading Screen -->
+<div id="globalLoading" class="global-loading">
+  <div class="spinner"></div>
+  <div class="text">載入資料中...</div>
+</div>
+
+<div class="hdr">
+<h1>💧 澳門用水分析</h1>
+<div class="tabs">
+<button class="tab active" onclick="showTab('home')">概覽</button>
+<button class="tab" onclick="showTab('trend')">趨勢</button>
+<button class="tab" onclick="showTab('rank')">排名</button>
+<button class="tab" onclick="showTab('diff')">差額</button>
+<button class="tab" onclick="showTab('anomaly')">異常</button>
+<button class="tab" onclick="showTab('search')">搜尋</button>
+<button class="tab" onclick="showTab('predict')">預測</button>
+<button class="tab" onclick="showTab('map')">地圖</button>
+<button class="refresh-btn" onclick="refreshData()">🔄 刷新</button>
+</div>
+</div>
+<div class="main">
+<div class="pwd-bar">
+  <span style="color:#94a3b8;font-size:13px">🔒 敏感資料保護</span>
+  <input type="password" id="pwdInput" placeholder="輸入密碼查看敏感資料">
+  <button onclick="unlockSensitive()">解鎖</button>
+  <span id="pwdStatus" class="status">未解鎖</span>
+</div>
+<div id="page-home"></div>
+<div id="page-trend" class="hidden"></div>
+<div id="page-rank" class="hidden"></div>
+<div id="page-diff" class="hidden"></div>
+<div id="page-anomaly" class="hidden"></div>
+<div id="page-calendar" class="hidden"></div>
+<div id="page-search" class="hidden"></div>
+<div id="page-predict" class="hidden"></div>
+<div id="page-heatmap" class="hidden"></div>
+<div id="page-dma" class="hidden"></div>
+<div id="page-map" class="hidden"></div>
+</div>
+
+<!-- AI Chat Floating Widget -->
+<button class="chat-fab" id="chatFab" onclick="toggleChat()">🤖</button>
+<div class="chat-popup" id="chatPopup">
+  <div class="chat-popup-hdr">
+    <span>💧 AI 水務助手</span>
+    <span class="chat-popup-close" onclick="toggleChat()">✕</span>
+  </div>
+  <div class="chat-popup-msgs" id="chatMsgs"></div>
+  <div class="chat-popup-bar">
+    <input type="text" id="chatInput" placeholder="輸入問題..." onkeydown="if(event.key==='Enter')sendChat()">
+    <button onclick="sendChat()">發送</button>
+  </div>
+</div>
+
+<script>
+// === utils.js ===
+// === 常量與顏色配置 ===
+const DC={'澳門低區':'#818cf8','澳門填海A區':'#a78bfa','澳大橫琴區':'#34d399','未分類':'#6b6b80'};
+const DMA_MAP={
+  '澳門低區':['HIA','PHA','ANEXA','SPA'],
+  '澳門填海A區':['THA'],
+  '路氹城區':['TA'],
+  '澳大橫琴區':['NA']
+};
+const DMA_COLORS={'澳門低區':'#818cf8','澳門填海A區':'#a78bfa','澳大橫琴區':'#34d399','路氹城區':'#f472b6'};
+const DMA_REVERSE={};
+for(const[zh,codes]of Object.entries(DMA_MAP)){
+  for(const c of codes) DMA_REVERSE[c]=zh;
+}
+// 修復路氹城區的 Unicode 私用區字符問題：資料中氹=U+EBF3(60403)，正常氹=U+6C39(27705)
+function getDmaName(code){
+  var name=DMA_REVERSE[code];
+  if(!name)return code;
+  if(window.D&&D.dma&&D.dma[0]){
+    var keys=Object.keys(D.dma[0].dmas);
+    for(var i=0;i<keys.length;i++){
+      if(keys[i].charCodeAt(1)===0xEBF3&&name.charCodeAt(1)===0x6C39){
+        if(keys[i].slice(0,1)===name.slice(0,1)&&keys[i].slice(2)===name.slice(2))return keys[i];
+      }
+    }
+  }
+  return name;
+}
+function getDmaColor(name){
+  if(DC[name])return DC[name];
+  // 尝试用正常字符查找
+  for(var k in DC){
+    if(k.charCodeAt(1)===0x6C39&&name.charCodeAt(1)===0xEBF3){
+      if(k.slice(0,1)===name.slice(0,1)&&k.slice(2)===name.slice(2))return DC[k];
+    }
+  }
+  return DC['未分類'];
+}
+
+// === 全局状态 ===
+let _selMeters={},_anomCfg={spikeMult:4,minScore:0.25},_anomCfgOpen=false;
+let selDate,selDma='',charts={},selDiffMeter=null;
+
+// === Demo mode: all data is fictional, no password needed ===
+let isUnlocked = true;
+
+function mask(text) { return text || ''; }
+function maskBuilding(name) { return name || ''; }
+function clickMasked() {}
+function unlockSensitive() {}
+
+// === 工具函數 ===
+function fmt(n){return Math.round(n).toLocaleString()}
+function findD(arr,d){return arr.find(x=>x.date===d)}
+function esc(s){return String(s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+
+// === ECharts 統一管理 ===
+function disposeChart(name){
+  if(charts[name]){charts[name].dispose();charts[name]=null;}
+}
+function initChart(dom,name){
+  disposeChart(name);
+  charts[name]=echarts.init(dom,'dark');
+  return charts[name];
+}
+
+// === 圖表 PNG 匯出 ===
+function exportChart(name,filename){
+  var c=charts[name];
+  if(!c)return;
+  var url=c.getDataURL({type:'png',pixelRatio:2,backgroundColor:'#0a0a0f'});
+  var a=document.createElement('a');a.href=url;a.download=(filename||name)+'.png';a.click();
+}
+
+// === CSV 匯出 ===
+function exportCsv(data,filename){
+  var csv=data.map(function(row){return row.map(function(v){return'"'+String(v).replace(/"/g,'""')+'"'}).join(',')}).join('\n');
+  var BOM='﻿';var blob=new Blob([BOM+csv],{type:'text/csv;charset=utf-8'});
+  var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;a.click();
+}
+
+// === tabs.js ===
+// === Tab 切換 ===
+let _rendered=new Set(['home']);
+
+function showTab(t){
+  ['home','trend','rank','diff','anomaly','search','predict','dma','map'].forEach(p=>{
+    var el=document.getElementById('page-'+p);
+    if(el)el.classList.toggle('hidden',p!==t&&!(p==='dma'&&t==='dma'));
+  });
+  document.querySelectorAll('.tab').forEach(function(b){b.classList.remove('active')});
+  var idx=['home','trend','rank','diff','anomaly','search','predict','map'].indexOf(t);
+  if(idx>=0)document.querySelectorAll('.tab')[idx].classList.add('active');
+  if(_rendered.has(t)){Object.values(charts).forEach(function(c){if(c)c.resize()});return;}
+  _rendered.add(t);
+  if(t==='trend')renderTrend();
+  else if(t==='rank')renderRank();
+  else if(t==='diff')renderDiff();
+  else if(t==='anomaly')renderAnomaly();
+  else if(t==='search')renderSearch();
+  else if(t==='predict')renderPredict();
+  else if(t==='map')renderMap();
+  else Object.values(charts).forEach(function(c){if(c)c.resize()});
+}
+
+function pickDate(d){if(D.dates.includes(d)){selDate=d;renderHome()}}
+function changeDate(d){var i=D.dates.indexOf(selDate);if(i+d>=0&&i+d<D.dates.length)pickDate(D.dates[i+d])}
+function pickDma(d){selDma=d;renderDma();showTab('dma')}
+
+// === 刷新資料 ===
+function refreshData(){
+  var btn=document.querySelector('.refresh-btn');
+  if(btn)btn.classList.add('spinning');
+  _rendered=new Set(['home']);
+  Object.keys(charts).forEach(function(k){disposeChart(k)});
+  loadData().then(function(){
+    var cotaiKey2=D.dates.length?Object.keys(D.dma[0].dmas).find(k=>k.charCodeAt(1)===0xebf3):'';
+    if(cotaiKey2)DC[cotaiKey2]='#f472b6';
+    selDate=D.dates[D.dates.length-1];
+    renderHome();
+    if(btn){btn.classList.remove('spinning');}
+  }).catch(function(e){
+    alert('刷新失敗: '+e.message);
+    if(btn)btn.classList.remove('spinning');
+  });
+}
+
+window.addEventListener('resize',function(){Object.values(charts).forEach(function(c){if(c)c.resize()})});
+
+// === home.js ===
+// === KPI 計算 ===
+function renderKPI(){
+  var dma=findD(D.dma,selDate);
+  if(!dma)return '';
+  var dateIdx=D.dates.indexOf(selDate);
+  var prevDma=dateIdx>0?findD(D.dma,D.dates[dateIdx-1]):null;
+
+  // 總用水量
+  var totalToday=0,totalPrev=0,totalRes=0,totalNonRes=0,resCnt=0,nonResCnt=0;
+  for(var k in dma.dmas){
+    var v=dma.dmas[k];
+    if(k==='未分類')continue;
+    totalToday+=v.total;totalRes+=v.residential;totalNonRes+=v.nonResidential;
+    resCnt+=v.resCount;nonResCnt+=v.nonResCount;
+  }
+  if(prevDma)for(var k in prevDma.dmas){if(k!=='未分類')totalPrev+=prevDma.dmas[k].total;}
+
+  // 環比變化
+  var changePct=totalPrev>0?((totalToday-totalPrev)/totalPrev*100).toFixed(1):null;
+  var changeClass=changePct>0?'up':'down';
+  var changeIcon=changePct>0?'↑':'↓';
+
+  // NRW率（最新月份）
+  var nrwPct='-';
+  if(D.diff&&D.diff.length){
+    var lastMonth=D.diff[D.diff.length-1];
+    var mt=0,st=0;
+    lastMonth.diffs.forEach(function(m){mt+=m.mainMonthTotal;st+=m.subMonthTotal;});
+    nrwPct=mt>0?((mt-st)/mt*100).toFixed(1)+'%':'-';
+  }
+
+  // 今日異常數
+  var anomToday=D.anomalies.filter(function(a){return a.date===selDate;}).length;
+
+  // 住宅占比
+  var resPct=totalToday>0?(totalRes/totalToday*100).toFixed(1):0;
+
+  var nrwSub=D.diff&&D.diff.length?D.diff[D.diff.length-1].month:'';
+  return '<div class="kpi-grid">'
+    +'<div class="kpi"><div class="label">今日總用水</div><div class="value">'+fmt(totalToday)+'</div><div class="sub">m³</div>'+(changePct!==null?'<div class="change '+changeClass+'">'+changeIcon+Math.abs(changePct)+'% 較昨日</div>':'')+'</div>'
+    +'<div class="kpi"><div class="label">NRW率</div><div class="value">'+nrwPct+'</div><div class="sub">'+nrwSub+'</div></div>'
+    +'<div class="kpi"><div class="label">住宅占比</div><div class="value">'+resPct+'%</div><div class="sub">'+fmt(totalRes)+' m³</div></div>'
+    +'<div class="kpi"><div class="label">今日異常</div><div class="value" style="'+(anomToday>0?'color:var(--red)':'')+'">'+anomToday+'</div><div class="sub">條告警</div></div>'
+    +'<div class="kpi"><div class="label">降雨量</div><div class="value">'+(dma.rain||0)+'</div><div class="sub">mm</div></div>'
+    +'</div>';
+}
+
+// === 首頁概覽 ===
+function renderHome(){
+  var dma=findD(D.dma,selDate),top=findD(D.top20,selDate),rain=dma?dma.rain||0:0;
+  var h='<section class="card"><h2>📅 選擇日期</h2><div class="dc"><input type="date" class="di" min="'+D.dates[0]+'" max="'+D.dates[D.dates.length-1]+'" value="'+selDate+'" onchange="pickDate(this.value)"><div class="dn"><button class="nb" onclick="changeDate(-1)" '+(D.dates.indexOf(selDate)<=0?'disabled':'')+'>◀ 前一天</button><span class="dd">'+selDate+(rain?' 🌧️'+rain+'mm':'')+'</span><button class="nb" onclick="changeDate(1)" '+(D.dates.indexOf(selDate)>=D.dates.length-1?'disabled':'')+'>後一天 ▶</button></div><div class="qd"><button class="qb" onclick="pickDate(D.dates[D.dates.length-1])">最新</button><button class="qb" onclick="pickDate(D.dates[0])">最早</button></div></div></section>';
+  h+=renderKPI();
+  h+='<section class="card"><h2>🏚️ DMA分區概覽 <span class="hint">（點擊進入詳情）</span></h2><div class="dg">';
+  if(dma)for(var k in dma.dmas){var v=dma.dmas[k];var ds=calcDmaStats(k);h+='<div class="dc2" style="border-left-color:'+(DC[k]||'#666')+'" onclick="pickDma(\''+esc(k)+'\')"><div class="dn2">'+esc(k)+' →</div><div class="dv">'+fmt(v.total)+' m³</div><div class="ds"><span>🏠 住宅: '+fmt(v.residential)+' m³ ('+v.resCount+'表)</span><span>🏢 非住宅: '+fmt(v.nonResidential)+' m³ ('+v.nonResCount+'表)</span><span>📊 日均: '+fmt(ds.avgDaily)+' m³</span><span>⚠ 異常: '+ds.anomalyCount+'條</span><span>💧 NRW: '+ds.nrwPct+'</span></div></div>';}
+  h+='</div></section>';
+
+  // DMA 對比分析
+  var dmaNames2=D.dma.length?Object.keys(D.dma[0].dmas).filter(function(k2){return k2!=='未分類'}):[];
+  h+='<section class="card"><h2>📊 DMA 對比分析</h2>';
+  h+='<div class="ms" style="margin-bottom:6px"><button class="mb active" onclick="drawDmaCompare(\'trend\',this)">用水趨勢</button><button class="mb" onclick="drawDmaCompare(\'nrw\',this)">NRW 對比</button><button class="mb" onclick="drawDmaCompare(\'anomaly\',this)">異常分布</button><button class="mb" onclick="drawDmaCompare(\'residential\',this)">住宅/非住宅</button></div>';
+  h+='<div class="chart-actions"><button class="export-btn" onclick="exportChart(\'dmaCompare\',\'DMA對比\')">匯出 PNG</button></div>';
+  h+='<div id="dmaCompareChart" class="chart" style="height:400px"></div></section>';
+  h+='<section class="card"><h2>📊 全域 Top 50</h2><div class="chart-actions"><button class="export-btn" onclick="exportChart(\'g\',\'全域Top50\')">匯出 PNG</button></div><div id="gChart" class="chart"></div></section>';
+  h+='<section class="card"><h2>報告生成</h2><div class="qd"><button class="qb" onclick="generateReport(\'weekly\')">週報</button><button class="qb" onclick="generateReport(\'monthly\')">月報</button></div></section>';
+  document.getElementById('page-home').innerHTML=h;
+  if(top){
+    disposeChart('g');
+    var c=initChart(document.getElementById('gChart'),'g');
+    var items=top.top20.slice().reverse();
+    c.setOption({backgroundColor:'transparent',tooltip:{trigger:'axis',axisPointer:{type:'shadow'},formatter:function(p){var m=items[p[0].dataIndex];return '<b>'+mask(m.contractId||m.meterId)+'</b><br/>'+esc(m.propertyType)+'<br/>'+esc(m.dma)+'<br/>'+fmt(m.total)+' m³'}},grid:{left:150,right:60,top:10,bottom:30},xAxis:{type:'value',axisLabel:{formatter:function(v){return(v/1000).toFixed(0)+'k'}}},yAxis:{type:'category',data:items.map(function(i){return mask(i.contractId||i.meterId)}),axisLabel:{fontSize:10}},series:[{type:'bar',data:items.map(function(i){return{value:i.total,itemStyle:{color:DC[i.dma]||'#666'}}}),label:{show:true,position:'right',formatter:function(p){return fmt(p.value)},fontSize:10}}]});
+  }
+  setTimeout(function(){drawDmaCompare('trend');},100);
+}
+
+// === DMA 詳情 ===
+function renderDma(){
+  var t20=findD(D.top20dma,selDate),dma=findD(D.dma,selDate);
+  var info=dma&&dma.dmas&&dma.dmas[selDma];
+  var items=t20&&t20.byDma&&t20.byDma[selDma]?t20.byDma[selDma]:[];
+  var h='<section class="card"><div class="breadcrumb"><span onclick="showTab(\'home\')">概覽</span><span class="sep">›</span><span class="current" style="color:'+(DC[selDma]||'#38bdf8')+'">'+esc(selDma)+'</span><span class="sep">›</span><span class="current">'+selDate+'</span></div>';
+  if(info)h+='<div class="sr"><div class="si"><div class="sl">總用水量</div><div class="sv">'+fmt(info.total)+' m³</div></div><div class="si res"><div class="sl">🏠 住宅</div><div class="sv">'+fmt(info.residential)+' m³</div><div class="ss">'+info.resCount+' 個水表</div></div><div class="si nonres"><div class="sl">🏢 非住宅</div><div class="sv">'+fmt(info.nonResidential)+' m³</div><div class="ss">'+info.nonResCount+' 個水表</div></div></div>';
+  h+='</section><section class="card"><h2>📊 Top 50</h2><div class="chart-actions"><button class="export-btn" onclick="exportChart(\'d\',\''+esc(selDma)+'Top50\')">匯出 PNG</button></div><div id="dChart" class="chart"></div></section>';
+  h+='<section class="card"><h2>📋 Top 50 明細</h2><table><thead><tr><th>#</th><th>合同編號</th><th>物業類型</th><th>建築物</th><th class="num">用水量</th></tr></thead><tbody>';
+  items.forEach(function(m,i){h+='<tr><td>'+(i+1)+'</td><td class="contract">'+mask(m.contractId)+'</td><td><span class="ptag '+(m.propertyType==='001:住宅'?'res':'')+'">'+esc(m.propertyType)+'</span></td><td class="'+(isUnlocked?'':'masked')+'" onclick="clickMasked()">'+maskBuilding(m.buildingName)+'</td><td class="num">'+fmt(m.total)+'</td></tr>';});
+  h+='</tbody></table></section>';
+  document.getElementById('page-dma').innerHTML=h;
+  if(items.length){
+    disposeChart('d');
+    var c=initChart(document.getElementById('dChart'),'d');
+    var rev=items.slice().reverse();
+    c.setOption({backgroundColor:'transparent',tooltip:{trigger:'axis',axisPointer:{type:'shadow'},formatter:function(p){var m=rev[p[0].dataIndex];return '<b>'+mask(m.contractId||m.meterId)+'</b><br/>'+esc(m.propertyType)+'<br/>'+fmt(m.total)+' m³'}},grid:{left:140,right:60,top:10,bottom:30},xAxis:{type:'value',axisLabel:{formatter:function(v){return(v/1000).toFixed(0)+'k'}}},yAxis:{type:'category',data:rev.map(function(i){return mask(i.contractId||i.meterId)}),axisLabel:{fontSize:10}},series:[{type:'bar',data:rev.map(function(i){return{value:i.total,itemStyle:{color:DC[selDma]||'#38bdf8'}}}),label:{show:true,position:'right',formatter:function(p){return fmt(p.value)},fontSize:10}}]});
+  }
+}
+
+// === 週報/月報 ===
+function generateReport(type){
+  var dates=D.dates;var startDate,endDate,title;
+  if(type==='weekly'){endDate=dates[dates.length-1];startDate=dates[Math.max(0,dates.length-7)];title='週報 ('+startDate+' ~ '+endDate+')';}
+  else{endDate=dates[dates.length-1];startDate=dates[Math.max(0,dates.length-30)];title='月報 ('+startDate+' ~ '+endDate+')';}
+  var periodDates=dates.filter(d=>d>=startDate&&d<=endDate);
+  var dmaStats={};
+  for(var dmaName of Object.keys(D.dma[0].dmas)){dmaStats[dmaName]={total:0,count:0,residential:0,nonResidential:0};}
+  for(var d of periodDates){var dayData2=D.dma.find(x=>x.date===d);if(!dayData2)continue;for(var[dmaName,info]of Object.entries(dayData2.dmas)){if(dmaStats[dmaName]){dmaStats[dmaName].total+=info.total;dmaStats[dmaName].residential+=info.residential;dmaStats[dmaName].nonResidential+=info.nonResidential;dmaStats[dmaName].count++;}}}
+  var html='<section class="card"><h2>'+title+'</h2>';
+  html+='<table><thead><tr><th>DMA</th><th class="num">總用水(m³)</th><th class="num">日均(m³)</th></tr></thead><tbody>';
+  for(var[dmaName,stats]of Object.entries(dmaStats)){if(stats.count===0)continue;var avg=stats.total/stats.count;html+='<tr><td>'+dmaName+'</td><td class="num">'+Math.round(stats.total).toLocaleString()+'</td><td class="num">'+Math.round(avg).toLocaleString()+'</td></tr>';}
+  html+='</tbody></table></section>';
+  document.getElementById('reportContent').innerHTML=html;
+  document.getElementById('reportModal').style.display='flex';
+}
+function closeReport(){document.getElementById('reportModal').style.display='none';}
+
+function calcDmaStats(dma){
+  var total=0,count=0,res=0,nonRes=0,anomalyCount=0;
+  D.dma.forEach(function(d){
+    var info=d.dmas[dma];
+    if(info){total+=info.total;count++;res+=info.residential;nonRes+=info.nonResidential;}
+  });
+  anomalyCount=D.anomalies.filter(function(a){return a.dma===dma}).length;
+  var avgDaily=count>0?Math.round(total/count):0;
+  var resPct=total>0?Math.round(res/total*100):0;
+  var nrwPct='-';
+  if(D.diff&&D.diff.length){
+    var lastMonth=D.diff[D.diff.length-1];
+    var mt=0,st=0;
+    lastMonth.diffs.forEach(function(m){if(m.dma===dma){mt+=m.mainMonthTotal;st+=m.subMonthTotal;}});
+    nrwPct=mt>0?((mt-st)/mt*100).toFixed(1)+'%':'-';
+  }
+  return{avgDaily:avgDaily,resPct:resPct,anomalyCount:anomalyCount,nrwPct:nrwPct};
+}
+
+function drawDmaCompare(view,btn){
+  if(btn){
+    document.querySelectorAll('#page-home .ms .mb').forEach(function(b){b.classList.remove('active')});
+    btn.classList.add('active');
+  }
+  disposeChart('dmaCompare');
+  var el=document.getElementById('dmaCompareChart');
+  if(!el)return;
+  var c=initChart(el,'dmaCompare');
+  var dates=D.dma.map(function(d){return d.date});
+  var dmaNames=D.dma.length?Object.keys(D.dma[0].dmas).filter(function(k){return k!=='未分類'}):[];
+
+  if(view==='trend'){
+    var series=dmaNames.map(function(dma){
+      return{name:dma,type:'line',smooth:true,showSymbol:false,
+        data:D.dma.map(function(d){return d.dmas[dma]?Math.round(d.dmas[dma].total):0}),
+        itemStyle:{color:DC[dma]||'#6b6b80'},lineStyle:{width:2}};
+    });
+    c.setOption({backgroundColor:'transparent',tooltip:{trigger:'axis'},legend:{data:dmaNames,textStyle:{color:'#94a3b8'}},
+      grid:{left:60,right:40,top:40,bottom:30},
+      xAxis:{type:'category',data:dates,axisLabel:{fontSize:10,rotate:45}},
+      yAxis:{type:'value',name:'m³',axisLabel:{formatter:function(v){return(v/1000).toFixed(0)+'k'}}},
+      series:series});
+  }
+  else if(view==='nrw'){
+    if(!D.diff||!D.diff.length)return;
+    var months=D.diff.map(function(d){return d.month});
+    var series=dmaNames.map(function(dma){
+      return{name:dma,type:'bar',
+        data:D.diff.map(function(m){
+          var mt=0,st=0;
+          m.diffs.forEach(function(d){if(d.dma===dma){mt+=d.mainMonthTotal;st+=d.subMonthTotal;}});
+          return mt>0?Math.round((mt-st)/mt*1000)/10:0;
+        }),
+        itemStyle:{color:DC[dma]||'#6b6b80'}};
+    });
+    c.setOption({backgroundColor:'transparent',tooltip:{trigger:'axis',formatter:function(p){var r=p[0].axisValue+'<br/>';p.forEach(function(i){r+=i.marker+' '+i.seriesName+': '+i.value+'%<br/>';});return r;}},legend:{data:dmaNames,textStyle:{color:'#94a3b8'}},
+      grid:{left:60,right:40,top:40,bottom:30},
+      xAxis:{type:'category',data:months},
+      yAxis:{type:'value',name:'NRW%',axisLabel:{formatter:'{value}%'}},
+      series:series});
+  }
+  else if(view==='anomaly'){
+    var types=['spike','drop','zero','watch'];
+    var colors=['#f87171','#fb923c','#facc15','#818cf8'];
+    var series=types.map(function(type,idx){
+      return{name:type,type:'bar',stack:'total',
+        data:dmaNames.map(function(dma){
+          return D.anomalies.filter(function(a){return a.dma===dma&&a.type===type}).length;
+        }),
+        itemStyle:{color:colors[idx]}};
+    });
+    c.setOption({backgroundColor:'transparent',tooltip:{trigger:'axis',axisPointer:{type:'shadow'}},legend:{data:types,textStyle:{color:'#94a3b8'}},
+      grid:{left:80,right:40,top:40,bottom:30},
+      xAxis:{type:'value'},
+      yAxis:{type:'category',data:dmaNames},
+      series:series});
+  }
+  else if(view==='residential'){
+    var resData=dmaNames.map(function(dma){
+      var total=0,res=0;
+      D.dma.forEach(function(d){if(d.dmas[dma]){total+=d.dmas[dma].total;res+=d.dmas[dma].residential;}});
+      return total>0?Math.round(res/total*1000)/10:0;
+    });
+    var nonResData=resData.map(function(v){return Math.round((100-v)*10)/10});
+    c.setOption({backgroundColor:'transparent',tooltip:{trigger:'axis',axisPointer:{type:'shadow'},formatter:function(p){return p[0].axisValue+'<br/>'+p[0].marker+' 住宅: '+p[0].value+'%<br/>'+p[1].marker+' 非住宅: '+p[1].value+'%';}},legend:{data:['住宅','非住宅'],textStyle:{color:'#94a3b8'}},
+      grid:{left:80,right:40,top:40,bottom:30},
+      xAxis:{type:'value',max:100,axisLabel:{formatter:'{value}%'}},
+      yAxis:{type:'category',data:dmaNames},
+      series:[
+        {name:'住宅',type:'bar',stack:'total',data:resData,itemStyle:{color:'#34d399'}},
+        {name:'非住宅',type:'bar',stack:'total',data:nonResData,itemStyle:{color:'#f472b6'}}
+      ]});
+  }
+}
+
+// === trend.js ===
+// === 趨勢頁 ===
+function renderTrend(){
+  var h='<section class="card"><h2>📈 用水趨勢 + 降雨量</h2>';
+  h+='<div class="ms" style="margin-bottom:6px"><button class="mb active" id="btnRA7" onclick="toggleRA(7,this)">7天均值</button><button class="mb" id="btnRA14" onclick="toggleRA(14,this)">14天均值</button><button class="mb" id="btnPred" onclick="togglePred(this)">7天預測</button><button class="mb" id="btnMoM" onclick="toggleMoM(this)">月環比</button><button class="mb" id="btnRes" onclick="switchTrendView(\'residential\',this)">住宅趨勢</button><button class="mb" id="btnWeekly" onclick="switchTrendView(\'weekly\',this)">週度趨勢</button></div>';
+  h+='<div class="chart-actions"><button class="export-btn" onclick="exportChart(\'trend\',\'用水趨勢\')">匯出 PNG</button></div>';
+  h+='<div id="trendChart" class="chart" style="height:450px"></div>';
+  h+='<div id="trendResChart" class="chart" style="height:450px;display:none"></div>';
+  h+='<div id="trendWeeklyChart" class="chart" style="height:450px;display:none"></div>';
+  h+='</section>';
+  var dmaNames=D.trend.length?Object.keys(D.trend[0].dmas).filter(function(k){return k!=='未分類'}):[];
+  h+='<section class="card"><h2>🏚️ 分DMA趨勢</h2><div class="ms">';
+  dmaNames.forEach(function(d){h+='<button class="mb" onclick="renderDmaTrend(\''+esc(d)+'\')">'+esc(d)+'</button>';});
+  h+='</div><div class="chart-actions"><button class="export-btn" onclick="exportChart(\'dt\',\'DMA趨勢\')">匯出 PNG</button></div><div id="dmaTrendChart" class="chart" style="height:400px"></div></section>';
+  document.getElementById('page-trend').innerHTML=h;
+  window._raWin=7; window._showPred=false; window._showMoM=false;
+  drawTrendChart();
+}
+
+function toggleMoM(btn){
+  window._showMoM=!window._showMoM;
+  window._trendView='main';
+  btn.classList.toggle('active',window._showMoM);
+  showMainTrend();
+  drawTrendChart();
+}
+
+function calcMA(data,win){
+  var r=[];for(var i=0;i<data.length;i++){if(i<win-1){r.push(null);continue;}var s=0;for(var j=i-win+1;j<=i;j++)s+=data[j];r.push(Math.round(s/win));}return r;
+}
+
+function hwForecast(data,horizon,alpha,beta,gamma){
+  alpha=alpha||0.3;beta=beta||0.1;gamma=gamma||0.3;
+  var n=data.length,period=7;
+  if(n<period*2)return holtForecast(data,horizon,alpha,beta);
+  var seasonAvg1=0,seasonAvg2=0;
+  for(var i=0;i<period;i++){seasonAvg1+=data[i];seasonAvg2+=data[period+i];}
+  seasonAvg1/=period;seasonAvg2/=period;
+  var trend2=(seasonAvg2-seasonAvg1)/period;
+  var season=[];
+  for(var i=0;i<period;i++)season.push(data[i]-seasonAvg1);
+  var level=seasonAvg1;
+  for(var i=period;i<n;i++){
+    var si=i%period;
+    var prevLevel=level;
+    level=alpha*(data[i]-season[si])+(1-alpha)*(level+trend2);
+    trend2=beta*(level-prevLevel)+(1-beta)*trend2;
+    season[si]=gamma*(data[i]-level)+(1-gamma)*season[si];
+  }
+  var preds=[];
+  for(var h=1;h<=horizon;h++){
+    var si=(n+h-1)%period;
+    preds.push(Math.round(Math.max(0,level+trend2*h+season[si])));
+  }
+  return preds;
+}
+
+function hwFitted(data,alpha,beta,gamma){
+  alpha=alpha||0.3;beta=beta||0.1;gamma=gamma||0.3;
+  var n=data.length,period=7;
+  if(n<period*2)return calcMA(data,7);
+  var seasonAvg1=0;for(var i=0;i<period;i++)seasonAvg1+=data[i];seasonAvg1/=period;
+  var seasonAvg2=0;for(var i=period;i<period*2&&i<n;i++)seasonAvg2+=data[i];seasonAvg2/=Math.min(period,n-period);
+  var trend2=(seasonAvg2-seasonAvg1)/period;
+  var season=[];for(var i=0;i<period;i++)season.push(data[i]-seasonAvg1);
+  var level=seasonAvg1;
+  var fitted=new Array(period).fill(null);
+  for(var i=period;i<n;i++){
+    var si=i%period;
+    var prevLevel=level;
+    level=alpha*(data[i]-season[si])+(1-alpha)*(level+trend2);
+    trend2=beta*(level-prevLevel)+(1-beta)*trend2;
+    season[si]=gamma*(data[i]-level)+(1-gamma)*season[si];
+    fitted.push(Math.round(Math.max(0,level+trend2+season[(i+1)%period])));
+  }
+  return fitted;
+}
+
+function toggleRA(w,btn){
+  window._raWin=w;
+  window._trendView='main';
+  document.querySelectorAll('#page-trend .ms .mb').forEach(function(b){if(b.id&&b.id.indexOf('btnRA')===0)b.classList.remove('active')});
+  btn.classList.add('active');
+  showMainTrend();
+  drawTrendChart();
+}
+
+function togglePred(btn){
+  window._showPred=!window._showPred;
+  window._trendView='main';
+  btn.classList.toggle('active',window._showPred);
+  showMainTrend();
+  drawTrendChart();
+}
+
+function showMainTrend(){
+  var main=document.getElementById('trendChart');
+  var res=document.getElementById('trendResChart');
+  var weekly=document.getElementById('trendWeeklyChart');
+  if(main)main.style.display='';
+  if(res)res.style.display='none';
+  if(weekly)weekly.style.display='none';
+}
+
+function switchTrendView(view,btn){
+  window._trendView=view;
+  document.querySelectorAll('#page-trend .ms .mb').forEach(function(b){b.classList.remove('active')});
+  btn.classList.add('active');
+  var main=document.getElementById('trendChart');
+  var res=document.getElementById('trendResChart');
+  var weekly=document.getElementById('trendWeeklyChart');
+  if(view==='residential'){
+    if(main)main.style.display='none';
+    if(weekly)weekly.style.display='none';
+    if(res)res.style.display='';
+    drawResTrendChart();
+  }else if(view==='weekly'){
+    if(main)main.style.display='none';
+    if(res)res.style.display='none';
+    if(weekly)weekly.style.display='';
+    drawWeeklyTrendChart();
+  }
+}
+
+function drawResTrendChart(){
+  disposeChart('trendRes');
+  var el=document.getElementById('trendResChart');
+  if(!el)return;
+  var c=initChart(el,'trendRes');
+  var dates=D.dma.map(function(d){return d.date});
+  var resData=D.dma.map(function(d){
+    var t=0;for(var k in d.dmas){if(k!=='未分類')t+=d.dmas[k].residential;}return Math.round(t);
+  });
+  var nonResData=D.dma.map(function(d){
+    var t=0;for(var k in d.dmas){if(k!=='未分類')t+=d.dmas[k].nonResidential;}return Math.round(t);
+  });
+  c.setOption({backgroundColor:'transparent',tooltip:{trigger:'axis'},
+    legend:{data:['住宅','非住宅'],textStyle:{color:'#94a3b8'}},
+    grid:{left:60,right:40,top:40,bottom:30},
+    xAxis:{type:'category',data:dates,axisLabel:{fontSize:10,rotate:45}},
+    yAxis:{type:'value',name:'m³',axisLabel:{formatter:function(v){return(v/1000000).toFixed(1)+'M'}}},
+    series:[
+      {name:'住宅',type:'line',stack:'total',areaStyle:{opacity:0.3},data:resData,itemStyle:{color:'#34d399'},showSymbol:false},
+      {name:'非住宅',type:'line',stack:'total',areaStyle:{opacity:0.3},data:nonResData,itemStyle:{color:'#f472b6'},showSymbol:false}
+    ]});
+}
+
+function drawWeeklyTrendChart(){
+  disposeChart('trendWeekly');
+  var el=document.getElementById('trendWeeklyChart');
+  if(!el)return;
+  var c=initChart(el,'trendWeekly');
+  // 計算週度匯總
+  var weeklyData=[];
+  var dates=D.dma.map(function(d){return d.date});
+  var weekStart=0;
+  for(var i=0;i<dates.length;i++){
+    var d=new Date(dates[i]);
+    if(d.getDay()===1&&i>0){
+      var weekDates=dates.slice(weekStart,i);
+      var wdTotal=0,wdCount=0,weTotal=0,weCount=0;
+      for(var j=weekStart;j<i;j++){
+        var dd=new Date(dates[j]);
+        var day=dd.getDay();
+        var total=0;
+        for(var k in D.dma[j].dmas){if(k!=='未分類')total+=D.dma[j].dmas[k].total;}
+        if(day===0||day===6){weTotal+=total;weCount++;}
+        else{wdTotal+=total;wdCount++;}
+      }
+      weeklyData.push({
+        label:dates[weekStart].slice(5)+'~'+dates[i-1].slice(5),
+        weekdayAvg:wdCount>0?Math.round(wdTotal/wdCount):0,
+        weekendAvg:weCount>0?Math.round(weTotal/weCount):0
+      });
+      weekStart=i;
+    }
+  }
+  // 最後一週
+  if(weekStart<dates.length){
+    var wdTotal=0,wdCount=0,weTotal=0,weCount=0;
+    for(var j=weekStart;j<dates.length;j++){
+      var dd=new Date(dates[j]);
+      var day=dd.getDay();
+      var total=0;
+      for(var k in D.dma[j].dmas){if(k!=='未分類')total+=D.dma[j].dmas[k].total;}
+      if(day===0||day===6){weTotal+=total;weCount++;}
+      else{wdTotal+=total;wdCount++;}
+    }
+    weeklyData.push({
+      label:dates[weekStart].slice(5)+'~'+dates[dates.length-1].slice(5),
+      weekdayAvg:wdCount>0?Math.round(wdTotal/wdCount):0,
+      weekendAvg:weCount>0?Math.round(weTotal/weCount):0
+    });
+  }
+
+  if(!weeklyData.length)return;
+  var labels=weeklyData.map(function(w){return w.label});
+  var weekdayAvgs=weeklyData.map(function(w){return w.weekdayAvg});
+  var weekendAvgs=weeklyData.map(function(w){return w.weekendAvg});
+  c.setOption({backgroundColor:'transparent',tooltip:{trigger:'axis'},
+    legend:{data:['工作日均','週末均'],textStyle:{color:'#94a3b8'}},
+    grid:{left:60,right:40,top:40,bottom:30},
+    xAxis:{type:'category',data:labels,axisLabel:{fontSize:10,rotate:45}},
+    yAxis:{type:'value',name:'m³',axisLabel:{formatter:function(v){return(v/1000).toFixed(0)+'k'}}},
+    series:[
+      {name:'工作日均',type:'bar',data:weekdayAvgs,itemStyle:{color:'#38bdf8'},barWidth:'30%'},
+      {name:'週末均',type:'bar',data:weekendAvgs,itemStyle:{color:'#f472b6'},barWidth:'30%'}
+    ]});
+}
+
+function drawTrendChart(){
+  disposeChart('trend');
+  var c=initChart(document.getElementById('trendChart'),'trend');
+  var dates=D.trend.map(function(d){return d.date}),totals=D.trend.map(function(d){var t=0;for(var v in d.dmas)t+=d.dmas[v];return t}),rain=D.trend.map(function(d){return d.rain||0});
+  var win=window._raWin||7;var ma=calcMA(totals,win);
+
+  // 月環比：按月份著色 + 月均值參考線
+  var barColors=totals.map(function(){return 'rgba(56,189,248,0.35)'});
+  var momLines=[];
+  if(window._showMoM){
+    var monthColors=['rgba(56,189,248,0.5)','rgba(167,139,250,0.5)','rgba(244,114,182,0.5)','rgba(52,211,153,0.5)','rgba(251,191,36,0.5)','rgba(248,113,113,0.5)'];
+    var monthStats={};
+    dates.forEach(function(d,i){
+      var m=d.slice(0,7);
+      if(!monthStats[m])monthStats[m]={sum:0,count:0,idx:Object.keys(monthStats).length};
+      monthStats[m].sum+=totals[i];monthStats[m].count++;
+      barColors[i]=monthColors[monthStats[m].idx%monthColors.length];
+    });
+    // 月均值參考線
+    var markData=[];
+    for(var m in monthStats){
+      var avg=Math.round(monthStats[m].sum/monthStats[m].count);
+      markData.push({yAxis:avg,label:{formatter:m+' 均:'+fmt(avg),fontSize:10,color:'#94a3b8'}});
+    }
+    momLines=[{silent:true,data:markData,lineStyle:{color:'#fbbf24',type:'dashed',width:1.5,opacity:0.6},symbol:'none'}];
+
+    // 月環比變化率
+    var months=Object.keys(monthStats).sort();
+    var momLabels=[];
+    for(var i=1;i<months.length;i++){
+      var prev=monthStats[months[i-1]],curr=monthStats[months[i]];
+      var pAvg=prev.sum/prev.count,cAvg=curr.sum/curr.count;
+      var pct=((cAvg-pAvg)/pAvg*100).toFixed(1);
+      momLabels.push(months[i]+' 環比 '+(pct>0?'+':'')+pct+'%');
+    }
+    if(momLabels.length){
+      // 不額外添加series，改用title顯示
+    }
+  }
+
+  var series=[
+    {name:'總用水量',type:'bar',data:totals.map(function(v,i){return{value:v,itemStyle:{color:barColors[i]}}}),barMaxWidth:6,z:1,
+     markLine:window._showMoM?momLines[0]:undefined},
+    {name:win+'天均值',type:'line',data:ma,smooth:true,itemStyle:{color:'#fbbf24'},lineStyle:{width:2.5},showSymbol:false,z:2}
+  ];
+  var legend=['總用水量',win+'天均值'];
+  if(window._showPred&&totals.length>=14){
+    var n=totals.length;
+    var preds=hwForecast(totals,7);
+    var predDates=dates.slice(),predVals=new Array(n).fill(null);
+    var fitted=hwFitted(totals);
+    for(var i=Math.max(0,n-14);i<n;i++)predVals[i]=fitted[i];
+    for(var i=0;i<7;i++){predDates.push('+'+(i+1)+'天');predVals.push(preds[i]);}
+    series[0].data=predDates.map(function(_,i){return i<n?totals[i]:null});
+    series[1].data=predDates.map(function(_,i){return i<n?ma[i]:null});
+    series.push({name:'預測(Holt-Winters)',type:'line',data:predVals,smooth:true,itemStyle:{color:'#f472b6'},lineStyle:{type:'dotted',width:2.5},showSymbol:false,z:3});
+    legend.push('預測(Holt-Winters)');
+    var rainFull=predDates.map(function(_,i){return i<n?rain[i]:0});
+    series.push({name:'降雨量',type:'bar',data:rainFull,yAxisIndex:1,itemStyle:{color:'rgba(59,130,246,0.4)'},barMaxWidth:6,z:0});
+    legend.push('降雨量');
+    c.setOption({backgroundColor:'transparent',tooltip:{trigger:'axis'},legend:{data:legend,textStyle:{color:'#94a3b8'}},grid:{left:60,right:60,top:40,bottom:30},xAxis:{type:'category',data:predDates,axisLabel:{fontSize:10,rotate:45}},yAxis:[{type:'value',name:'m³',axisLabel:{formatter:function(v){return(v/1000000).toFixed(1)+'M'}}},{type:'value',name:'mm',max:15}],series:series});
+    return;
+  }
+  series.push({name:'降雨量',type:'bar',data:rain,yAxisIndex:1,itemStyle:{color:'rgba(59,130,246,0.4)'},barMaxWidth:6,z:0});
+  legend.push('降雨量');
+  c.setOption({backgroundColor:'transparent',tooltip:{trigger:'axis'},legend:{data:legend,textStyle:{color:'#94a3b8'}},grid:{left:60,right:60,top:40,bottom:30},xAxis:{type:'category',data:dates,axisLabel:{fontSize:10,rotate:45}},yAxis:[{type:'value',name:'m³',axisLabel:{formatter:function(v){return(v/1000000).toFixed(1)+'M'}}},{type:'value',name:'mm',max:15}],series:series});
+}
+
+function renderDmaTrend(dma){
+  disposeChart('dt');
+  var c=initChart(document.getElementById('dmaTrendChart'),'dt');
+  var dates=D.trend.map(function(d){return d.date});
+  var vals=D.trend.map(function(d){return d.dmas[dma]||0});
+  var ma=calcMA(vals,7);
+  var preds=hwForecast(vals,7);
+  var predDates=dates.slice(),predVals=new Array(vals.length).fill(null);
+  var fitted=hwFitted(vals);
+  for(var i=Math.max(0,vals.length-14);i<vals.length;i++)predVals[i]=fitted[i];
+  for(var i=0;i<7;i++){predDates.push('+'+(i+1)+'天');predVals.push(preds[i]);}
+  var color=DC[dma]||'#38bdf8';
+  var series=[
+    {name:dma,type:'bar',data:predDates.map(function(_,i){return i<vals.length?vals[i]:null}),itemStyle:{color:color,opacity:0.4},barMaxWidth:6},
+    {name:'7天均值',type:'line',data:predDates.map(function(_,i){return i<vals.length?ma[i]:null}),smooth:true,itemStyle:{color:'#fbbf24'},lineStyle:{width:2},showSymbol:false},
+    {name:'預測(Holt-Winters)',type:'line',data:predVals,smooth:true,itemStyle:{color:'#f472b6'},lineStyle:{type:'dotted',width:2},showSymbol:false}
+  ];
+  c.setOption({backgroundColor:'transparent',tooltip:{trigger:'axis'},legend:{data:series.map(function(s){return s.name}),textStyle:{color:'#94a3b8'}},grid:{left:60,right:40,top:40,bottom:30},xAxis:{type:'category',data:predDates,axisLabel:{fontSize:10,rotate:45}},yAxis:{type:'value',name:'m³'},series:series});
+}
+
+// === rank.js ===
+// === 排名頁 ===
+function renderRank(){
+  var h='<section class="card"><h2>📈 Top50 排名追蹤 <span class="hint">（進入Top50次數最多的水表）</span> <span style="float:right;cursor:pointer;color:var(--muted);font-size:11px" onclick="exportRankCsv()">💾 匯出CSV</span></h2><table><thead><tr><th>#</th><th>合同編號</th><th>建築物</th><th>DMA</th><th>天數</th><th>平均排名</th><th class="num">平均用水</th><th>趨勢</th></tr></thead><tbody>';
+  D.rank.forEach(function(r,i){var tc=r.trend==='↑'?'up':r.trend==='↓'?'down':'';h+='<tr><td>'+(i+1)+'</td><td class="contract">'+mask(r.contractId)+'</td><td class="'+(isUnlocked?'':'masked')+'" onclick="clickMasked()">'+maskBuilding(r.buildingName)+'</td><td><span class="tag" style="background:'+(DC[r.dma]||'#666')+'">'+esc(r.dma)+'</span></td><td>'+r.daysInTop20+'/'+D.dates.length+'</td><td>'+r.avgRank+'</td><td class="num">'+fmt(r.avgTotal)+'</td><td class="'+tc+'">'+r.trend+'</td></tr>';});
+  h+='</tbody></table></section>';
+  document.getElementById('page-rank').innerHTML=h;
+}
+
+function exportRankCsv(){
+  var rows=[['排名','合同編號','建築物','DMA','Top50天數','平均排名','平均用水']];
+  D.rank.forEach(function(r,i){rows.push([i+1,r.contractId||'',r.buildingName||'',r.dma||'',r.daysInTop20,r.avgRank,Math.round(r.avgTotal||0)])});
+  exportCsv(rows,'rank_top50.csv');
+}
+
+// === diff.js ===
+// === 差額頁 ===
+function renderDiff(){
+  var h='<section class="card"><h2>💰 月度主分表差額</h2>';
+  if(D.diff.length){h+='<div class="ms">';D.diff.forEach(function(d,i){h+='<button class="mb '+(i===D.diff.length-1?'active':'')+'" onclick="showMonthDiff(\''+d.month+'\',this)">'+d.month+'</button>';});h+='</div><div class="chart-actions"><button class="export-btn" onclick="exportChart(\'diff\',\'主分表差額\')">匯出 PNG</button></div><div id="mDiffChart" style="height:300px;margin:16px 0"></div><div id="mDiff"></div>';}
+  h+='</section>';h+='<section class="card"><h2>NRW（無收益水）說明</h2><div class="dc"><p><b>NRW = 主表讀數 - Σ(分表讀數)</b></p><p>NRW率 = NRW / 主表讀數 × 100%</p><p class="hint">NRW 包含：漏損 + 計量誤差 + 未計費用水</p></div></section>';
+  document.getElementById('page-diff').innerHTML=h;
+  if(D.diff.length){renderDiffChart(selDiffMeter);showMonthDiff(D.diff[D.diff.length-1].month);}
+}
+
+function renderDiffChart(meterId){
+  if(!D.diff||!D.diff.length)return;
+  var months=[],mainTotals=[],subTotals=[],diffs=[],nrwPct=[];
+  var title='月度匯總';
+  D.diff.forEach(function(d){
+    if(meterId){
+      var m=d.diffs.find(function(x){return x.mainMeterId===meterId});
+      if(m){months.push(d.month);mainTotals.push(m.mainMonthTotal);subTotals.push(m.subMonthTotal);diffs.push(m.mainMonthTotal-m.subMonthTotal);nrwPct.push(m.mainMonthTotal>0?Math.round((m.mainMonthTotal-m.subMonthTotal)/m.mainMonthTotal*1000)/10:0);}
+    }else{
+      var mt=0,st=0;
+      d.diffs.forEach(function(m){mt+=m.mainMonthTotal;st+=m.subMonthTotal;});
+      months.push(d.month);mainTotals.push(mt);subTotals.push(st);diffs.push(mt-st);nrwPct.push(mt>0?Math.round((mt-st)/mt*1000)/10:0);
+    }
+  });
+  if(meterId){var info=D.search.find(function(s){return s.id===meterId});title=info?(mask(info.contract)+' '+maskBuilding(info.building)):meterId;}
+  var chartDom=document.getElementById('mDiffChart');
+  if(!chartDom)return;
+  disposeChart('diff');
+  var c=initChart(chartDom,'diff');
+  c.setOption({
+    backgroundColor:'transparent',
+    title:{text:title,left:'center',textStyle:{color:'#e2e8f0',fontSize:13,fontWeight:'normal'}},
+    tooltip:{trigger:'axis',formatter:function(p){var r=p[0].axisValue+'<br/>';p.forEach(function(i){r+=i.marker+' '+i.seriesName+': '+i.value.toLocaleString()+(i.seriesName.indexOf('%')>=0?'%':' m³')+'<br/>';});return r;}},
+    legend:{data:['主表','分表合計','差額','NRW率%'],textStyle:{color:'#94a3b8'},top:22},
+    grid:{left:70,right:70,top:55,bottom:30},
+    xAxis:{type:'category',data:months,axisLabel:{color:'#94a3b8'}},
+    yAxis:[{type:'value',name:'m³',axisLabel:{color:'#94a3b8'}},{type:'value',name:'%',axisLabel:{color:'#94a3b8',formatter:'{value}%' },splitLine:{show:false}}],
+    series:[
+      {name:'主表',type:'bar',data:mainTotals,itemStyle:{color:'#38bdf8'},barWidth:'25%'},
+      {name:'分表合計',type:'bar',data:subTotals,itemStyle:{color:'#a78bfa'},barWidth:'25%'},
+      {name:'差額',type:'bar',data:diffs,itemStyle:{color:function(p){return p.value<0?'#ef4444':'#fbbf24'}},barWidth:'25%'},
+      {name:'NRW率%',type:'line',yAxisIndex:1,data:nrwPct,itemStyle:{color:'#34d399'},lineStyle:{width:3},symbol:'circle',symbolSize:8}
+    ]
+  });
+}
+
+function resetDiffSel(){selDiffMeter=null;renderDiffChart();var activeBtn=document.querySelector('#page-diff .mb.active');if(activeBtn)showMonthDiff(activeBtn.textContent,activeBtn);else showMonthDiff(D.diff[D.diff.length-1].month);}
+
+function showMonthDiff(month,btn){
+  if(btn){document.querySelectorAll('#page-diff .mb').forEach(function(b){b.classList.remove('active')});btn.classList.add('active');}
+  var data=D.diff.find(function(d){return d.month===month});if(!data)return;
+  var h='';if(selDiffMeter){h+='<div style="margin-bottom:10px"><button class="mb" onclick="resetDiffSel()" style="font-size:12px">← 返回匯總</button> <span class="hint">目前: '+selDiffMeter+'</span></div>';}
+  h+='<table><thead><tr><th>#</th><th>合同編號</th><th>建築物</th><th>DMA</th><th>分表數</th><th class="num">主表月量</th><th class="num">分表月量</th><th class="num">差額</th><th class="num">NRW%</th></tr></thead><tbody>';
+  data.diffs.slice(0,30).forEach(function(d,i){var c2=d.diffPct>20||d.diffPct<-20?'warn':'';h+='<tr class="'+c2+'" style="cursor:pointer" onclick="selDiffMeter=\''+esc(d.mainMeterId)+'\';renderDiffChart(selDiffMeter);showDailyDiff(\''+month+'\',\''+esc(d.mainMeterId)+'\',\''+mask(d.mainContractId)+'\',\''+maskBuilding(d.mainBuilding)+'\')"><td>'+(i+1)+'</td><td class="contract">'+mask(d.mainContractId)+'</td><td class="'+(isUnlocked?'':'masked')+'" onclick="event.stopPropagation();clickMasked()">'+maskBuilding(d.mainBuilding)+'</td><td><span class="tag" style="background:'+(DC[d.dma]||'#666')+'">'+esc(d.dma)+'</span></td><td>'+d.subCount+'</td><td class="num">'+fmt(d.mainMonthTotal)+'</td><td class="num">'+fmt(d.subMonthTotal)+'</td><td class="num '+(d.diff<0?'neg':'')+'">'+fmt(d.diff)+'</td><td class="num '+(d.diffPct<0?'neg':'')+'">'+d.diffPct+'%</td></tr>';});
+  h+='</tbody></table><div id="dailyDiffDetail"></div>';
+  document.getElementById('mDiff').innerHTML=h;
+}
+
+function showDailyDiff(month,mainMeterId,contract,building){
+  var detailEl=document.getElementById('dailyDiffDetail');
+  if(!detailEl)return;
+  var monthData=D.diff.find(function(d){return d.month===month});
+  if(!monthData){detailEl.innerHTML='<div class="card"><p style="color:#ef4444">未找到月份資料</p></div>';return;}
+  var meterData=monthData.diffs.find(function(d){return d.mainMeterId===mainMeterId});
+  if(!meterData){detailEl.innerHTML='<div class="card"><p style="color:#ef4444">未找到水表資料</p></div>';return;}
+  var subMeterIds=Array.isArray(meterData.subs)?meterData.subs:Object.keys(meterData.subs||{});
+  var dailyData=meterData.daily||{};
+  var dates=Object.keys(dailyData).sort();
+  var mainTotals=[],subTotals=[],dailyDiffs=[];
+  dates.forEach(function(date){var d=dailyData[date]||{};mainTotals.push(d.main||0);subTotals.push(d.sub||0);dailyDiffs.push(d.diff||0);});
+
+  // 組合完整 HTML（圖表 + 分表明細）
+  var totalDiff=dailyDiffs.reduce(function(a,b){return a+b},0);
+  var avgDiff=dates.length>0?Math.round(totalDiff/dates.length):0;
+  var posDays=dailyDiffs.filter(function(d){return d>0}).length;
+  var negDays=dailyDiffs.filter(function(d){return d<0}).length;
+  var dataType=(meterData&&meterData.hasRealData)?'✅ 實際日資料':'📊 月總量按日均分';
+  var h='<div class="card" style="margin-top:16px"><h2>📊 '+contract+' 每日差額詳情</h2>';
+  if(building)h+='<p style="color:#94a3b8;font-size:13px;margin-bottom:12px">'+building+' · 主表: '+mainMeterId+' · 分表: '+subMeterIds.length+' 個 · '+dataType+'</p>';
+  h+='<div class="chart-actions"><button class="export-btn" onclick="exportChart(\'dd\',\'每日差額\')">匯出 PNG</button></div><div id="dailyDiffChart" class="chart" style="height:350px"></div>';
+  h+='<div class="sr" style="margin-top:16px"><div class="si"><div class="sl">月總差額</div><div class="sv '+(totalDiff<0?'neg':'')+'">'+fmt(totalDiff)+' m³</div></div><div class="si"><div class="sl">日均差額</div><div class="sv '+(avgDiff<0?'neg':'')+'">'+fmt(avgDiff)+' m³</div></div><div class="si"><div class="sl">正/負天數</div><div class="sv">'+posDays+'/'+negDays+'</div></div></div></div>';
+
+  // 渲染分表用水量明細
+  h+='<div class="card"><h2>💧 分表用水量 ('+month+')</h2>';
+  h+='<p class="hint">主表: '+mainMeterId+' | 合同: '+contract+' | 建築物: '+building+'</p>';
+  h+='<p class="hint">分表數: '+subMeterIds.length+' | 主表月量: '+fmt(meterData.mainMonthTotal)+' | 分表月量: '+fmt(meterData.subMonthTotal)+' | 差額: '+fmt(meterData.diff)+'</p>';
+  h+='<table><thead><tr><th>分表ID</th><th>合同編號</th><th class="num">月用水量</th></tr></thead><tbody>';
+  var subMeterData=[];
+  subMeterIds.forEach(function(subId){var monthly=D.meterMonthly[subId]||{};var monthTotal=monthly[month]||0;var info=D.search.find(function(s){return s.id===subId})||{};subMeterData.push({id:subId,total:monthTotal,contract:info.contract||''});});
+  subMeterData.sort(function(a,b){return b.total-a.total});
+  subMeterData.slice(0,20).forEach(function(m){h+='<tr><td>'+m.id+'</td><td>'+mask(m.contract)+'</td><td class="num">'+fmt(m.total)+'</td></tr>';});
+  if(subMeterData.length>20){h+='<tr><td colspan="3" class="hint">... 還有 '+(subMeterData.length-20)+' 個分表</td></tr>';}
+  h+='</tbody></table></div>';
+  detailEl.innerHTML=h;
+
+  // 渲染每日差額圖表（在 DOM 更新後）
+  setTimeout(function(){
+    var chartDom=document.getElementById('dailyDiffChart');
+    if(!chartDom)return;
+    disposeChart('dd');
+    var c=initChart(chartDom,'dd');
+    c.setOption({backgroundColor:'transparent',tooltip:{trigger:'axis',formatter:function(params){var result=params[0].axisValue+'<br/>';params.forEach(function(p){result+=p.marker+' '+p.seriesName+': '+p.value.toLocaleString()+' m³<br/>';});return result;}},legend:{data:['主表','分表合計','差額'],textStyle:{color:'#94a3b8'},top:0},grid:{left:80,right:30,top:40,bottom:60},xAxis:{type:'category',data:dates,axisLabel:{fontSize:10,rotate:45,color:'#94a3b8'}},yAxis:{type:'value',name:'m³',axisLabel:{color:'#94a3b8'}},series:[{name:'主表',type:'bar',data:mainTotals,itemStyle:{color:'#38bdf8'},barWidth:'30%'},{name:'分表合計',type:'bar',data:subTotals,itemStyle:{color:'#a78bfa'},barWidth:'30%'},{name:'差額',type:'line',data:dailyDiffs,itemStyle:{color:'#fbbf24'},lineStyle:{width:3},symbol:'circle',symbolSize:8}]});
+  },100);
+}
+
+function renderDailyDiffChart(dates,mainTotals,subTotals,dailyDiffs,contract,building,mainMeterId,subMeterIds,month,meterData){
+  for(var i=0;i<dates.length;i++){if(mainTotals[i]===undefined)mainTotals[i]=0;if(subTotals[i]===undefined)subTotals[i]=0;if(dailyDiffs[i]===undefined)dailyDiffs[i]=0;}
+  var totalDiff=dailyDiffs.reduce(function(a,b){return a+b},0);
+  var avgDiff=dates.length>0?Math.round(totalDiff/dates.length):0;
+  var posDays=dailyDiffs.filter(function(d){return d>0}).length;
+  var negDays=dailyDiffs.filter(function(d){return d<0}).length;
+  var dataType=(meterData&&meterData.hasRealData)?'✅ 實際日資料':'📊 月總量按日均分';
+  var h='<div class="card" style="margin-top:16px"><h2>📊 '+contract+' 每日差額詳情</h2>';
+  if(building)h+='<p style="color:#94a3b8;font-size:13px;margin-bottom:12px">'+building+' · 主表: '+mainMeterId+' · 分表: '+subMeterIds.length+' 個 · '+dataType+'</p>';
+  h+='<div class="chart-actions"><button class="export-btn" onclick="exportChart(\'dd\',\'每日差額\')">匯出 PNG</button></div><div id="dailyDiffChart" class="chart" style="height:350px"></div>';
+  h+='<div class="sr" style="margin-top:16px"><div class="si"><div class="sl">月總差額</div><div class="sv '+(totalDiff<0?'neg':'')+'">'+fmt(totalDiff)+' m³</div></div><div class="si"><div class="sl">日均差額</div><div class="sv '+(avgDiff<0?'neg':'')+'">'+fmt(avgDiff)+' m³</div></div><div class="si"><div class="sl">正/負天數</div><div class="sv">'+posDays+'/'+negDays+'</div></div></div></div>';
+  document.getElementById('dailyDiffDetail').innerHTML=h;
+  setTimeout(function(){
+    var chartDom=document.getElementById('dailyDiffChart');
+    if(!chartDom)return;
+    disposeChart('dd');
+    var c=initChart(chartDom,'dd');
+    c.setOption({backgroundColor:'transparent',tooltip:{trigger:'axis',formatter:function(params){var result=params[0].axisValue+'<br/>';params.forEach(function(p){result+=p.marker+' '+p.seriesName+': '+p.value.toLocaleString()+' m³<br/>';});return result;}},legend:{data:['主表','分表合計','差額'],textStyle:{color:'#94a3b8'},top:0},grid:{left:80,right:30,top:40,bottom:60},xAxis:{type:'category',data:dates,axisLabel:{fontSize:10,rotate:45,color:'#94a3b8'}},yAxis:{type:'value',name:'m³',axisLabel:{color:'#94a3b8'}},series:[{name:'主表',type:'bar',data:mainTotals,itemStyle:{color:'#38bdf8'},barWidth:'30%'},{name:'分表合計',type:'bar',data:subTotals,itemStyle:{color:'#a78bfa'},barWidth:'30%'},{name:'差額',type:'line',data:dailyDiffs,itemStyle:{color:'#fbbf24'},lineStyle:{width:3},symbol:'circle',symbolSize:8}]});
+  },100);
+}
+
+// === anomaly.js ===
+// === 異常檢測頁 ===
+function renderAnomaly(){
+  var h='<section class="card"><h2>⚠ 異常用水檢測 <span class="hint">(滾動14天視窗基準)</span></h2>';
+  h+='<span class="cf-toggle" onclick="_anomCfgOpen=!_anomCfgOpen;renderAnomaly()">'+(_anomCfgOpen?'▼ 隱藏設定':'▶ 過濾設定')+'</span>';
+  h+='<div class="cf '+(_anomCfgOpen?'open':'')+'"><div class="cf-inner">';
+  h+='<div class="cf-row"><label>暴增倍數</label><input type="range" min="2" max="8" step="0.5" value="'+_anomCfg.spikeMult+'" oninput="_anomCfg.spikeMult=parseFloat(this.value);renderAnomaly()"><span class="val">'+_anomCfg.spikeMult.toFixed(1)+'×</span></div>';
+  h+='<div class="cf-row"><label>最小分數</label><input type="range" min="0.1" max="0.8" step="0.05" value="'+_anomCfg.minScore+'" oninput="_anomCfg.minScore=parseFloat(this.value);renderAnomaly()"><span class="val">'+_anomCfg.minScore.toFixed(2)+'</span></div>';
+  h+='</div></div>';
+  var ts='display:inline-block;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px;margin-right:4px;';
+  var aOn=ts+'background:#38bdf8;color:#0f172a;font-weight:600;';
+  var aOff=ts+'background:#334155;color:#cbd5e1;';
+  if(!window._anomType)window._anomType='all';
+  h+='<div class="dc" style="margin-bottom:10px">';
+  h+='<input type="date" class="di" min="'+D.dates[0]+'" max="'+D.dates[D.dates.length-1]+'" value="'+(window._anomDate||D.dates[D.dates.length-1])+'" onchange="window._anomDate=this.value;renderAnomaly()">';
+  h+='<button class="nb" onclick="var d=D.dates,i=d.indexOf(window._anomDate||d[d.length-1]);if(i>0){window._anomDate=d[i-1];renderAnomaly()}">&#9664;</button>';
+  h+='<span class="dd">'+(window._anomDate||D.dates[D.dates.length-1])+'</span>';
+  h+='<button class="nb" onclick="var d=D.dates,i=d.indexOf(window._anomDate||d[d.length-1]);if(i<d.length-1){window._anomDate=d[i+1];renderAnomaly()}">&#9654;</button>';
+  h+='</div>';
+  h+='<div style="margin-bottom:10px">';
+  h+='<span style="'+(window._anomType==='all'?aOn:aOff)+'" onclick="window._anomType=&quot;all&quot;;renderAnomaly()">全部</span>';
+  h+='<span style="'+(window._anomType==='spike'?aOn:aOff)+'" onclick="window._anomType=&quot;spike&quot;;renderAnomaly()">暴增</span>';
+  h+='<span style="'+(window._anomType==='drop'?aOn:aOff)+'" onclick="window._anomType=&quot;drop&quot;;renderAnomaly()">暴跌</span>';
+  h+='<span style="'+(window._anomType==='zero'?aOn:aOff)+'" onclick="window._anomType=&quot;zero&quot;;renderAnomaly()">歸零</span>';
+  h+='<span style="'+(window._anomType==='watch'?aOn:aOff)+'" onclick="window._anomType=&quot;watch&quot;;renderAnomaly()">關注</span>';
+  h+='<span style="'+aOff+'margin-left:6px" onclick="exportAnomalyCsv()">💾 匯出CSV</span>';
+  h+='</div>';
+  var byType={'spike':0,'drop':0,'zero':0,'watch':0};
+  D.anomalies.forEach(function(a){if(byType.hasOwnProperty(a.type))byType[a.type]++;});
+  h+='<p style="color:#64748b;font-size:11px;margin-bottom:8px">暴增'+byType.spike+' | 暴跌'+byType.drop+' | 歸零'+byType.zero+' | 關注'+byType.watch+' (共'+D.anomalies.length+'條)</p>';
+  var dateFilter=window._anomDate;
+  var filtered=dateFilter?D.anomalies.filter(function(a){return a.date===dateFilter}):D.anomalies.slice(0,200);
+  if(window._anomType!=='all')filtered=filtered.filter(function(a){return a.type===window._anomType;});
+  filtered=filtered.filter(function(a){return a.anomalyScore>=_anomCfg.minScore;});
+  if(_anomCfg.spikeMult<4)filtered=filtered.filter(function(a){return a.type!=='spike'||a.total/a.pastMean>=_anomCfg.spikeMult;});
+  if(filtered.length){
+    h+='<table><thead><tr><th>日期</th><th>類型</th><th>表位編號</th><th>建築物</th><th>DMA</th><th class="num">當日</th><th class="num">14天均值</th><th class="num">分數</th><th>原因</th></tr></thead><tbody>';
+    filtered.forEach(function(a){
+      var tc2={'spike':'#f87171','drop':'#fb923c','zero':'#a78bfa','watch':'#fbbf24'};
+      var tn={'spike':'暴增','drop':'暴跌','zero':'歸零','watch':'關注'};
+      h+='<tr class="warn" style="cursor:pointer" onclick="window._anomTarget={meterId:'+JSON.stringify(esc(a.meterId)).replace(/"/g,'&quot;')+',contractId:'+JSON.stringify(mask(a.contractId||a.meterId)).replace(/"/g,'&quot;')+',anomalyDate:'+JSON.stringify(a.date).replace(/"/g,'&quot;')+',anomalyType:'+JSON.stringify(a.type).replace(/"/g,'&quot;')+'};showAnomCurve()">';
+      h+='<td>'+a.date+'</td>';
+      h+='<td><span class="tag" style="background:'+(tc2[a.type]||'#666')+'">'+tn[a.type]+'</span></td>';
+      h+='<td>'+esc(a.meterId)+'</td>';
+      h+='<td class="'+(isUnlocked?'':'masked')+'" onclick="clickMasked()">'+maskBuilding(a.buildingName)+'</td>';
+      h+='<td><span class="tag" style="background:'+(DC[a.dma]||'#666')+'">'+esc(a.dma)+'</span></td>';
+      h+='<td class="num">'+fmt(a.total)+'</td>';
+      h+='<td class="num">'+(a.pastMean?fmt(a.pastMean):'-')+'</td>';
+      h+='<td class="num '+(a.anomalyScore>=0.7?'neg':'')+'">'+(a.anomalyScore!=null?a.anomalyScore.toFixed(2):'-')+'</td>';
+      h+='<td style="font-size:11px">'+a.reason+'</td></tr>';
+    });
+    h+='</tbody></table>';
+    if(!dateFilter)h+='<p style="color:#64748b;font-size:11px;margin-top:8px">顯示最近200條 · 選擇日期查看單日全部</p>';
+    else h+='<p style="color:#64748b;font-size:11px;margin-top:8px">'+filtered.length+'條 - '+dateFilter+'</p>';
+  }else{
+    h+='<p style="color:#64748b">'+(dateFilter?dateFilter+' 無異常':'無異常')+'</p>';
+  }
+  h+='<span class="cf-toggle" style="margin-top:12px" onclick="var s=this.nextElementSibling;s.style.maxHeight=s.style.maxHeight?\'\':\'300px\';setTimeout(function(){Object.values(charts).forEach(function(c){if(c)c.resize()})},350)">▶ 異常統計分析</span>';
+  h+='<div style="max-height:0;overflow:hidden;transition:max-height .3s"><div class="cf-inner" style="margin-top:8px"><div style="display:flex;gap:12px;flex-wrap:wrap">';
+  h+='<div id="anomStatsDMA" class="chart" style="height:200px;flex:1;min-width:200px"></div>';
+  h+='<div id="anomStatsMonth" class="chart" style="height:200px;flex:1;min-width:200px"></div>';
+  h+='<div id="anomStatsType" class="chart" style="height:200px;flex:1;min-width:180px"></div></div>';
+  var anomFreq={};D.anomalies.forEach(function(a){anomFreq[a.meterId]=(anomFreq[a.meterId]||0)+1});
+  var freqList=Object.keys(anomFreq).sort(function(a,b){return anomFreq[b]-anomFreq[a]}).slice(0,10);
+  h+='<div style="margin-top:10px"><span style="font-size:11px;color:var(--muted)">異常頻發水表 Top10: </span>';
+  freqList.forEach(function(id,i){h+='<span style="font-size:11px;color:var(--text);margin-right:8px">'+id+' ('+anomFreq[id]+')次</span>'});
+  h+='</div></div></div>';
+
+  // 異常統計概覽卡片
+  var uniqueMeters={};
+  D.anomalies.forEach(function(a){uniqueMeters[a.meterId]=1;});
+  h+='<div class="kpi-grid" style="margin-top:12px">';
+  h+='<div class="kpi"><div class="label">總異常數</div><div class="value">'+D.anomalies.length+'</div><div class="sub">條</div></div>';
+  h+='<div class="kpi"><div class="label">涉及水表</div><div class="value">'+Object.keys(uniqueMeters).length+'</div><div class="sub">個</div></div>';
+  h+='<div class="kpi"><div class="label">暴增</div><div class="value" style="color:#f87171">'+byType.spike+'</div><div class="sub">條</div></div>';
+  h+='<div class="kpi"><div class="label">暴跌</div><div class="value" style="color:#fb923c">'+byType.drop+'</div><div class="sub">條</div></div>';
+  h+='<div class="kpi"><div class="label">歸零</div><div class="value" style="color:#facc15">'+byType.zero+'</div><div class="sub">條</div></div>';
+  h+='<div class="kpi"><div class="label">關注</div><div class="value" style="color:#818cf8">'+byType.watch+'</div><div class="sub">條</div></div>';
+  h+='</div>';
+
+  // 趨勢分析可摺疊區域
+  h+='<span class="cf-toggle" style="margin-top:12px" onclick="var s=this.nextElementSibling;s.style.maxHeight=s.style.maxHeight?\'\':\'500px\';setTimeout(function(){if(!window._anomTrendInited){drawAnomTrendChart(\'daily\');window._anomTrendInited=true;}Object.values(charts).forEach(function(c){if(c)c.resize()})},350)">▶ 異常趨勢分析</span>';
+  h+='<div style="max-height:0;overflow:hidden;transition:max-height .3s"><div style="margin-top:8px">';
+  h+='<div class="ms" style="margin-bottom:6px"><button class="mb active" onclick="drawAnomTrendChart(\'daily\',this)">每日異常數</button><button class="mb" onclick="drawAnomTrendChart(\'type\',this)">按類型分布</button><button class="mb" onclick="drawAnomTrendChart(\'score\',this)">評分分布</button><button class="mb" onclick="drawAnomTrendChart(\'weekday\',this)">週幾分布</button></div>';
+  h+='<div class="chart-actions"><button class="export-btn" onclick="exportChart(\'anomTrend\',\'異常趨勢\')">匯出 PNG</button></div>';
+  h+='<div id="anomTrendChart" class="chart" style="height:350px"></div>';
+  h+='</div></div>';
+
+  h+='<div id="anomOverlay" class="ov" style="display:none"><div class="ov-bg" onclick="closeAnomOverlay()"></div><div class="ov-box"><span class="ov-close" onclick="closeAnomOverlay()">✕</span><span id="anomOverlayTitle" style="font-weight:600;color:var(--text);margin-bottom:8px;display:block"></span><div class="anom-nav"><button id="anomPrevBtn" onclick="navAnomDate(-1)">◀ 上一條</button><span style="font-size:11px;color:var(--muted)" id="anomNavInfo"></span><button id="anomNextBtn" onclick="navAnomDate(1)">下一條 ▶</button></div><div id="anomCurve" style="width:100%;height:320px"></div></div></div>';
+  h+='</section>';
+  document.getElementById('page-anomaly').innerHTML=h;
+  if(!window._anomDate)window._anomDate=D.dates[D.dates.length-1];
+  setTimeout(function(){renderAnomStats();},100);
+}
+
+function renderAnomStats(){
+  var anoms=D.anomalies;
+  var dmaDist={};anoms.forEach(function(a){var d=a.dma||'未分類';dmaDist[d]=(dmaDist[d]||0)+1});
+  var dmaPie=Object.keys(dmaDist).map(function(k){return{name:k,value:dmaDist[k]}});
+  disposeChart('ad');
+  var cAd=initChart(document.getElementById('anomStatsDMA'),'ad');
+  cAd.setOption({backgroundColor:'transparent',title:{text:'異常 DMA 分布',textStyle:{color:'var(--muted)',fontSize:12},left:'center'},tooltip:{trigger:'item'},series:[{type:'pie',radius:'60%',data:dmaPie,label:{fontSize:10},itemStyle:{borderColor:'var(--bg)',borderWidth:1}}]});
+  var monthDist={};anoms.forEach(function(a){var m=a.date.slice(0,7);monthDist[m]=(monthDist[m]||0)+1});
+  var months=Object.keys(monthDist).sort();
+  var monthVals=months.map(function(m){return monthDist[m]});
+  disposeChart('am');
+  var cAm=initChart(document.getElementById('anomStatsMonth'),'am');
+  cAm.setOption({backgroundColor:'transparent',title:{text:'異常月份趨勢',textStyle:{color:'var(--muted)',fontSize:12},left:'center'},grid:{left:40,right:10,top:30,bottom:30},xAxis:{type:'category',data:months,axisLabel:{rotate:45,fontSize:9}},yAxis:{type:'value'},series:[{type:'bar',data:monthVals,itemStyle:{color:'#818cf8',borderRadius:[3,3,0,0]}}]});
+  var types={spike:0,drop:0,zero:0,watch:0};anoms.forEach(function(a){if(types.hasOwnProperty(a.type))types[a.type]++});
+  var typePie=[{name:'暴增',value:types.spike,itemStyle:{color:'#f87171'}},{name:'暴跌',value:types.drop,itemStyle:{color:'#fb923c'}},{name:'歸零',value:types.zero,itemStyle:{color:'#a78bfa'}},{name:'關注',value:types.watch,itemStyle:{color:'#fbbf24'}}];
+  disposeChart('at');
+  var cAt=initChart(document.getElementById('anomStatsType'),'at');
+  cAt.setOption({backgroundColor:'transparent',title:{text:'異常類型分布',textStyle:{color:'var(--muted)',fontSize:12},left:'center'},tooltip:{trigger:'item'},series:[{type:'pie',radius:['40%','65%'],data:typePie,label:{fontSize:10,formatter:'{b}: {c}'},itemStyle:{borderColor:'var(--bg)',borderWidth:1}}]});
+}
+
+function exportAnomalyCsv(){
+  var anoms=D.anomalies;
+  if(window._anomType&&window._anomType!=='all')anoms=anoms.filter(function(a){return a.type===window._anomType});
+  var rows=[['日期','類型','水表ID','建築物','DMA','當日','14天均值','分數','原因']];
+  anoms.forEach(function(a){rows.push([a.date,a.type,a.meterId,a.buildingName||'',a.dma||'',a.total,a.pastMean||'',a.anomalyScore!=null?a.anomalyScore.toFixed(3):'',a.reason||''])});
+  exportCsv(rows,'anomalies.csv');
+}
+
+function showAnomCurve(){
+  var t=window._anomTarget;if(!t)return;
+  var meterId=t.meterId,contractId=t.contractId,anomalyDate=t.anomalyDate,anomalyType=t.anomalyType||'spike';
+  var md=D.meterDaily[meterId];
+  if(!md){alert('無歷史資料');return;}
+  var ad=new Date(anomalyDate);
+  var rangeDates=[],rangeVals=[];
+  for(var i=-14;i<=7;i++){var d=new Date(ad);d.setDate(ad.getDate()+i);var ds=d.toISOString().slice(0,10);rangeDates.push(ds);rangeVals.push(md.hasOwnProperty(ds)?md[ds]:null);}
+  var firstData=-1,lastData=-1;
+  for(var i=0;i<rangeVals.length;i++){if(rangeVals[i]!==null){if(firstData===-1)firstData=i;lastData=i;}}
+  if(firstData===-1){alert('無歷史資料');return;}
+  rangeDates=rangeDates.slice(firstData,lastData+1);
+  rangeVals=rangeVals.slice(firstData,lastData+1);
+  var validVals=rangeVals.filter(function(v){return v!==null});
+  var avg=validVals.reduce(function(s,v){return s+v},0)/validVals.length;
+  var anomalyIdx=rangeDates.indexOf(anomalyDate);
+  document.getElementById('anomOverlayTitle').textContent='表位:'+(contractId||meterId)+' | 異常日:'+anomalyDate+' | 視窗均值:'+avg.toFixed(0)+'m³';
+  document.getElementById('anomOverlay').style.display='flex';
+  window._anomNavList=D.anomalies.filter(function(a){return a.meterId===meterId;}).map(function(a){return a.date;}).sort();
+  var navIdx=window._anomNavList.indexOf(anomalyDate);
+  document.getElementById('anomNavInfo').textContent=(navIdx+1)+'/'+window._anomNavList.length;
+  document.getElementById('anomPrevBtn').disabled=navIdx<=0;
+  document.getElementById('anomNextBtn').disabled=navIdx>=window._anomNavList.length-1;
+  window._anomNavIdx=navIdx;
+  window._anomNavMeter=meterId;
+  disposeChart('anomC');
+  var c=initChart(document.getElementById('anomCurve'),'anomC');
+  c.setOption({tooltip:{trigger:'axis'},grid:{left:60,right:20,top:20,bottom:40},xAxis:{type:'category',data:rangeDates,axisLabel:{rotate:45,fontSize:10}},yAxis:{type:'value'},series:[{type:'line',data:rangeVals,connectNulls:false,smooth:false,symbol:'circle',symbolSize:6,areaStyle:{opacity:0.08},markLine:{silent:true,data:[{yAxis:avg,name:'均值',label:{formatter:'{c}m³'}}],lineStyle:{color:'#fbbf24',type:'dashed'}},markPoint:{silent:true,symbol:'pin',symbolSize:40,data:anomalyIdx>=0?[{name:anomalyDate,coord:[anomalyIdx,rangeVals[anomalyIdx]],itemStyle:{color:anomalyType==='spike'?'#ef4444':anomalyType==='drop'?'#f97316':anomalyType==='zero'?'#8b5cf6':'#eab308'},label:{show:true,formatter:anomalyDate+'\n'+rangeVals[anomalyIdx].toFixed(0)+'m³',color:'#fff',fontSize:11,fontWeight:'bold',position:'top',distance:8}}]:[],animation:false}}]});
+}
+
+function navAnomDate(dir){
+  var list=window._anomNavList;if(!list||!list.length)return;
+  var newIdx=window._anomNavIdx+dir;
+  if(newIdx<0||newIdx>=list.length)return;
+  var a=D.anomalies.find(function(x){return x.meterId===window._anomNavMeter&&x.date===list[newIdx];});
+  if(a){window._anomTarget={meterId:a.meterId,contractId:a.contractId||a.meterId,anomalyDate:a.date,anomalyType:a.type};showAnomCurve();}
+}
+
+function closeAnomOverlay(){
+  document.getElementById('anomOverlay').style.display='none';
+  disposeChart('anomC');
+}
+
+function drawAnomTrendChart(view,btn){
+  if(btn){
+    document.querySelectorAll('#page-anomaly .ms .mb').forEach(function(b){b.classList.remove('active')});
+    btn.classList.add('active');
+  }
+  disposeChart('anomTrend');
+  var el=document.getElementById('anomTrendChart');
+  if(!el)return;
+  var c=initChart(el,'anomTrend');
+
+  if(view==='daily'){
+    var dateMap={};
+    D.anomalies.forEach(function(a){dateMap[a.date]=(dateMap[a.date]||0)+1;});
+    var dates=D.dates.slice();
+    var counts=dates.map(function(d){return dateMap[d]||0});
+    var ma=[];
+    for(var i=0;i<counts.length;i++){
+      if(i<6){ma.push(null);continue;}
+      var s=0;for(var j=i-6;j<=i;j++)s+=counts[j];
+      ma.push(Math.round(s/7*10)/10);
+    }
+    c.setOption({backgroundColor:'transparent',tooltip:{trigger:'axis'},
+      legend:{data:['每日異常數','7天均值'],textStyle:{color:'#94a3b8'}},
+      grid:{left:60,right:40,top:40,bottom:30},
+      xAxis:{type:'category',data:dates,axisLabel:{fontSize:10,rotate:45}},
+      yAxis:{type:'value',name:'異常數'},
+      series:[
+        {name:'每日異常數',type:'bar',data:counts,itemStyle:{color:'rgba(248,113,113,0.6)'},barMaxWidth:8},
+        {name:'7天均值',type:'line',data:ma,smooth:true,itemStyle:{color:'#fbbf24'},lineStyle:{width:2},showSymbol:false}
+      ]});
+  }
+  else if(view==='type'){
+    var types=['spike','drop','zero','watch'];
+    var colors=['#f87171','#fb923c','#facc15','#818cf8'];
+    var dateMap={};
+    D.anomalies.forEach(function(a){
+      if(!dateMap[a.date])dateMap[a.date]={};
+      dateMap[a.date][a.type]=(dateMap[a.date][a.type]||0)+1;
+    });
+    var dates=D.dates.slice();
+    var series=types.map(function(type,idx){
+      return{
+        name:type,type:'bar',stack:'total',
+        data:dates.map(function(d){return dateMap[d]&&dateMap[d][type]?dateMap[d][type]:0}),
+        itemStyle:{color:colors[idx]}
+      };
+    });
+    c.setOption({backgroundColor:'transparent',tooltip:{trigger:'axis',axisPointer:{type:'shadow'}},
+      legend:{data:types,textStyle:{color:'#94a3b8'}},
+      grid:{left:60,right:40,top:40,bottom:30},
+      xAxis:{type:'category',data:dates,axisLabel:{fontSize:10,rotate:45}},
+      yAxis:{type:'value',name:'異常數'},
+      series:series});
+  }
+  else if(view==='score'){
+    var scoreRanges=['0-0.1','0.1-0.2','0.2-0.3','0.3-0.4','0.4-0.5','0.5-0.6','0.6-0.7','0.7-0.8','0.8-0.9','0.9-1.0'];
+    var scoreCounts=new Array(10).fill(0);
+    D.anomalies.forEach(function(a){
+      var idx=Math.min(Math.floor(a.anomalyScore*10),9);
+      scoreCounts[idx]++;
+    });
+    c.setOption({backgroundColor:'transparent',tooltip:{trigger:'axis'},
+      grid:{left:60,right:40,top:40,bottom:30},
+      xAxis:{type:'category',data:scoreRanges,axisLabel:{fontSize:10}},
+      yAxis:{type:'value',name:'異常數'},
+      series:[{type:'bar',data:scoreCounts,itemStyle:{color:function(p){
+        var clrs=['#34d399','#a78bfa','#818cf8','#f472b6','#fb923c','#f87171','#ef4444','#dc2626','#b91c1c','#991b1b'];
+        return clrs[p.dataIndex];
+      }},barWidth:'60%'}]});
+  }
+  else if(view==='weekday'){
+    var weekDays=['週日','週一','週二','週三','週四','週五','週六'];
+    var dayCounts=new Array(7).fill(0);
+    D.anomalies.forEach(function(a){
+      var d=new Date(a.date);
+      dayCounts[d.getDay()]++;
+    });
+    c.setOption({backgroundColor:'transparent',tooltip:{trigger:'axis',formatter:function(p){return weekDays[p[0].dataIndex]+': '+p[0].value+' 條異常';}},
+      grid:{left:80,right:40,top:20,bottom:30},
+      xAxis:{type:'category',data:weekDays},
+      yAxis:{type:'value',name:'異常數'},
+      series:[{type:'bar',data:dayCounts,itemStyle:{color:function(p){
+        var max=Math.max.apply(null,dayCounts);
+        var ratio=max>0?p.value/max:0;
+        return 'rgba(248,113,113,'+(0.3+ratio*0.7)+')';
+      }},barWidth:'50%'}]});
+  }
+}
+
+// === search.js ===
+// === 搜尋頁 ===
+function renderSearch(){
+  _selMeters={};
+  var h='<section class="card"><h2>🔍 水表月度用水查詢</h2><input type="text" class="si2" placeholder="輸入合同編號、水表編號或建築物名稱..." oninput="doSearch(this.value)"><div id="searchR"></div><div id="compareBar" class="compare-bar"><span class="sel" id="compareCount"></span><button class="mb active" onclick="showCompareMeters()">📊 對比用水曲線</button><button class="nb" onclick="_selMeters={};renderSearch()">取消</button></div><div id="meterD"></div></section>';
+  document.getElementById('page-search').innerHTML=h;
+}
+
+function doSearch(q){
+  if(q.length<2){document.getElementById('searchR').innerHTML='';document.getElementById('meterD').innerHTML='';document.getElementById('compareBar').style.display='none';return;}
+  var ql=q.toLowerCase();var res=D.search.filter(function(s){return(s.contract||'').toLowerCase().includes(ql)||(s.id||'').toLowerCase().includes(ql)||(s.building||'').toLowerCase().includes(ql)}).slice(0,20);
+  var h='<table><thead><tr><th></th><th>合同編號</th><th>水表編號</th><th>建築物</th><th>DMA</th><th>物業類型</th><th>Top50</th><th></th></tr></thead><tbody>';
+  res.forEach(function(r){var tc=r.top20Count||0;var tcColor=tc>20?'#ef4444':tc>5?'#fbbf24':tc>0?'#34d399':'#64748b';var selId=esc(r.id);h+='<tr><td><input type="checkbox" class="ck" '+(_selMeters[selId]?'checked':'')+' onchange="toggleSelMeter(\''+selId+'\',\''+mask(r.contract)+'\',\''+maskBuilding(r.building)+'\',this.checked)" onclick="event.stopPropagation()"></td><td class="contract">'+mask(r.contract)+'</td><td>'+selId+'</td><td class="'+(isUnlocked?'':'masked')+'" onclick="clickMasked()">'+maskBuilding(r.building)+'</td><td><span class="tag" style="background:'+(DC[r.dma]||'#666')+'">'+esc(r.dma)+'</span></td><td><span class="ptag '+(r.type==='001:住宅'?'res':'')+'">'+esc(r.type)+'</span></td><td style="color:'+tcColor+';font-weight:600">'+(tc>0?tc+'天':'-')+'</td><td><button class="nb" onclick="showMeterDetail(\''+selId+'\',\''+mask(r.contract)+'\',\''+maskBuilding(r.building)+'\')">查看</button></td></tr>';});
+  h+='</tbody></table><p style="color:#64748b;font-size:11px;margin-top:8px">共 '+res.length+' 條結果</p>';
+  document.getElementById('searchR').innerHTML=h;
+  updateCompareBar();
+}
+
+function toggleSelMeter(id,contract,building,checked){
+  if(checked){if(Object.keys(_selMeters).length>=5){alert('最多選擇5個水表');return;}_selMeters[id]={contract:contract,building:building};}
+  else delete _selMeters[id];
+  updateCompareBar();
+}
+
+function updateCompareBar(){
+  var keys=Object.keys(_selMeters),bar=document.getElementById('compareBar');
+  if(!bar)return;
+  if(keys.length>=2){bar.style.display='flex';document.getElementById('compareCount').textContent='已選 '+keys.length+' 個水表';}
+  else bar.style.display='none';
+}
+
+function showCompareMeters(){
+  var keys=Object.keys(_selMeters);if(keys.length<2)return;
+  var allDates=D.dates;
+  var series=[];var colors=['#818cf8','#f87171','#34d399','#fbbf24','#fb923c'];
+  keys.forEach(function(id,i){
+    var md=D.meterDaily[id];if(!md)return;
+    var vals=allDates.map(function(d){return md.hasOwnProperty(d)?md[d]:null});
+    series.push({name:_selMeters[id].contract+' ('+id+')',type:'line',data:vals,connectNulls:false,smooth:false,symbol:'none',lineStyle:{width:2,color:colors[i]},itemStyle:{color:colors[i]}});
+  });
+  if(series.length<2)return;
+  var h='<div class="card"><h2>📊 水表日用水對比</h2><div id="compareChart" class="chart" style="height:400px"></div>';
+  keys.forEach(function(id,i){h+='<span style="display:inline-block;width:12px;height:12px;border-radius:2px;background:'+colors[i]+';margin-right:4px"></span><span style="font-size:11px;color:var(--muted);margin-right:12px">'+_selMeters[id].contract+' ('+id+')</span>';});
+  h+='</div>';
+  document.getElementById('meterD').innerHTML=h;
+  disposeChart('cmp');
+  var c=initChart(document.getElementById('compareChart'),'cmp');
+  c.setOption({backgroundColor:'transparent',tooltip:{trigger:'axis'},legend:{data:series.map(function(s){return s.name}),textStyle:{color:'var(--muted)'},bottom:0},grid:{left:60,right:20,top:10,bottom:40},xAxis:{type:'category',data:allDates,axisLabel:{fontSize:9,rotate:45}},yAxis:{type:'value',name:'m³'},series:series});
+}
+
+function showMeterDetail(mid,contract,building){
+  var monthly=D.meterMonthly[mid];if(!monthly){document.getElementById('meterD').innerHTML='<div class="card"><p style="color:#64748b">該水表無月度資料</p></div>';return;}
+  var months=Object.keys(monthly).sort(),vals=months.map(function(m){return Math.round(monthly[m])});
+  var h='<div class="card"><h2>📊 '+esc(contract)+' 月度用水量</h2>';
+  if(building)h+='<p style="color:#94a3b8;font-size:13px;margin-bottom:12px">'+esc(building)+' · '+mid+'</p>';
+  h+='<div id="mChart" class="chart" style="height:300px"></div>';
+  h+='<table style="margin-top:12px"><thead><tr><th>月份</th><th class="num">用水量 (m³)</th><th class="num">環比變化</th></tr></thead><tbody>';
+  months.forEach(function(m,i){var prev=i>0?vals[i-1]:null;var ch=prev!==null&&prev>0?((vals[i]-prev)/prev*100).toFixed(1):null;var cls=ch!==null?(parseFloat(ch)>0?'neg':'up'):'';var arrow=ch!==null?(parseFloat(ch)>0?'↑':'↓'):'';h+='<tr><td>'+m+'</td><td class="num">'+fmt(vals[i])+'</td><td class="num '+cls+'">'+(ch!==null?arrow+Math.abs(ch)+'%':'-')+'</td></tr>';});
+  h+='</tbody></table></div>';
+  var daily=D.meterDaily&&D.meterDaily[mid];
+  if(daily){
+    h+='<div class="card"><h2>📈 日用水曲線</h2><div id="dailyChart" class="chart" style="height:300px"></div></div>';
+  }
+  document.getElementById('meterD').innerHTML=h;
+  disposeChart('m');
+  var c=initChart(document.getElementById('mChart'),'m');
+  c.setOption({backgroundColor:'transparent',tooltip:{trigger:'axis'},grid:{left:60,right:40,top:20,bottom:30},xAxis:{type:'category',data:months},yAxis:{type:'value',name:'m³'},series:[{type:'bar',data:vals,itemStyle:{color:'#38bdf8',borderRadius:[4,4,0,0]},label:{show:true,position:'top',formatter:function(p){return fmt(p.value)},fontSize:11}}]});
+  if(daily){
+    var dDates=Object.keys(daily).sort(),dVals=dDates.map(function(d){return daily[d]});
+    disposeChart('md');
+    var cMd=initChart(document.getElementById('dailyChart'),'md');
+    var dMa=calcMA(dVals,7);
+    cMd.setOption({backgroundColor:'transparent',tooltip:{trigger:'axis'},legend:{data:['日用水量','7天均值'],textStyle:{color:'#94a3b8'}},grid:{left:60,right:40,top:30,bottom:30},xAxis:{type:'category',data:dDates,axisLabel:{fontSize:9,rotate:45}},yAxis:{type:'value',name:'m³'},series:[{name:'日用水量',type:'bar',data:dVals,itemStyle:{color:'rgba(56,189,248,0.6)'},barMaxWidth:4},{name:'7天均值',type:'line',data:dMa,smooth:true,itemStyle:{color:'#fbbf24'},lineStyle:{width:2},showSymbol:false}]});
+  }
+}
+
+// === predict.js ===
+// === 預測頁 ===
+var _predView='building';
+
+function renderPredict(){
+  if(!PRED||!PRED.predictions||!PRED.predictions.length){
+    document.getElementById('page-predict').innerHTML='<section class="card"><p style="color:#64748b">暫無預測資料</p></section>';
+    return;
+  }
+  var h='<section class="card"><h2>🔮 用水預測</h2>';
+  h+='<div class="ms" style="margin-bottom:16px">';
+  h+='<button class="mb '+(_predView==='building'?'active':'')+'" onclick="_predView=\'building\';renderPredict()">🏢 按建築物（路氹城區）</button>';
+  h+='<button class="mb '+(_predView==='meter'?'active':'')+'" onclick="_predView=\'meter\';renderPredict()">💧 按水表（Top50）</button>';
+  h+='</div>';
+  if(_predView==='building'){h+=renderBuildingPrediction();}else{h+=renderMeterPrediction();}
+  h+='</section>';
+  if(!document.getElementById('predictDlg')){
+    var dlg=document.createElement('dialog');
+    dlg.id='predictDlg';
+    dlg.style.cssText='background:#1e293b;color:#e2e8f0;border:1px solid #475569;border-radius:12px;padding:16px;width:90vw;max-width:800px;';
+    dlg.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span id="predictDlgTitle" style="font-weight:bold"></span><button id="predictDlgClose" style="background:none;border:none;color:#94a3b8;font-size:20px;cursor:pointer">✕</button></div><div id="predictDlgChart" style="width:100%;height:400px"></div><div id="predictDlgTable" style="margin-top:12px"></div>';
+    document.body.appendChild(dlg);
+    document.getElementById('predictDlgClose').onclick=function(){dlg.close();};
+    dlg.addEventListener('click',function(e){if(e.target===dlg)dlg.close();});
+  }
+  document.getElementById('page-predict').innerHTML=h;
+}
+
+function renderBuildingPrediction(){
+  if(!PRED_BLD||!PRED_BLD.predictions||!PRED_BLD.predictions.length){return '<p style="color:#64748b">暫無建築物預測資料</p>';}
+  var h='<p class="hint" style="margin-bottom:12px">基於線性迴歸模型 · DMA: '+esc(PRED_BLD.dma)+'</p>';
+  h+='<p class="hint" style="margin-bottom:12px">歷史資料: '+PRED_BLD.historicalRange.start+' ~ '+PRED_BLD.historicalRange.end+' ('+PRED_BLD.historicalRange.days+'天) · 生成時間: '+PRED_BLD.generatedAt+'</p>';
+  h+='<input type="text" class="si2" placeholder="輸入建築物名稱搜尋..." oninput="filterBuildingPredict(this.value)">';
+  var upCount=PRED_BLD.predictions.filter(function(p){return p.trend==='up'}).length;
+  var downCount=PRED_BLD.predictions.filter(function(p){return p.trend==='down'}).length;
+  h+='<div class="sr" style="margin-bottom:16px"><div class="si"><div class="sl">總建築數</div><div class="sv">'+PRED_BLD.totalBuildings+'</div></div><div class="si res"><div class="sl">📈 上升趨勢</div><div class="sv">'+upCount+'</div></div><div class="si nonres"><div class="sl">📉 下降趨勢</div><div class="sv">'+downCount+'</div></div></div>';
+  h+='<div id="buildingPredictList">'+renderBuildingList(PRED_BLD.predictions)+'</div>';
+  return h;
+}
+
+function renderBuildingList(predictions){
+  var h='<table><thead><tr><th>#</th><th>建築物</th><th>物業類型</th><th class="num">水表數</th><th class="num">歷史均值</th><th class="num">預測均值</th><th class="num">模型分</th><th>趨勢</th><th></th></tr></thead><tbody>';
+  predictions.forEach(function(p,i){
+    var avgPred=p.predictions.reduce(function(s,v){return s+v.value},0)/p.predictions.length;
+    var trendColor=p.trend==='up'?'#34d399':'#ef4444';
+    var trendIcon=p.trend==='up'?'↑':'↓';
+    h+='<tr><td>'+(i+1)+'</td><td class="contract">'+esc(p.building)+'</td><td><span class="ptag '+(p.propertyType.indexOf('001:')===0?'res':'')+'">'+esc(p.propertyType)+'</span></td><td class="num">'+p.meterCount+'</td><td class="num">'+fmt(p.avgHistorical)+'</td><td class="num">'+fmt(avgPred)+'</td><td class="num">'+p.modelScore.toFixed(2)+'</td><td style="color:'+trendColor+';font-weight:600">'+trendIcon+' '+p.trend+'</td><td><button class="nb" onclick="showBuildingDetail(\''+esc(p.building)+'\')">查看</button></td></tr>';
+  });
+  h+='</tbody></table>';
+  return h;
+}
+
+function filterBuildingPredict(q){
+  if(q.length<1){document.getElementById('buildingPredictList').innerHTML=renderBuildingList(PRED_BLD.predictions);return;}
+  var ql=q.toLowerCase();
+  var filtered=PRED_BLD.predictions.filter(function(p){return p.building.toLowerCase().includes(ql);});
+  document.getElementById('buildingPredictList').innerHTML=renderBuildingList(filtered);
+}
+
+function showBuildingDetail(building){
+  var pred=PRED_BLD.predictions.find(function(p){return p.building===building});
+  if(!pred)return;
+  var dlg=document.getElementById('predictDlg');
+  document.getElementById('predictDlgTitle').textContent='🏢 '+pred.building+' 預測詳情';
+  if(dlg.open)dlg.close();
+  dlg.showModal();
+  setTimeout(function(){
+    var fittedDates=pred.fitted.map(function(f){return f.date});
+    var fittedVals=pred.fitted.map(function(f){return f.fitted});
+    var actualVals=pred.fitted.map(function(f){return f.actual});
+    var predDates=pred.predictions.map(function(p){return p.date});
+    var predVals=pred.predictions.map(function(p){return p.value});
+    var allDates=fittedDates.concat(predDates);
+    var allActual=actualVals.concat(predDates.map(function(){return null}));
+    var allFitted=fittedVals.concat(predDates.map(function(){return null}));
+    var allPred=new Array(fittedDates.length).fill(null).concat(predVals);
+    disposeChart('pdc');
+    var c=initChart(document.getElementById('predictDlgChart'),'pdc');
+    c.setOption({backgroundColor:'transparent',tooltip:{trigger:'axis'},legend:{data:['實際用水','模型擬合','7天預測'],textStyle:{color:'#94a3b8'}},grid:{left:60,right:40,top:40,bottom:30},xAxis:{type:'category',data:allDates,axisLabel:{fontSize:9,rotate:45}},yAxis:{type:'value',name:'m³'},series:[{name:'實際用水',type:'bar',data:allActual,itemStyle:{color:'rgba(56,189,248,0.6)'},barMaxWidth:6},{name:'模型擬合',type:'line',data:allFitted,smooth:true,itemStyle:{color:'#fbbf24'},lineStyle:{width:2},showSymbol:false},{name:'7天預測',type:'line',data:allPred,itemStyle:{color:'#f472b6'},lineStyle:{type:'dashed',width:3},symbol:'circle',symbolSize:8}]});
+    var tableH='<table style="margin-top:12px"><thead><tr><th>日期</th><th>類型</th><th class="num">實際值</th><th class="num">擬合/預測值</th><th class="num">誤差</th></tr></thead><tbody>';
+    pred.fitted.forEach(function(f){var err=f.actual>0?((f.fitted-f.actual)/f.actual*100).toFixed(1):0;var cls=parseFloat(err)>0?'neg':'up';tableH+='<tr><td>'+f.date+'</td><td><span class="tag" style="background:#fbbf24">擬合</span></td><td class="num">'+fmt(f.actual)+'</td><td class="num">'+fmt(f.fitted)+'</td><td class="num '+cls+'">'+err+'%</td></tr>';});
+    pred.predictions.forEach(function(p){tableH+='<tr><td>'+p.date+'</td><td><span class="tag" style="background:#f472b6">預測</span></td><td class="num">-</td><td class="num">'+fmt(p.value)+'</td><td class="num">-</td></tr>';});
+    tableH+='</tbody></table>';
+    document.getElementById('predictDlgTable').innerHTML=tableH;
+  },50);
+}
+
+function renderMeterPrediction(){
+  if(!PRED||!PRED.predictions||!PRED.predictions.length){return '<p style="color:#64748b">暫無水表預測資料</p>';}
+  var h='<p class="hint" style="margin-bottom:12px">基於線性迴歸模型 · 歷史資料: '+PRED.historicalRange.start+' ~ '+PRED.historicalRange.end+' ('+PRED.historicalRange.days+'天)</p>';
+  h+='<p class="hint" style="margin-bottom:12px">生成時間: '+PRED.generatedAt+'</p>';
+  h+='<input type="text" class="si2" placeholder="輸入水表編號搜尋..." oninput="filterPredict(this.value)">';
+  var upCount=PRED.predictions.filter(function(p){return p.trend==='up'}).length;
+  var downCount=PRED.predictions.filter(function(p){return p.trend==='down'}).length;
+  h+='<div class="sr" style="margin-bottom:16px"><div class="si"><div class="sl">總水表數</div><div class="sv">'+PRED.totalMeters+'</div></div><div class="si res"><div class="sl">📈 上升趨勢</div><div class="sv">'+upCount+'</div></div><div class="si nonres"><div class="sl">📉 下降趨勢</div><div class="sv">'+downCount+'</div></div></div>';
+  h+='<div id="predictList">'+renderPredictList(PRED.predictions)+'</div>';
+  return h;
+}
+
+function renderPredictList(predictions){
+  var h='<table><thead><tr><th>#</th><th>水表編號</th><th>DMA</th><th>物業類型</th><th>建築物</th><th class="num">歷史均值</th><th class="num">預測均值</th><th class="num">模型分</th><th>趨勢</th><th></th></tr></thead><tbody>';
+  predictions.forEach(function(p,i){
+    var avgPred=p.predictions.reduce(function(s,v){return s+v.value},0)/p.predictions.length;
+    var trendColor=p.trend==='up'?'#34d399':'#ef4444';
+    var trendIcon=p.trend==='up'?'↑':'↓';
+    h+='<tr><td>'+(i+1)+'</td><td class="contract">'+esc(p.meterId)+'</td><td><span class="tag" style="background:'+(DC[p.info.dma]||'#666')+'">'+esc(p.info.dma)+'</span></td><td><span class="ptag '+(p.info.propertyType.indexOf('001:')===0?'res':'')+'">'+esc(p.info.propertyType)+'</span></td><td style="font-size:11px" class="'+(isUnlocked?'':'masked')+'" onclick="clickMasked()">'+maskBuilding(p.info.buildingName)+'</td><td class="num">'+fmt(p.avgHistorical)+'</td><td class="num">'+fmt(avgPred)+'</td><td class="num">'+p.modelScore.toFixed(2)+'</td><td style="color:'+trendColor+';font-weight:600">'+trendIcon+' '+p.trend+'</td><td><button class="nb" onclick="showPredictDetail(\''+esc(p.meterId)+'\')">查看</button></td></tr>';
+  });
+  h+='</tbody></table>';
+  return h;
+}
+
+function filterPredict(q){
+  if(q.length<1){document.getElementById('predictList').innerHTML=renderPredictList(PRED.predictions);return;}
+  var ql=q.toLowerCase();
+  var filtered=PRED.predictions.filter(function(p){return p.meterId.toLowerCase().includes(ql)||(p.info.buildingName||'').toLowerCase().includes(ql)||(p.info.contractId||'').toLowerCase().includes(ql);});
+  document.getElementById('predictList').innerHTML=renderPredictList(filtered);
+}
+
+function showPredictDetail(meterId){
+  var pred=PRED.predictions.find(function(p){return p.meterId===meterId});
+  if(!pred)return;
+  var dlg=document.getElementById('predictDlg');
+  document.getElementById('predictDlgTitle').textContent='📊 '+pred.meterId+' 預測詳情';
+  if(dlg.open)dlg.close();
+  dlg.showModal();
+  setTimeout(function(){
+    var allDates=[],allActual=[],allFitted=[],allPred=[];
+    if(pred.fitted){pred.fitted.forEach(function(f){allDates.push(f.date);allActual.push(f.actual);allFitted.push(f.fitted);allPred.push(null);});}
+    pred.predictions.forEach(function(p){allDates.push(p.date);allActual.push(null);allFitted.push(null);allPred.push(p.value);});
+    disposeChart('pdc');
+    var c=initChart(document.getElementById('predictDlgChart'),'pdc');
+    c.setOption({backgroundColor:'transparent',tooltip:{trigger:'axis'},legend:{data:['實際用水','模型擬合','7天預測'],textStyle:{color:'#94a3b8'}},grid:{left:60,right:40,top:40,bottom:30},xAxis:{type:'category',data:allDates,axisLabel:{fontSize:9,rotate:45}},yAxis:{type:'value',name:'m³'},series:[{name:'實際用水',type:'bar',data:allActual,itemStyle:{color:'rgba(56,189,248,0.6)'},barMaxWidth:6},{name:'模型擬合',type:'line',data:allFitted,smooth:true,itemStyle:{color:'#fbbf24'},lineStyle:{width:2},showSymbol:false},{name:'7天預測',type:'line',data:allPred,itemStyle:{color:'#f472b6'},lineStyle:{type:'dashed',width:3},symbol:'circle',symbolSize:8}]});
+    var tableH='<table style="margin-top:12px"><thead><tr><th>日期</th><th>類型</th><th class="num">實際值</th><th class="num">擬合/預測值</th><th class="num">誤差</th></tr></thead><tbody>';
+    if(pred.fitted){pred.fitted.forEach(function(f){var err=f.actual>0?((f.fitted-f.actual)/f.actual*100).toFixed(1):0;var cls=parseFloat(err)>0?'neg':'up';tableH+='<tr><td>'+f.date+'</td><td><span class="tag" style="background:#fbbf24">擬合</span></td><td class="num">'+fmt(f.actual)+'</td><td class="num">'+fmt(f.fitted)+'</td><td class="num '+cls+'">'+err+'%</td></tr>';});}
+    pred.predictions.forEach(function(p){tableH+='<tr><td>'+p.date+'</td><td><span class="tag" style="background:#f472b6">預測</span></td><td class="num">-</td><td class="num">'+fmt(p.value)+'</td><td class="num">-</td></tr>';});
+    tableH+='</tbody></table>';
+    document.getElementById('predictDlgTable').innerHTML=tableH;
+  },50);
+}
+
+// === map.js ===
+// === 地圖頁 ===
+let _leafletMap=null;
+
+async function renderMap(){
+  const container=document.getElementById('page-map');
+  if(!container)return;
+  if(_leafletMap){_leafletMap.remove();_leafletMap=null;}
+  container.innerHTML='<div id="mapLayout"><div id="mapContainer"></div><div id="mapDetail" class="card"></div></div>';
+  try{
+    const geoResp=await fetch('data/dma_zones.geojson?v='+Date.now());
+    const geoData=await geoResp.json();
+    const dmaData=findD(D.dma,selDate);
+    if(!dmaData){container.innerHTML='<div class="card"><h2>無資料</h2></div>';return;}
+
+    // 計算各 DMA 資料（處理私用區字符）
+    var dmaInfo={};
+    var dataKeys=Object.keys(dmaData.dmas);
+    geoData.features.forEach(function(f){
+      var code=f.properties.dma;
+      var zhName=getDmaName(code)||f.properties.name_zh||code;
+      var info=dmaData.dmas[zhName];
+      if(!info){
+        for(var ki=0;ki<dataKeys.length;ki++){
+          if(dataKeys[ki]!==zhName&&dataKeys[ki].slice(0,1)===zhName.slice(0,1)&&dataKeys[ki].slice(2)===zhName.slice(2)){
+            zhName=dataKeys[ki];info=dmaData.dmas[zhName];break;
+          }
+        }
+      }
+      dmaInfo[code]={zhName:zhName,info:info};
+    });
+
+    var maxVal=1;
+    for(var k in dmaInfo){if(dmaInfo[k].info&&dmaInfo[k].info.total>maxVal)maxVal=dmaInfo[k].info.total;}
+
+    // 更精細的顏色漸變
+    function getColor(val){
+      var r=Math.min(val/maxVal,1);
+      // 從綠到紫的漸變
+      var colors=[
+        [52,211,153],  // 綠
+        [251,191,36],  // 黃
+        [244,114,182], // 粉
+        [167,139,250], // 紫
+        [129,140,248]  // 藍紫
+      ];
+      var idx=r*(colors.length-1);
+      var lo=Math.floor(idx),hi=Math.ceil(idx),t=idx-lo;
+      if(lo===hi)return 'rgb('+colors[lo].join(',')+')';
+      var c=colors[lo].map(function(v,i){return Math.round(v+(colors[hi][i]-v)*t)});
+      return 'rgb('+c.join(',')+')';
+    }
+
+    document.getElementById('mapDetail').innerHTML='<div class="map-placeholder"><div>點擊地圖上的 DMA 區域<br>查看用水詳情</div></div>';
+
+    _leafletMap=L.map('mapContainer',{zoomControl:true,attributionControl:false,minZoom:12,maxZoom:16}).setView([22.15,113.55],14);
+    // 使用暗色地圖瓦片
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
+      attribution:'© OpenStreetMap · CARTO',maxZoom:18
+    }).addTo(_leafletMap);
+
+    var selectedLayer=null;
+
+    const geoLayer=L.geoJSON(geoData,{
+      style:function(feature){
+        var d=dmaInfo[feature.properties.dma];
+        var val=d&&d.info?d.info.total:0;
+        return{
+          fillColor:getColor(val),
+          fillOpacity:0.45,
+          color:'rgba(255,255,255,0.3)',
+          weight:1.5,
+          opacity:0.8
+        };
+      },
+      onEachFeature:function(feature,layer){
+        var d=dmaInfo[feature.properties.dma];
+        if(!d||!d.info)return;
+        var zhName=d.zhName,info=d.info;
+
+        // Hover 效果
+        layer.on('mouseover',function(e){
+          this.setStyle({fillOpacity:0.7,weight:2.5,color:'#fff'});
+          this.bringToFront();
+        });
+        layer.on('mouseout',function(e){
+          if(selectedLayer!==this){
+            geoLayer.resetStyle(this);
+          }
+        });
+
+        // 富文本 Tooltip
+        var pct=info.total>0?Math.round(info.residential/info.total*100):0;
+        layer.bindTooltip(
+          '<div style="font-size:14px;font-weight:700;margin-bottom:4px">'+zhName+'</div>'
+          +'<div style="color:#94a3b8;font-size:12px">總用水: <b style="color:#e4e4ed">'+Math.round(info.total).toLocaleString()+'</b> m³</div>'
+          +'<div style="color:#94a3b8;font-size:12px">住宅: <span style="color:#34d399">'+pct+'%</span> · 非住宅: <span style="color:#f472b6">'+(100-pct)+'%</span></div>'
+          +'<div style="color:#6b6b80;font-size:11px;margin-top:4px">'+info.resCount+'+'+info.nonResCount+' 表</div>',
+          {sticky:true,className:'dma-tooltip',direction:'top'}
+        );
+
+        // 點擊詳情
+        layer.on('click',function(){
+          // 高亮選中
+          if(selectedLayer)geoLayer.resetStyle(selectedLayer);
+          selectedLayer=this;
+          this.setStyle({fillOpacity:0.85,weight:3,color:'#818cf8'});
+
+          var dayTop20=D.top20dma&&D.top20dma.length>0?D.top20dma[D.top20dma.length-1]:null;
+          var top20m=dayTop20&&dayTop20.byDma&&dayTop20.byDma[zhName]?dayTop20.byDma[zhName].slice(0,20):[];
+          var dmaColor=getDmaColor(zhName)||'#818cf8';
+
+          var detail='<h2 style="display:flex;align-items:center;gap:8px"><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:'+dmaColor+'"></span>'+zhName+'<span class="hint">'+selDate+'</span></h2>'
+            +'<div class="sr">'
+            +'<div class="si"><div class="sl">總用水</div><div class="sv">'+Math.round(info.total).toLocaleString()+'</div><div class="ss">m³</div></div>'
+            +'<div class="si res"><div class="sl">住宅</div><div class="sv">'+Math.round(info.residential).toLocaleString()+'</div><div class="ss">'+info.resCount+'表 | '+pct+'%</div></div>'
+            +'<div class="si nonres"><div class="sl">非住宅</div><div class="sv">'+Math.round(info.nonResidential).toLocaleString()+'</div><div class="ss">'+info.nonResCount+'表 | '+(100-pct)+'%</div></div>'
+            +'</div>';
+          if(top20m.length>0){
+            detail+='<div class="chart-actions"><button class="export-btn" onclick="exportChart(\'mapDma\',\''+zhName+'Top50\')">匯出 PNG</button></div><div id="mapDmaChart" class="chart" style="height:320px"></div>';
+          }
+          document.getElementById('mapDetail').innerHTML=detail;
+
+          if(top20m.length>0){
+            var chartDom=document.getElementById('mapDmaChart');
+            if(chartDom){
+              disposeChart('mapDma');
+              var c=initChart(chartDom,'mapDma');
+              var revItems=top20m.slice().reverse();
+              c.setOption({backgroundColor:'transparent',tooltip:{trigger:'axis',axisPointer:{type:'shadow'},formatter:function(p){var m=revItems[p[0].dataIndex];return '<b>'+mask(m.contractId||m.meterId)+'</b><br/>'+esc(m.propertyType||'')+'<br/>'+fmt(m.total)+' m³';}},grid:{left:100,right:50,top:10,bottom:20},xAxis:{type:'value',axisLabel:{formatter:function(v){return(v/1000).toFixed(0)+'k'},fontSize:10}},yAxis:{type:'category',data:revItems.map(function(i){return mask(i.contractId||i.meterId)}),axisLabel:{fontSize:9}},series:[{type:'bar',data:revItems.map(function(i){return{value:i.total,itemStyle:{color:dmaColor}}}),label:{show:true,position:'right',formatter:function(p){return fmt(p.value)},fontSize:9}}]});
+            }
+          }
+        });
+      }
+    }).addTo(_leafletMap);
+
+    // 在每個 DMA 區域中心添加標籤
+    geoLayer.eachLayer(function(layer){
+      if(layer.feature&&layer.feature.properties){
+        var d=dmaInfo[layer.feature.properties.dma];
+        if(!d||!d.info)return;
+        var center=layer.getBounds().getCenter();
+        var label=L.marker(center,{
+          icon:L.divIcon({
+            className:'',
+            html:'<div style="text-align:center;pointer-events:none;text-shadow:0 1px 4px rgba(0,0,0,0.8)"><div style="font-size:13px;font-weight:700;color:#e4e4ed;white-space:nowrap">'+d.zhName+'</div><div style="font-size:11px;color:#94a3b8;white-space:nowrap">'+Math.round(d.info.total).toLocaleString()+' m³</div></div>',
+            iconSize:[120,40],
+            iconAnchor:[60,20]
+          })
+        }).addTo(_leafletMap);
+      }
+    });
+
+    _leafletMap.fitBounds(geoLayer.getBounds(),{padding:[20,15]});
+    setTimeout(function(){_leafletMap.invalidateSize();},100);
+
+    // 圖例
+    const legend=L.control({position:'bottomright'});
+    legend.onAdd=function(){
+      const div=L.DomUtil.create('div','info legend');
+      div.style.cssText='background:rgba(19,19,26,0.92);padding:12px 14px;border-radius:10px;border:1px solid #252532;color:#e4e4ed;font-size:12px;backdrop-filter:blur(8px)';
+      div.innerHTML='<div style="font-weight:700;margin-bottom:8px">用水量</div>'
+        +'<div style="display:flex;align-items:center;gap:6px;margin:4px 0"><span style="background:#818cf8;width:14px;height:10px;border-radius:2px;display:inline-block"></span> 高</div>'
+        +'<div style="display:flex;align-items:center;gap:6px;margin:4px 0"><span style="background:#a78bfa;width:14px;height:10px;border-radius:2px;display:inline-block"></span> 中高</div>'
+        +'<div style="display:flex;align-items:center;gap:6px;margin:4px 0"><span style="background:#f472b6;width:14px;height:10px;border-radius:2px;display:inline-block"></span> 中低</div>'
+        +'<div style="display:flex;align-items:center;gap:6px;margin:4px 0"><span style="background:#34d399;width:14px;height:10px;border-radius:2px;display:inline-block"></span> 低</div>'
+        +'<div style="color:#6b6b80;font-size:10px;margin-top:8px;border-top:1px solid #252532;padding-top:6px">'+selDate+'</div>';
+      return div;
+    };
+    legend.addTo(_leafletMap);
+  }catch(e){
+    container.innerHTML='<div class="card"><h2>地圖載入失敗</h2><p>'+e.message+'</p></div>';
+  }
+}
+
+// === calendar.js ===
+// === 日曆頁 & 熱力圖 ===
+function renderCalendar(){
+  var byMonth={};D.cotai.forEach(function(d){var m=d.date.substring(0,7);if(!byMonth[m])byMonth[m]=[];byMonth[m].push(d);});
+  var months=Object.keys(byMonth).sort();
+  if(!months.length){document.getElementById('page-calendar').innerHTML='<section class="card"><p style="color:#64748b">暫無資料</p></section>';return;}
+  if(!window._calMonth)window._calMonth=months[months.length-1];
+  var years={};months.forEach(function(m){var y=m.substring(0,4);if(!years[y])years[y]=[];years[y].push(m);});
+  var yearList=Object.keys(years).sort();
+  if(!window._calYear)window._calYear=yearList[yearList.length-1];
+  var curMonths=years[window._calYear]||[];
+  var h='<section class="card"><h2>📅 路氹城非住宅用水日曆</h2>';
+  h+='<div class="ms" style="margin-bottom:8px">';
+  yearList.forEach(function(y){h+='<button class="mb '+(y===window._calYear?'active':'')+'" onclick="window._calYear=\''+y+'\';window._calMonth=\''+years[y][years[y].length-1]+'\';renderCalendar()">'+y+'年</button>';});
+  h+='</div>';
+  h+='<div class="ms">';
+  for(var mi=1;mi<=12;mi++){
+    var ms=window._calYear+'-'+(mi<10?'0':'')+mi;
+    var has=curMonths.indexOf(ms)>=0;
+    var active=ms===window._calMonth;
+    h+='<button class="mb '+(active?'active':'')+'" style="'+(has?'':'opacity:0.3;cursor:default')+'" onclick="'+(has?'window._calMonth=\''+ms+'\';renderCalendar()':'')+'">'+mi+'月</button>';
+  }
+  h+='</div>';
+  var month=window._calMonth;
+  var days=byMonth[month];
+  if(days){
+    var maxT=0;days.forEach(function(d){var t=0;d.items.forEach(function(i){t+=i.total});if(t>maxT)maxT=t;});
+    var fd=new Date(month+'-01').getDay(),dim=new Date(parseInt(month.split('-')[0]),parseInt(month.split('-')[1]),0).getDate();
+    h+='<div class="cg">';
+    ['日','一','二','三','四','五','六'].forEach(function(d){h+='<div class="ch">'+d+'</div>';});
+    for(var i=0;i<fd;i++)h+='<div></div>';
+    for(var dd=1;dd<=dim;dd++){
+      var ds=month+'-'+(dd<10?'0':'')+dd;
+      var dayD=days.find(function(x){return x.date===ds});
+      var total=dayD?dayD.items.reduce(function(s,i){return s+i.total},0):0;
+      var inten=maxT>0?total/maxT:0;
+      var r=Math.round(239*inten),g=Math.round(68*inten),b=Math.round(68*inten);
+      var bg=total>0?'rgb('+(r+20)+','+(g+20)+','+(b+20)+')':'#1e293b';
+      var dayTotal=0;
+      var tt=D.trend.find(function(x){return x.date===ds});
+      if(tt){var dmas=tt.dmas;for(var dk in dmas)dayTotal+=dmas[dk];}
+      var totalLabel=dayTotal>0?fmt(dayTotal)+'m³':'';
+      h+='<div class="cc" style="background:'+bg+'" onclick="showCotaiDay(\''+ds+'\')" title="'+ds+': '+fmt(dayTotal)+' m³">'+dd+'<span class="cdt">'+totalLabel+'</span></div>';
+    }
+    h+='</div>';
+  }else{
+    h+='<p style="color:#64748b;text-align:center;padding:20px">'+month+' 無資料</p>';
+  }
+  h+='<div id="cotaiD" style="margin-top:12px"></div></section>';
+  document.getElementById('page-calendar').innerHTML=h;
+}
+
+function showCotaiDay(date){
+  var day=D.cotai.find(function(d){return d.date===date});
+  if(!day){document.getElementById('cotaiD').innerHTML='<p style="color:#64748b">該日無資料</p>';return;}
+  var h='<div class="card"><h2>'+date+' 路氹非住宅Top10</h2><table><thead><tr><th>#</th><th>合同編號</th><th>建築物</th><th class="num">用水量</th></tr></thead><tbody>';
+  day.items.sort(function(a,b){return b.total-a.total}).slice(0,10).forEach(function(m,i){h+='<tr><td>'+(i+1)+'</td><td class="contract">'+mask(m.contractId)+'</td><td class="'+(isUnlocked?'':'masked')+'" onclick="clickMasked()">'+maskBuilding(m.buildingName)+'</td><td class="num">'+fmt(m.total)+'</td></tr>';});
+  h+='</tbody></table></div>';
+  document.getElementById('cotaiD').innerHTML=h;
+}
+
+function renderHeatmap(){
+  var monthly=D.meterMonthly;
+  var totals=[];
+  Object.keys(monthly).forEach(function(id){var sum=0;Object.keys(monthly[id]).forEach(function(m){sum+=monthly[id][m]});totals.push({id:id,total:sum});});
+  totals.sort(function(a,b){return b.total-a.total});
+  var topIds=totals.slice(0,60).map(function(x){return x.id});
+  var anomIds={};D.anomalies.forEach(function(a){anomIds[a.meterId]=true});
+  Object.keys(anomIds).forEach(function(id){if(topIds.indexOf(id)<0&&topIds.length<80)topIds.push(id)});
+  topIds=topIds.slice(0,70);
+  var dates=D.dates;var data=[];
+  topIds.forEach(function(mid,mi){var md=D.meterDaily[mid];if(!md)return;dates.forEach(function(d,di){var v=md[d];if(v!==undefined&&v>0){data.push([di,mi,Math.round(v)])}});});
+  var searchMap={};D.search.forEach(function(s){searchMap[s.id]=s.contract||''});
+  var meterLabels=topIds.map(function(id){return searchMap[id]?mask(searchMap[id]):id});
+  var h='<section class="card"><h2>🔥 用水熱力圖 <span class="hint">(Top'+topIds.length+'水表)</span></h2><div id="hmChart" class="chart" style="height:'+(Math.max(400,topIds.length*20))+'px"></div></section>';
+  document.getElementById('page-heatmap').innerHTML=h;
+  disposeChart('hm');
+  var c=initChart(document.getElementById('hmChart'),'hm');
+  c.setOption({backgroundColor:'transparent',tooltip:{position:'top',formatter:function(p){return p.value[2]+'m³<br>'+dates[p.value[0]]+'<br>'+meterLabels[p.value[1]]}},grid:{left:120,right:20,top:20,bottom:60},xAxis:{type:'category',data:dates,axisLabel:{rotate:45,fontSize:9}},yAxis:{type:'category',data:meterLabels,axisLabel:{fontSize:10},inverse:true},visualMap:{min:0,max:500,calculable:true,orient:'vertical',left:'left',top:'center',inRange:{color:['#13131a','#1e3a5f','#2563eb','#818cf8','#fbbf24','#f87171']},text:['高','低']},series:[{type:'heatmap',data:data,label:{show:false},emphasis:{itemStyle:{shadowBlur:10,shadowColor:'rgba(0,0,0,.5)'}}}]});
+}
+
+// === chat.js ===
+// === AI Assistant Chat Module ===
+// Optional: connect to a LangChain / AI backend for natural language queries
+// Set AI_API_URL to your backend endpoint, or leave empty to disable
+const AI_API_URL = "";  // e.g. "http://localhost:8000/api/chat"
+let _chatInited = false;
+
+function toggleChat() {
+  const popup = document.getElementById('chatPopup');
+  const fab = document.getElementById('chatFab');
+  if (!popup) return;
+  const open = popup.classList.toggle('open');
+  fab.classList.toggle('active', open);
+  if (!_chatInited) {
+    _chatInited = true;
+    chatAppend('ai', 'Hello! I am the Smart Water AI Assistant. You can ask me:\n- Anomaly statistics for Zone-3\n- Which meters are long-term Top20?\n- Draw an anomaly type distribution chart\n- Main/sub meter diff and NRW rate\n- Predict next week consumption');
+  }
+  if (open) {
+    setTimeout(function() { document.getElementById('chatInput').focus(); }, 200);
+  }
+}
+
+async function sendChat() {
+  const input = document.getElementById('chatInput');
+  const q = input.value.trim();
+  if (!q) return;
+  input.value = '';
+
+  chatAppend('user', q);
+
+  if (!AI_API_URL) {
+    chatAppend('ai', 'AI backend not connected. To enable:\n1. Start your LangChain server\n2. Set AI_API_URL in chat.js\n\nThis is a demo dashboard showing the UI integration point.');
+    input.focus();
+    return;
+  }
+
+  var loadId = chatAppend('ai', 'Thinking...');
+
+  try {
+    var resp = await fetch(AI_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: q }),
+    });
+    var data = await resp.json();
+    chatUpdate(loadId, data.answer || 'No response');
+    if (data.chart) {
+      setTimeout(function() { chatRenderChart(data.chart); }, 200);
+    }
+  } catch (e) {
+    chatUpdate(loadId, 'Failed to connect to AI service.\nPlease ensure the backend server is running.');
+  }
+  input.focus();
+}
+
+function chatAppend(role, text) {
+  var c = document.getElementById('chatMsgs');
+  var id = 'cm-' + Date.now() + Math.random();
+  var d = document.createElement('div');
+  d.className = 'chat-msg ' + role;
+  d.id = id;
+  d.innerHTML = '<div class="chat-bubble">' + chatEsc(text) + '</div>';
+  c.appendChild(d);
+  c.scrollTop = c.scrollHeight;
+  return id;
+}
+
+function chatUpdate(id, text) {
+  var d = document.getElementById(id);
+  if (!d) return;
+  d.innerHTML = '<div class="chat-bubble">' + chatFmt(text) + '</div>';
+  var c = document.getElementById('chatMsgs');
+  c.scrollTop = c.scrollHeight;
+}
+
+function chatEsc(t) {
+  return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+}
+
+function chatFmt(t) {
+  return t
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\n/g, '<br>');
+}
+
+function chatRenderChart(option) {
+  var c = document.getElementById('chatMsgs');
+  var id = 'cc-' + Date.now();
+  var d = document.createElement('div');
+  d.className = 'chat-msg ai';
+  d.innerHTML = '<div class="chat-bubble"><div id="' + id + '" class="chat-chart"></div></div>';
+  c.appendChild(d);
+  c.scrollTop = c.scrollHeight;
+  setTimeout(function() {
+    var el = document.getElementById(id);
+    if (el && typeof echarts !== 'undefined') {
+      var ch = echarts.init(el);
+      ch.setOption(option);
+      window.addEventListener('resize', function() { ch.resize(); });
+    }
+  }, 100);
+}
+
+
+</script>
+
+<!-- Data & Init -->
+<script>
+let D,PRED,PRED_BLD;
+async function loadData(){
+  const[dp,pp,pbp]=await Promise.all([
+    fetch('data/all_data.json').then(r=>r.json()),
+    fetch('data/predictions.json').then(r=>r.json()),
+    fetch('data/predictions_by_building.json').then(r=>r.json())
+  ]);
+  D=dp;PRED=pp;PRED_BLD=pbp;
+}
+
+// Initialize after data loads
+loadData().then(()=>{
+  const cotaiKey=D.dates.length?Object.keys(D.dma[0].dmas).find(k=>k.charCodeAt(1)===0xebf3):'';
+  if(cotaiKey)DC[cotaiKey]='#f472b6';
+  selDate=D.dates[D.dates.length-1];
+
+  // Hide loading screen
+  const loadingEl=document.getElementById('globalLoading');
+  if(loadingEl){loadingEl.classList.add('fade-out');setTimeout(()=>loadingEl.remove(),300);}
+
+  renderHome();
+}).catch(e=>{
+  const loadingEl=document.getElementById('globalLoading');
+  if(loadingEl)loadingEl.innerHTML='<div style="color:#ef4444;font-size:16px">数据加载失败</div><p style="color:#6b6b80">'+e.message+'</p>';
+});
+</script>
+
+<!-- Report Modal -->
+<div id="reportModal" class="ov" style="display:none"><div class="ov-bg" onclick="closeReport()"></div><div class="ov-box"><span class="ov-close" onclick="closeReport()">&times;</span><div id="reportContent"></div></div></div>
+</body>
+</html>

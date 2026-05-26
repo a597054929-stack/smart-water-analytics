@@ -1,0 +1,14 @@
+{
+  "name": "smart-water-analytics",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "mock": "python scripts/mock_data_generator.py",
+    "build": "node frontend/build.cjs",
+    "serve": "npx serve frontend/dist -l 5173",
+    "demo": "npm run mock && npm run build && npm run serve"
+  },
+  "dependencies": {
+    "xlsx": "^0.18.5"
+  }
+}

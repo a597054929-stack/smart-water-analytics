@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>澳門用水分析</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+<link rel="stylesheet" href="css/styles.css" />
+<link rel="stylesheet" href="lib/leaflet/leaflet.css" />
+<script src="lib/leaflet/leaflet.js"></script>
+</head>
+<body>
+
+<!-- Loading Screen -->
+<div id="globalLoading" class="global-loading">
+  <div class="spinner"></div>
+  <div class="text">載入資料中...</div>
+</div>
+
+<div class="hdr">
+<h1>💧 澳門用水分析</h1>
+<div class="tabs">
+<button class="tab active" onclick="showTab('home')">概覽</button>
+<button class="tab" onclick="showTab('trend')">趨勢</button>
+<button class="tab" onclick="showTab('rank')">排名</button>
+<button class="tab" onclick="showTab('diff')">差額</button>
+<button class="tab" onclick="showTab('anomaly')">異常</button>
+<button class="tab" onclick="showTab('search')">搜尋</button>
+<button class="tab" onclick="showTab('predict')">預測</button>
+<button class="tab" onclick="showTab('map')">地圖</button>
+<button class="refresh-btn" onclick="refreshData()">🔄 刷新</button>
+</div>
+</div>
+<div class="main">
+<div class="pwd-bar">
+  <span style="color:#94a3b8;font-size:13px">🔒 敏感資料保護</span>
+  <input type="password" id="pwdInput" placeholder="輸入密碼查看敏感資料">
+  <button onclick="unlockSensitive()">解鎖</button>
+  <span id="pwdStatus" class="status">未解鎖</span>
+</div>
+<div id="page-home"></div>
+<div id="page-trend" class="hidden"></div>
+<div id="page-rank" class="hidden"></div>
+<div id="page-diff" class="hidden"></div>
+<div id="page-anomaly" class="hidden"></div>
+<div id="page-calendar" class="hidden"></div>
+<div id="page-search" class="hidden"></div>
+<div id="page-predict" class="hidden"></div>
+<div id="page-heatmap" class="hidden"></div>
+<div id="page-dma" class="hidden"></div>
+<div id="page-map" class="hidden"></div>
+</div>
+
+<!-- AI Chat Floating Widget -->
+<button class="chat-fab" id="chatFab" onclick="toggleChat()">🤖</button>
+<div class="chat-popup" id="chatPopup">
+  <div class="chat-popup-hdr">
+    <span>💧 AI 水務助手</span>
+    <span class="chat-popup-close" onclick="toggleChat()">✕</span>
+  </div>
+  <div class="chat-popup-msgs" id="chatMsgs"></div>
+  <div class="chat-popup-bar">
+    <input type="text" id="chatInput" placeholder="輸入問題..." onkeydown="if(event.key==='Enter')sendChat()">
+    <button onclick="sendChat()">發送</button>
+  </div>
+</div>
+
+<!-- JS Modules -->
+<script src="js/utils.js"></script>
+<script src="js/tabs.js"></script>
+<script src="js/home.js"></script>
+<script src="js/trend.js"></script>
+<script src="js/rank.js"></script>
+<script src="js/diff.js"></script>
+<script src="js/anomaly.js"></script>
+<script src="js/search.js"></script>
+<script src="js/predict.js"></script>
+<script src="js/map.js"></script>
+<script src="js/calendar.js"></script>
+<script src="js/chat.js"></script>
+
+<!-- Data & Init -->
+<script>
+const D=ALLDATA_PLACEHOLDER;
+const PRED=PREDICTIONS_PLACEHOLDER;
+const PRED_BLD=PREDICTIONS_BUILDING_PLACEHOLDER;
+</script>
+
+<!-- Report Modal -->
+<div id="reportModal" class="ov" style="display:none"><div class="ov-bg" onclick="closeReport()"></div><div class="ov-box"><span class="ov-close" onclick="closeReport()">&times;</span><div id="reportContent"></div></div></div>
+</body>
+</html>
