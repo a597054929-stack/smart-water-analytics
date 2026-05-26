@@ -67,7 +67,12 @@ async def chat(req: ChatRequest):
         chart = None
         for msg in reversed(result["messages"]):
             if hasattr(msg, "content") and msg.content:
-                answer = msg.content
+                content = msg.content
+                # Handle list-type content (some providers return content blocks)
+                if isinstance(content, list):
+                    texts = [block.get("text", "") for block in content if isinstance(block, dict) and block.get("type") == "text"]
+                    content = " ".join(texts) if texts else str(content)
+                answer = content
                 break
 
         # Check for chart data in tool outputs
