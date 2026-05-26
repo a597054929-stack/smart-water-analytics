@@ -50,11 +50,25 @@ def get_llm_config():
 
     if provider == "mimo" and "xiaomi-coding" in providers:
         m = providers["xiaomi-coding"]
+        # Get model name from config or use default
+        models_list = m.get("models", [])
+        default_model = models_list[0]["id"] if models_list else "mimo-v2.5-pro"
         return {
             "provider": "mimo",
             "api_key": m["apiKey"],
             "base_url": m["baseUrl"],
-            "model": model or "mimo-v2.5",
+            "model": model or default_model,
+        }
+
+    if provider == "nvidia" and "nvidia" in providers:
+        n = providers["nvidia"]
+        models_list = n.get("models", [])
+        default_model = models_list[0]["id"] if models_list else "z-ai/glm5"
+        return {
+            "provider": "nvidia",
+            "api_key": n["apiKey"],
+            "base_url": n["baseUrl"],
+            "model": model or default_model,
         }
 
     raise ValueError(
