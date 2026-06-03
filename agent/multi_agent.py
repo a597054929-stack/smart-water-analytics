@@ -190,8 +190,16 @@ def synthesize(question: str, plan_steps: list, results: list, llm) -> str:
 
 # ── Main Pipeline ─────────────────────────────────────────────
 
-def run_multi_agent(question: str) -> dict:
-    """Run the full multi-agent pipeline: Plan → Execute → Synthesize."""
+def run_multi_agent(question: str, context: dict | None = None) -> dict:
+    """Run the full multi-agent pipeline: Plan → Execute → Synthesize.
+
+    Args:
+        question: the user's natural-language question.
+        context: optional page state from the frontend
+                 ({active_tab, selected_date, selected_dma, ...}).
+                 When provided, the planner and synthesizer see it
+                 so they can resolve references like "this week".
+    """
     cfg = get_llm_config()
     llm = ChatOpenAI(
         model=cfg["model"],
@@ -201,14 +209,29 @@ def run_multi_agent(question: str) -> dict:
         max_tokens=2048,
     )
 
+    # Prepend the page context to the question, if any. Both the planner
+    # and the synthesizer read the question, so this single injection
+    # covers both.
+    augmented_question = question
+    if context:
+        ctx_lines = ["[PAGE CONTEXT] The user is currently viewing:"]
+        for k, v in context.items():
+            if v is None or v == "":
+                continue
+            ctx_lines.append(f"  - {k}: {v}")
+        ctx_lines.append(
+            "Use this to resolve references like 'this week' or 'current zone'."
+        )
+        augmented_question = "\n".join(ctx_lines) + "\n\nUser question: " + question
+
     # Step 1: Plan
-    plan_steps = plan(question, llm)
+    plan_steps = plan(augmented_question, llm)
 
     # Step 2: Execute
     results = execute(plan_steps)
 
     # Step 3: Synthesize
-    answer = synthesize(question, plan_steps, results, llm)
+    answer = synthesize(augmented_question, plan_steps, results, llm)
 
     # Check for charts in results
     chart = None

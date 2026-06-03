@@ -4,6 +4,7 @@
 # LangChain core
 langchain>=0.3.0
 langchain-openai>=0.3.0
+langchain-anthropic>=0.3.0
 langgraph>=0.4.0
 
 # Web server
@@ -16,5 +17,7 @@ scikit-learn>=1.5.0
 numpy>=1.26.0
 openpyxl>=3.1.0
 
-# Data processing
-xlsx>=0.18.5
+# MLOps pipeline (schema validation, drift detection, evaluation)
+pandera>=0.20.0
+scipy>=1.11.0
+pytest>=8.0.0

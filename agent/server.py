@@ -30,12 +30,15 @@ app.add_middleware(
 class ChatRequest(BaseModel):
     question: str
     mode: str = "agent"  # "agent" (single) or "multi" (planner+executor+synthesizer)
+    context: Optional[dict] = None  # page state from the frontend
+    #   { active_tab, selected_date, selected_dma, sensitive_unlocked, likely_intent }
 
 class ChatResponse(BaseModel):
     answer: str
     chart: Optional[dict] = None
     plan: Optional[list] = None
     tools_called: Optional[list] = None
+    context_used: Optional[dict] = None  # echoes back what the agent saw
 
 
 # ── Agent ─────────────────────────────────────────────────────
@@ -68,6 +71,23 @@ chat_history = load_history()
 
 
 # ── Streaming Chat ────────────────────────────────────────────
+
+def _format_context_message(ctx: dict) -> str:
+    """Render the frontend page state as a short system message for the agent."""
+    if not ctx:
+        return ""
+    parts = ["[PAGE CONTEXT] The user is currently viewing:"]
+    for k, v in ctx.items():
+        if v is None or v == "":
+            continue
+        parts.append(f"  - {k}: {v}")
+    parts.append(
+        "Use this to resolve references like 'this week', 'current zone', "
+        "or 'what I'm looking at'. If the question seems to ask about the "
+        "current page, prefer these values over guessing."
+    )
+    return "\n".join(parts)
+
 
 def _extract_text(content):
     """Extract text from content (handles list-type content blocks)."""
@@ -111,7 +131,7 @@ async def chat(req: ChatRequest):
                 from multi_agent import run_multi_agent
                 yield f"data: {json.dumps({'type': 'tool', 'name': 'planner'})}\n\n"
 
-                result = run_multi_agent(question)
+                result = run_multi_agent(question, context=req.context)
 
                 for tool_name in result.get("tools_called", []):
                     yield f"data: {json.dumps({'type': 'tool', 'name': tool_name})}\n\n"
@@ -121,12 +141,34 @@ async def chat(req: ChatRequest):
                     payload["chart"] = result["chart"]
                 if result.get("plan"):
                     payload["plan"] = result["plan"]
+                if req.context:
+                    payload["context_used"] = req.context
                 yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
             # Single-agent mode (default)
             else:
+                # Update the page-context store so the get_current_page_context
+                # tool sees the latest frontend state.
+                try:
+                    from agent_tools import set_page_context
+                    set_page_context(req.context)
+                except Exception:
+                    pass
+
                 agent = get_agent()
-                messages = chat_history + [{"role": "user", "content": question}]
+                messages = list(chat_history)
+
+                # Inject page context as a system message at the start of this turn.
+                # The agent sees it before the user's question and can use it to
+                # disambiguate things like "this week" or "current DMA".
+                if req.context:
+                    messages.append(
+                        {
+                            "role": "system",
+                            "content": _format_context_message(req.context),
+                        }
+                    )
+                messages.append({"role": "user", "content": question})
 
                 final_answer = ""
                 chart = None
@@ -163,6 +205,8 @@ async def chat(req: ChatRequest):
                 payload = {"type": "answer", "content": final_answer}
                 if chart:
                     payload["chart"] = chart
+                if req.context:
+                    payload["context_used"] = req.context
                 yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
             # Save to history
@@ -188,8 +232,17 @@ async def chat_sync(req: ChatRequest):
         return ChatResponse(answer="Please enter a question.")
 
     try:
+        try:
+            from agent_tools import set_page_context
+            set_page_context(req.context)
+        except Exception:
+            pass
+
         agent = get_agent()
-        messages = chat_history + [{"role": "user", "content": question}]
+        messages = list(chat_history)
+        if req.context:
+            messages.append({"role": "system", "content": _format_context_message(req.context)})
+        messages.append({"role": "user", "content": question})
         result = agent.invoke({"messages": messages})
 
         answer = ""
@@ -207,7 +260,7 @@ async def chat_sync(req: ChatRequest):
             chat_history[:] = chat_history[-20:]
         save_history(chat_history)
 
-        return ChatResponse(answer=answer, chart=chart)
+        return ChatResponse(answer=answer, chart=chart, context_used=req.context)
     except Exception as e:
         return ChatResponse(answer=f"Error: {str(e)}")
 

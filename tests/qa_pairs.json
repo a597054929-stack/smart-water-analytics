@@ -1,0 +1,181 @@
+{
+  "version": "1.0.0",
+  "description": "Test QA pairs for evaluating the Smart Water Analytics agent. Each entry has a question, the expected tool (or tools) the agent should call, and keywords that should appear in the final answer. Difficulty is a hint for triage; not used in scoring.",
+  "pairs": [
+    {
+      "id": "anomaly_zone3_count_sql",
+      "question": "How many anomalies are in Zone-3?",
+      "expected_tool": "sql_query",
+      "expected_keywords": ["Zone-3", "12"],
+      "difficulty": "easy"
+    },
+    {
+      "id": "anomaly_top5_score",
+      "question": "What are the top 5 highest-scoring anomalies?",
+      "expected_tool": "sql_query",
+      "expected_keywords": ["anomalyScore", "DESC"],
+      "difficulty": "easy"
+    },
+    {
+      "id": "anomaly_zone3_list",
+      "question": "Show me anomalies in Zone-3",
+      "expected_tool": "query_anomalies",
+      "expected_keywords": ["Zone-3"],
+      "difficulty": "easy"
+    },
+    {
+      "id": "anomaly_stats_zone1",
+      "question": "What are the anomaly statistics for Zone-1?",
+      "expected_tool": "get_anomaly_stats",
+      "expected_keywords": ["Zone-1", "total"],
+      "difficulty": "easy"
+    },
+    {
+      "id": "data_overview",
+      "question": "Give me an overview of the data",
+      "expected_tool": "get_data_overview",
+      "expected_keywords": ["meters", "anomalies"],
+      "difficulty": "easy"
+    },
+    {
+      "id": "meters_residential",
+      "question": "How many residential meters do we have?",
+      "expected_tool": "query_meters",
+      "expected_keywords": ["residential"],
+      "difficulty": "easy"
+    },
+    {
+      "id": "predictions_meter",
+      "question": "Predict next week consumption for meter 3586950",
+      "expected_tool": "get_predictions",
+      "expected_keywords": ["3586950"],
+      "difficulty": "medium"
+    },
+    {
+      "id": "building_predictions",
+      "question": "Show predictions for a building",
+      "expected_tool": "get_building_predictions",
+      "expected_keywords": ["building"],
+      "difficulty": "medium"
+    },
+    {
+      "id": "weekly_trend",
+      "question": "What is the weekly trend?",
+      "expected_tool": "query_weekly",
+      "expected_keywords": ["week"],
+      "difficulty": "easy"
+    },
+    {
+      "id": "rank_changes",
+      "question": "Which meters have been in the top 20 the longest?",
+      "expected_tool": "query_rank_changes",
+      "expected_keywords": ["top"],
+      "difficulty": "medium"
+    },
+    {
+      "id": "monthly_diff_nrw",
+      "question": "Show me the non-revenue water situation",
+      "expected_tool": "query_monthly_diff",
+      "expected_keywords": ["diff", "main"],
+      "difficulty": "medium"
+    },
+    {
+      "id": "compare_two_months",
+      "question": "Compare January and February consumption",
+      "expected_tool": "compare_months",
+      "expected_keywords": ["January", "February"],
+      "difficulty": "medium"
+    },
+    {
+      "id": "chart_trend",
+      "question": "Draw a trend chart for Zone-2",
+      "expected_tool": "generate_chart",
+      "expected_keywords": ["Zone-2"],
+      "difficulty": "medium"
+    },
+    {
+      "id": "anomaly_investigate",
+      "question": "Investigate meter 3586950 anomalies",
+      "expected_tool": "analyze_anomaly",
+      "expected_keywords": ["3586950"],
+      "difficulty": "hard"
+    },
+    {
+      "id": "report_zone3",
+      "question": "Generate a Zone-3 monthly report",
+      "expected_tool": "generate_report",
+      "expected_keywords": ["Zone-3"],
+      "difficulty": "hard"
+    },
+    {
+      "id": "sql_total_by_dma",
+      "question": "What is the total daily consumption by DMA?",
+      "expected_tool": "sql_query",
+      "expected_keywords": ["dma", "total"],
+      "difficulty": "medium"
+    },
+    {
+      "id": "sql_top_meters",
+      "question": "Top 5 meters by total consumption",
+      "expected_tool": "sql_query",
+      "expected_keywords": ["meterId", "DESC"],
+      "difficulty": "medium"
+    },
+    {
+      "id": "sql_avg_by_dma",
+      "question": "What is the average anomaly score by DMA?",
+      "expected_tool": "sql_query",
+      "expected_keywords": ["anomalyScore", "AVG"],
+      "difficulty": "medium"
+    },
+    {
+      "id": "list_tables",
+      "question": "What tables are available?",
+      "expected_tool": "list_tables_tool",
+      "expected_keywords": ["anomalies", "meters"],
+      "difficulty": "easy"
+    },
+    {
+      "id": "schema_anomalies",
+      "question": "What columns does the anomalies table have?",
+      "expected_tool": "get_table_schema_tool",
+      "expected_keywords": ["dma", "anomalyScore"],
+      "difficulty": "easy"
+    },
+    {
+      "id": "daily_dma_rainy",
+      "question": "Show me daily consumption data",
+      "expected_tool": "query_daily_dma",
+      "expected_keywords": ["date"],
+      "difficulty": "easy"
+    },
+    {
+      "id": "meters_by_dma",
+      "question": "List all meters in Zone-2",
+      "expected_tool": "query_meters",
+      "expected_keywords": ["Zone-2"],
+      "difficulty": "easy"
+    },
+    {
+      "id": "anomaly_watch_list",
+      "question": "Show me watch anomalies",
+      "expected_tool": "query_anomalies",
+      "expected_keywords": ["watch"],
+      "difficulty": "medium"
+    },
+    {
+      "id": "compare_two_dmas",
+      "question": "Compare Zone-1 and Zone-3 consumption",
+      "expected_tool": "compare_months",
+      "expected_keywords": ["Zone-1", "Zone-3"],
+      "difficulty": "medium"
+    },
+    {
+      "id": "report_all",
+      "question": "Generate a comprehensive report",
+      "expected_tool": "generate_report",
+      "expected_keywords": ["anomalies", "consumption"],
+      "difficulty": "hard"
+    }
+  ]
+}

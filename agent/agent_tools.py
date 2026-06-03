@@ -13,6 +13,23 @@ DATA_DIR = os.environ.get(
     os.path.join(os.path.dirname(__file__), "..", "backend", "data", "output")
 )
 
+# Per-process page context. The server injects the request's `context` field
+# here before each turn so the `get_current_page_context` tool can read it.
+# The agent also sees it as a [PAGE CONTEXT] system message, but the tool
+# is useful when the user switches tabs mid-conversation.
+_PAGE_CONTEXT: dict = {}
+
+
+def set_page_context(ctx: dict | None) -> None:
+    """Called by the server on every request. Stores the latest page state."""
+    global _PAGE_CONTEXT
+    _PAGE_CONTEXT = ctx or {}
+
+
+def get_page_context() -> dict:
+    """Read-only accessor for the latest page state."""
+    return dict(_PAGE_CONTEXT)
+
 
 def _load(filename):
     with open(os.path.join(DATA_DIR, filename), "r", encoding="utf-8") as f:
@@ -422,6 +439,29 @@ def generate_report(dma: str = "", month: str = "") -> str:
     return json.dumps(report, ensure_ascii=False, indent=2)
 
 
+# ── Tool 15: Page context ─────────────────────────────────────
+
+@tool
+def get_current_page_context() -> str:
+    """Return the user's current page state: which tab they're on, the selected
+    date, the selected DMA zone, and other UI filters.
+
+    Use this when the user asks a deictic question like:
+      - "what about this week?"
+      - "the meter I'm looking at"
+      - "current zone consumption"
+      - "compare to last month" (when looking at a chart with a known month)
+
+    The same information is also passed as a [PAGE CONTEXT] system message at
+    the start of every turn. This tool is useful when the user has switched
+    tabs mid-conversation and you need a fresh read.
+    """
+    ctx = get_page_context()
+    if not ctx:
+        return json.dumps({"context": "no page context available"})
+    return json.dumps({"context": ctx}, ensure_ascii=False)
+
+
 # ── Export all tools ──────────────────────────────────────────
 
 ALL_TOOLS = [
@@ -439,4 +479,14 @@ ALL_TOOLS = [
     compare_months,
     analyze_anomaly,
     generate_report,
+    get_current_page_context,
 ]
+
+# Text-to-SQL tools (always available; agent picks the right one per question).
+# Re-exported from sql_tools so multi_agent can discover them via ALL_TOOLS.
+try:
+    from .sql_tools import ALL_SQL_TOOLS  # type: ignore
+    ALL_TOOLS = list(ALL_TOOLS) + list(ALL_SQL_TOOLS)
+except (ImportError, Exception):
+    # sql_tools may be unavailable (db not built yet). The agent still works.
+    pass

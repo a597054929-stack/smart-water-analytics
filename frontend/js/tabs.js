@@ -1,5 +1,8 @@
 // === Tab 切換 ===
 let _rendered=new Set(['home']);
+// Tracks which tab the user is currently looking at. Exposed globally so the
+// chat widget can pass it to the AI agent as page context.
+let _activeTab = 'home';
 
 function showTab(t){
   ['home','trend','rank','diff','anomaly','search','predict','dma','map'].forEach(p=>{
@@ -9,6 +12,7 @@ function showTab(t){
   document.querySelectorAll('.tab').forEach(function(b){b.classList.remove('active')});
   var idx=['home','trend','rank','diff','anomaly','search','predict','map'].indexOf(t);
   if(idx>=0)document.querySelectorAll('.tab')[idx].classList.add('active');
+  _activeTab = t;
   if(_rendered.has(t)){Object.values(charts).forEach(function(c){if(c)c.resize()});return;}
   _rendered.add(t);
   if(t==='trend')renderTrend();

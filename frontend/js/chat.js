@@ -27,11 +27,43 @@ function toggleChat() {
   fab.classList.toggle('active', open);
   if (!_chatInited) {
     _chatInited = true;
-    chatAppend('ai', 'Hello! I am the Smart Water AI Assistant.\n\nYou can ask me:\n- Anomaly statistics for Zone-3\n- Which meters are long-term Top20?\n- Draw an anomaly type distribution chart\n- Main/sub meter diff and NRW rate\n- Predict next week consumption\n\nTip: Toggle between Agent and Multi-Agent mode below.');
+    chatAppend('ai', 'Hello! I am the Smart Water AI Assistant.\n\nYou can ask me:\n- Anomaly statistics for Zone-3\n- Which meters are long-term Top20?\n- Draw an anomaly type distribution chart\n- Main/sub meter diff and NRW rate\n- Predict next week consumption\n\nTip: Toggle between Agent and Multi-Agent mode below.\nTip: I can see which page you are on, so you can ask things like "this week" or "current DMA".');
   }
   if (open) {
     setTimeout(function() { document.getElementById('chatInput').focus(); }, 200);
   }
+}
+
+// === Page context ===
+// Gather everything the AI should know about the user's current view.
+// The agent uses this so questions like "this week" or "current zone" work
+// without the user spelling out the filters.
+function getPageContext() {
+  var ctx = {
+    active_tab: (typeof _activeTab !== 'undefined') ? _activeTab : 'home',
+    // Date + DMA come from the global state in utils.js
+    selected_date: (typeof selDate !== 'undefined') ? selDate : null,
+    selected_dma: (typeof selDma !== 'undefined' && selDma) ? selDma : null,
+  };
+  // Detect the password / sensitive unlock state (best-effort)
+  var pwd = document.getElementById('pwdStatus');
+  if (pwd) {
+    ctx.sensitive_unlocked = /解鎖|unlock/i.test(pwd.textContent || '');
+  }
+  // Map active tab → likely intent keywords (so the agent can disambiguate)
+  var intentByTab = {
+    home: 'overview',
+    trend: 'time-series',
+    rank: 'top-meters',
+    diff: 'main-vs-sub / NRW',
+    anomaly: 'anomalies',
+    search: 'meter lookup',
+    predict: 'forecast',
+    dma: 'DMA detail',
+    map: 'geographic',
+  };
+  ctx.likely_intent = intentByTab[ctx.active_tab] || 'general';
+  return ctx;
 }
 
 function toggleChatMode() {
@@ -65,7 +97,11 @@ async function sendChat() {
     var resp = await fetch(AI_API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question: q, mode: _chatMode }),
+      body: JSON.stringify({
+        question: q,
+        mode: _chatMode,
+        context: getPageContext(),
+      }),
     });
 
     var reader = resp.body.getReader();

@@ -1,7 +1,14 @@
 node_modules/
 backend/data/output/
+backend/data/analytics.db
 frontend/dist/data/
 *.log
+logs/
+checkpoints/
+reports/run_*.json
 .DS_Store
 *.bat
 __pycache__/
+
+# Local-only interview prep
+docs/CHEAT_SHEET.md

@@ -30,7 +30,8 @@ A full-stack data analytics platform for monitoring and predicting urban water c
 | Data Processing | Node.js (xlsx library) |
 | Machine Learning | Python, scikit-learn (LinearRegression), NumPy |
 | Visualization | ECharts 5 (charts), Leaflet.js (maps) |
-| AI Backend | LangChain + FastAPI (optional) |
+| AI Backend | LangChain + FastAPI (ReAct agent, 17 tools, multi-agent) |
+| MLOps Pipeline | Pandera (schemas), SQLite, scipy (KS-test drift) |
 | Build | Custom Node.js build script (CSS/JS inlining) |
 
 ## Architecture
@@ -93,22 +94,105 @@ Set `LLM_PROVIDER` env var to switch:
 ```
 portfolio/
 ├── backend/
+│   ├── data/
+│   │   ├── output/                # JSON artifacts (ingest source)
+│   │   └── analytics.db           # SQLite (load_sql output)
 │   └── scripts/
-│       ├── process_data.cjs      # Data processor (Excel → JSON)
-│       ├── predict_top50.py      # Top-50 meter predictions
+│       ├── process_data.cjs       # Data processor (Excel → JSON)
+│       ├── predict_top50.py       # Top-50 meter predictions
 │       └── predict_by_building.py # Building-level predictions
-├── frontend/
-│   ├── js/                       # 12 JS modules (tabs, charts, etc.)
+├── pipeline/                      # MLOps data pipeline
+│   ├── logger.py                  # Structured JSON logging with run_id
+│   ├── schema.py                  # Pandera schemas (data contracts)
+│   ├── validators.py              # Checkpoint validation
+│   ├── data_quality.py            # IQR/z-score outlier, missing-value
+│   ├── sql_loader.py              # JSON → SQLite loader with indexes
+│   ├── drift.py                   # KS-test / chi-square drift detection
+│   └── orchestrator.py            # Stage-based pipeline runner
+├── agent/                         # AI Agent (LangChain + FastAPI)
+│   ├── agent_tools.py             # 14 JSON tools
+│   ├── sql_tools.py               # 3 text-to-SQL tools
+│   ├── agent_executor.py          # ReAct agent + system prompt
+│   ├── multi_agent.py             # Planner → Executor → Synthesizer
+│   ├── server.py                  # FastAPI with SSE streaming
+│   ├── chart_generator.py         # ECharts option builder
+│   ├── data_loader.py
+│   └── config.py
+├── tests/                         # Evaluation framework
+│   ├── qa_pairs.json              # 25 QA test pairs
+│   ├── test_data_quality.py       # Outlier / missing-value tests
+│   ├── test_pipeline.py           # End-to-end pipeline tests
+│   ├── test_agent_tools.py        # Agent tool smoke tests
+│   ├── test_evaluator.py          # Evaluator unit tests
+│   └── evaluate.py                # Tool accuracy + keyword recall scorer
+├── docs/
+│   ├── INTERVIEW_PREP.md          # HKT interview guide (GitHub)
+│   └── CHEAT_SHEET.md             # One-page summary (local)
+├── frontend/                      # 9-tab dashboard
+│   ├── js/                        # 12 JS modules
 │   ├── css/styles.css
-│   ├── template.html             # Dashboard template
-│   ├── build.cjs                 # Build script
-│   └── dist/                     # Built dashboard
+│   ├── template.html              # Dashboard template
+│   ├── build.cjs                  # Build script
+│   └── dist/                      # Built dashboard
 ├── public/data/
-│   └── dma_zones.geojson         # DMA zone boundaries
+│   └── dma_zones.geojson          # DMA zone boundaries
 ├── scripts/
-│   └── mock_data_generator.py    # Demo data generator
+│   └── mock_data_generator.py     # Demo data generator
+├── reports/                       # Run summaries, drift reports, eval reports
+├── logs/                          # Pipeline JSON logs
+├── checkpoints/                   # Stage checkpoints (resume support)
 └── package.json
 ```
+
+## MLOps Pipeline
+
+The `pipeline/` module turns raw JSON artifacts into a production-grade
+data flow. Six stages, each with structured logging, schema validation,
+and checkpoint support:
+
+```bash
+python pipeline/orchestrator.py --force   # run end-to-end
+pytest tests/test_pipeline.py -v          # verify all stages pass
+```
+
+Stages:
+1. **ingest** — read JSON outputs into typed DataFrames
+2. **clean** — IQR outlier capping + missing-value interpolation
+3. **detect_anomalies** — validate the anomaly artifact
+4. **predict** — validate the forecast rows
+5. **load_sql** — write to SQLite with indexes on `meterId`, `date`, `dma`
+6. **drift** — KS-test (numeric) and chi-square (categorical) drift detection
+
+## AI Agent
+
+17 LangChain tools: 14 read from the JSON files, 3 query the SQLite
+database directly via text-to-SQL. The system prompt teaches the model
+when to use which category (aggregations → SQL, summarized data → JSON).
+
+```bash
+# Run the agent
+cd agent
+export LLM_API_KEY="..."
+python server.py                 # streams at http://localhost:8000/api/chat
+```
+
+Multi-agent mode adds a Planner → Executor → Synthesizer chain (toggle
+in the chat UI).
+
+## Evaluation
+
+```bash
+pytest tests/ -v                 # 39 unit tests
+python tests/evaluate.py         # 25 QA pairs, real LLM
+```
+
+The evaluator scores:
+- **tool accuracy** — did it call the expected tool?
+- **keyword recall** — fraction of expected keywords in the answer
+- **latency** — end-to-end wall time
+- **failure rate** — % of unanswered questions
+
+Output: `reports/eval_per_qa.json` and `reports/eval_report.md`.
 
 ## Anomaly Detection Algorithm
 

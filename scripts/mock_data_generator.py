@@ -58,9 +58,9 @@ BUILDING_NAMES = {
     ]
 }
 
-# Date range: 90 days
+# Date range: 125 days (Jan 1 ~ May 5)
 START_DATE = datetime(2026, 1, 1)
-NUM_DAYS = 90
+NUM_DAYS = 125
 DATES = [(START_DATE + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(NUM_DAYS)]
 
 # Generate meter pool
