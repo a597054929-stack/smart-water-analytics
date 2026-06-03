@@ -6,9 +6,11 @@ frontend/dist/data/
 logs/
 checkpoints/
 reports/run_*.json
+reports/latest_run.json
 .DS_Store
 *.bat
 __pycache__/
+agent/chat_history.json
 
 # Local-only interview prep
 docs/CHEAT_SHEET.md

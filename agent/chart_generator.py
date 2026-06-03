@@ -7,10 +7,11 @@ which the frontend renders directly with ECharts.
 
 import json, os
 
-DATA_DIR = os.environ.get(
-    "WATER_DATA_DIR",
-    os.path.join(os.path.dirname(__file__), "..", "backend", "data", "output")
+_DEFAULT_DATA_DIR = os.path.abspath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "backend", "data", "output")
 )
+_env_dir = os.environ.get("WATER_DATA_DIR", "")
+DATA_DIR = _env_dir if (_env_dir and os.path.isabs(_env_dir)) else _DEFAULT_DATA_DIR
 
 
 def _load(filename):

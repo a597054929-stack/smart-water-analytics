@@ -55,7 +55,7 @@ def get_agent():
 
 # ── Conversation Persistence ──────────────────────────────────
 
-CHAT_HISTORY_FILE = os.path.join(os.path.dirname(__file__), "chat_history.json")
+CHAT_HISTORY_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "chat_history.json")
 
 def load_history():
     if os.path.exists(CHAT_HISTORY_FILE):

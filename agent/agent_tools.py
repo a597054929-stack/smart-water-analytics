@@ -8,10 +8,24 @@ The docstring is critical — the agent reads it to decide when to use each tool
 import json, os
 from langchain_core.tools import tool
 
-DATA_DIR = os.environ.get(
-    "WATER_DATA_DIR",
-    os.path.join(os.path.dirname(__file__), "..", "backend", "data", "output")
+# Always resolve the data dir to an absolute path.
+#
+# Rule:
+#   - If WATER_DATA_DIR is set AND absolute → use it.
+#   - If WATER_DATA_DIR is set but relative → IGNORE it (resolved against
+#     CWD, which is unreliable). Fall through to the default.
+#   - Otherwise → default to <project>/backend/data/output.
+#
+# This prevents the bug where the bat set WATER_DATA_DIR=..\backend\data\output
+# and running from portfolio/ resolved it to workspace/backend/... (wrong).
+_DEFAULT_DATA_DIR = os.path.abspath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "backend", "data", "output")
 )
+_env_dir = os.environ.get("WATER_DATA_DIR", "")
+if _env_dir and os.path.isabs(_env_dir):
+    DATA_DIR = _env_dir
+else:
+    DATA_DIR = _DEFAULT_DATA_DIR
 
 # Per-process page context. The server injects the request's `context` field
 # here before each turn so the `get_current_page_context` tool can read it.
