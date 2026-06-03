@@ -498,9 +498,20 @@ ALL_TOOLS = [
 
 # Text-to-SQL tools (always available; agent picks the right one per question).
 # Re-exported from sql_tools so multi_agent can discover them via ALL_TOOLS.
+# `agent/` has no __init__.py and is not a real package, so a relative
+# import like `from .sql_tools` would always fail. Use the same sys.path
+# bootstrap as sql_tools.py itself.
 try:
-    from .sql_tools import ALL_SQL_TOOLS  # type: ignore
+    import sys
+    from pathlib import Path
+    _agent_dir = str(Path(__file__).resolve().parent)
+    if _agent_dir not in sys.path:
+        sys.path.insert(0, _agent_dir)
+    from sql_tools import ALL_SQL_TOOLS  # type: ignore
     ALL_TOOLS = list(ALL_TOOLS) + list(ALL_SQL_TOOLS)
-except (ImportError, Exception):
-    # sql_tools may be unavailable (db not built yet). The agent still works.
-    pass
+except (ImportError, Exception) as _sql_err:
+    # Don't silently swallow this — it means SQL tools are missing and the
+    # agent will tell the user "no SQL tools available". Surface it to the
+    # server console so a missing db / broken import is visible.
+    import sys
+    print(f"[agent_tools] SQL tools not registered: {_sql_err}", file=sys.stderr)
