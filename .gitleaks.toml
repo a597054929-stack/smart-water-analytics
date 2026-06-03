@@ -1,0 +1,19 @@
+# Gitleaks configuration. See https://github.com/gitleaks/gitleaks
+#
+# The default ruleset catches sk-*, AKIA*, ghp_*, and most provider key
+# formats. We only allowlist files that intentionally contain example or
+# fake credentials — never real ones.
+#
+# To add a new allowlist entry:
+#   1. Confirm the file genuinely contains a placeholder, not a real key.
+#   2. Add a regex matching the path below.
+#   3. Add a one-line comment explaining why the allowlist is safe.
+
+[allowlist]
+paths = [
+  # .env.example ships placeholder values like sk-replace-me-... — safe
+  # to be public, but its sk- prefix would otherwise trip the scanner.
+  '''\.env\.example$''',
+  # Test fixtures that intentionally include fake keys.
+  '''tests/fixtures/.*''',
+]

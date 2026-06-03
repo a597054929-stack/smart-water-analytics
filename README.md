@@ -219,4 +219,30 @@ Generates 7-day ahead forecasts with R² model scoring.
 
 ## License
 
-This project was developed as a Final Year Project. The code is available for portfolio review purposes.
+MIT — see [LICENSE](LICENSE).
+
+## Development
+
+### Running with Docker
+
+```bash
+cp .env.example .env       # fill in LLM_API_KEY
+docker compose up --build
+# Dashboard: http://localhost:5173
+# Agent:     http://localhost:8000/api/health
+```
+
+### Running locally on Windows
+
+Use the `start_*.bat` scripts — they set the right env vars and dependencies automatically.
+
+### Secret scanning
+
+A pre-commit hook ([`.pre-commit-config.yaml`](.pre-commit-config.yaml)) runs **gitleaks** to block accidental commits of API keys.
+
+```bash
+pip install pre-commit
+pre-commit install
+```
+
+GitHub also offers [native secret scanning](https://docs.github.com/en/code-security/secret-scanning/about-secret-scanning) — enable it in the repo's **Settings → Security** tab.
