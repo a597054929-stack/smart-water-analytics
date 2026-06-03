@@ -159,11 +159,25 @@ async def chat(req: ChatRequest):
             else:
                 # Update the page-context store so the get_current_page_context
                 # tool sees the latest frontend state.
+                #
+                # `agent/` is not a real package (no __init__.py), so a bare
+                # `import agent_tools` only works when cwd is agent/. The bat
+                # files `cd agent` before starting, so this usually works, but
+                # we also need to handle the case where the import fails (e.g.
+                # when server.py is launched from elsewhere). If we can't
+                # import set_page_context, the get_current_page_context tool
+                # will return "no page context available" — visible to the
+                # user as a confusing error. Surface the failure to stderr.
                 try:
                     from agent_tools import set_page_context
                     set_page_context(req.context)
-                except Exception:
-                    pass
+                except Exception as _ctx_err:
+                    import sys
+                    print(
+                        f"[chat] set_page_context failed: {_ctx_err!r}",
+                        file=sys.stderr,
+                        flush=True,
+                    )
 
                 agent = get_agent()
                 # LangChain requires all system messages to be a contiguous
