@@ -8,6 +8,15 @@ The docstring is critical — the agent reads it to decide when to use each tool
 import json, os
 from langchain_core.tools import tool
 
+# Page-context state lives in its own module so that LangGraph's tool
+# runtime (which may rebind tool functions into its own namespace) still
+# sees the same global dict. See _page_state.py for the rationale.
+from _page_state import (
+    set_page_context,
+    get_page_context,
+    PAGE_STATE,
+)
+
 # Always resolve the data dir to an absolute path.
 #
 # Rule:
@@ -27,22 +36,10 @@ if _env_dir and os.path.isabs(_env_dir):
 else:
     DATA_DIR = _DEFAULT_DATA_DIR
 
-# Per-process page context. The server injects the request's `context` field
-# here before each turn so the `get_current_page_context` tool can read it.
-# The agent also sees it as a [PAGE CONTEXT] system message, but the tool
-# is useful when the user switches tabs mid-conversation.
-_PAGE_CONTEXT: dict = {}
-
-
-def set_page_context(ctx: dict | None) -> None:
-    """Called by the server on every request. Stores the latest page state."""
-    global _PAGE_CONTEXT
-    _PAGE_CONTEXT = ctx or {}
-
-
-def get_page_context() -> dict:
-    """Read-only accessor for the latest page state."""
-    return dict(_PAGE_CONTEXT)
+# Per-process page context. The actual state is held in `_page_state.PAGE_STATE`
+# (see the import block at the top of this file). `set_page_context` and
+# `get_page_context` are re-exported from there for callers that used to
+# import them from this module.
 
 
 def _load(filename):
