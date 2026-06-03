@@ -126,6 +126,16 @@ async def chat(req: ChatRequest):
 
     async def stream():
         try:
+            # Diagnostic: log what context the server actually received from
+            # the frontend. Crucial for debugging "no page context" reports.
+            # One line per request — easy to grep in the server console.
+            import sys
+            print(
+                f"[chat] mode={req.mode} context={req.context}",
+                file=sys.stderr,
+                flush=True,
+            )
+
             # Multi-agent mode
             if req.mode == "multi":
                 from multi_agent import run_multi_agent
@@ -233,6 +243,8 @@ async def chat_sync(req: ChatRequest):
         return ChatResponse(answer="Please enter a question.")
 
     try:
+        import sys
+        print(f"[chat-sync] context={req.context}", file=sys.stderr, flush=True)
         try:
             from agent_tools import set_page_context
             set_page_context(req.context)
