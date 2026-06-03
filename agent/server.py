@@ -156,19 +156,20 @@ async def chat(req: ChatRequest):
                     pass
 
                 agent = get_agent()
-                messages = list(chat_history)
-
-                # Inject page context as a system message at the start of this turn.
-                # The agent sees it before the user's question and can use it to
-                # disambiguate things like "this week" or "current DMA".
+                # LangChain requires all system messages to be a contiguous
+                # block at the very start of the list. Strip any stale system
+                # entries persisted from prior turns, then build a fresh
+                # sequence: [context_system?, ...history, user].
+                context_msg = None
                 if req.context:
-                    messages.append(
-                        {
-                            "role": "system",
-                            "content": _format_context_message(req.context),
-                        }
-                    )
-                messages.append({"role": "user", "content": question})
+                    context_msg = {
+                        "role": "system",
+                        "content": _format_context_message(req.context),
+                    }
+                history_no_system = [m for m in chat_history if m.get("role") != "system"]
+                messages = ([context_msg] if context_msg else []) + history_no_system + [
+                    {"role": "user", "content": question}
+                ]
 
                 final_answer = ""
                 chart = None
@@ -239,10 +240,13 @@ async def chat_sync(req: ChatRequest):
             pass
 
         agent = get_agent()
-        messages = list(chat_history)
+        context_msg = None
         if req.context:
-            messages.append({"role": "system", "content": _format_context_message(req.context)})
-        messages.append({"role": "user", "content": question})
+            context_msg = {"role": "system", "content": _format_context_message(req.context)}
+        history_no_system = [m for m in chat_history if m.get("role") != "system"]
+        messages = ([context_msg] if context_msg else []) + history_no_system + [
+            {"role": "user", "content": question}
+        ]
         result = agent.invoke({"messages": messages})
 
         answer = ""
