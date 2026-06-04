@@ -841,7 +841,7 @@ function drawWeeklyTrendChart(){
 function drawTrendChart(){
   disposeChart('trend');
   var c=initChart(document.getElementById('trendChart'),'trend');
-  var dates=D.trend.map(function(d){return d.date}),totals=D.trend.map(function(d){var t=0;for(var v in d.dmas)t+=d.dmas[v];return t}),rain=D.trend.map(function(d){return d.rain||0});
+  var dates=D.trend.map(function(d){return d.date}),totals=D.trend.map(function(d){var t=0;for(var v in d.dmas)t+=d.dmas[v].total||0;return t}),rain=D.trend.map(function(d){return d.rain||0});
   var win=window._raWin||7;var ma=calcMA(totals,win);
 
   // 月環比：按月份著色 + 月均值參考線
@@ -910,7 +910,7 @@ function renderDmaTrend(dma){
   disposeChart('dt');
   var c=initChart(document.getElementById('dmaTrendChart'),'dt');
   var dates=D.trend.map(function(d){return d.date});
-  var vals=D.trend.map(function(d){return d.dmas[dma]||0});
+  var vals=D.trend.map(function(d){return d.dmas[dma]?d.dmas[dma].total:0});
   var ma=calcMA(vals,7);
   var preds=hwForecast(vals,7);
   var predDates=dates.slice(),predVals=new Array(vals.length).fill(null);
@@ -1753,7 +1753,7 @@ function renderCalendar(){
       var bg=total>0?'rgb('+(r+20)+','+(g+20)+','+(b+20)+')':'#1e293b';
       var dayTotal=0;
       var tt=D.trend.find(function(x){return x.date===ds});
-      if(tt){var dmas=tt.dmas;for(var dk in dmas)dayTotal+=dmas[dk];}
+      if(tt){var dmas=tt.dmas;for(var dk in dmas)dayTotal+=dmas[dk].total||0;}
       var totalLabel=dayTotal>0?fmt(dayTotal)+'m³':'';
       h+='<div class="cc" style="background:'+bg+'" onclick="showCotaiDay(\''+ds+'\')" title="'+ds+': '+fmt(dayTotal)+' m³">'+dd+'<span class="cdt">'+totalLabel+'</span></div>';
     }
@@ -2029,12 +2029,25 @@ async function _loadIndividual(){
     _safeFetch('data/predictions_by_building.json'),
     _safeFetch('data/predictions_fitted.json'),
   ]);
-  // Assemble D object to match all_data.json shape
+  // Real converter emits mainTotal/subsTotal/diffPercent and no
+  // subCount; the JS expects mainMonthTotal/subMonthTotal/diffPct/
+  // subCount (legacy mock-data shape). Map once here so every renderer
+  // can stay schema-blind.
+  const diff = (monthlyDiff || []).map(m => ({
+    ...m,
+    diffs: (m.diffs || []).map(d => ({
+      ...d,
+      mainMonthTotal: d.mainTotal ?? 0,
+      subMonthTotal:  d.subsTotal ?? 0,
+      diffPct:        d.diffPercent ?? 0,
+      subCount:       Array.isArray(d.subs) ? d.subs.length : 0,
+    })),
+  }));
   return {
     dma:dma||[],
     top:top20?top20.map(d=>({date:d.date,top20:d.top20})):[],
     top20dma:[],  // not generated; computed on demand if needed
-    diff:monthlyDiff||[],
+    diff,
     dates:dates||[],
     rank:rank||[],
     anomalies:anomalies||[],

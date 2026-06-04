@@ -94,6 +94,18 @@ RESIDENTIAL_CODES = {"001"}
 PEAK_HOUR_WINDOW = set(range(18, 23))  # 18:00-22:00 treated as "peak"
 
 
+def _normalize_dma_name(name: str) -> str:
+    """Replace the PUA codepoint U+EBF3 (which real data sometimes uses for 氹)
+    with the canonical U+6C39 so downstream membership checks against
+    MACAU_DMAS work. Without this, ~800 meters whose meter_info encodes
+    the district with the PUA variant get bucketed as Unclassified and
+    the Cotai zone (路氹城區) shows 0 consumption.
+    """
+    if not name:
+        return name
+    return name.replace("", "氹")
+
+
 # ── Mapping helpers ──────────────────────────────────────────
 
 def _map_property_type(raw: str) -> str:
@@ -135,7 +147,7 @@ def _load_reference_meters() -> dict:
                 "isResidential": (raw_type.split(":", 1)[0] in RESIDENTIAL_CODES)
                                  if isinstance(raw_type, str) else False,
                 "buildingName": r.get("建築物名稱") or "",
-                "dma": r.get("DMA分區") or "Unclassified",
+                "dma": _normalize_dma_name(r.get("DMA分區") or "Unclassified"),
                 "supplyMode": r.get("供水模式") or "DIRECT",
                 "mainBarcode": r.get("主錶錶碼") if pd.notna(r.get("主錶錶碼")) else None,
             })
