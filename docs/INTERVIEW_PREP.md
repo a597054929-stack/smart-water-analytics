@@ -1,287 +1,199 @@
-# HKT Data Scientist Interview — Project Guide
+# 数据科学家面试 — 项目指南
 
-> This document is written for the **HKT (Hong Kong Telecommunications) Data
-> Scientist** interview. It explains the design decisions in this portfolio,
-> connects them to telecom use cases, and gives sample answers to the most
-> likely interview questions.
+> 本文档解释项目的设计决策，连接到行业应用场景，并提供面试常见问题的参考答案。
 
 ---
 
-## 1. Project Overview (30-second elevator pitch)
+## 1. 项目概述（30 秒电梯演讲）
 
-**Smart Water Analytics** is an end-to-end analytics platform for a water
-utility: daily meter ingestion, anomaly detection, 7-day forecasting, an AI
-agent for natural-language queries, and an MLOps-grade data pipeline.
+**Smart Water Analytics** 是一个端到端的水务数据分析平台：每日水表数据采集、异常检测、7 天预测、自然语言 AI Agent 查询，以及 MLOps 级别的数据管道。
 
-Built to demonstrate five things HKT cares about:
-1. **MLOps maturity** — pipeline transparency, schema validation, drift detection.
-2. **Structured + unstructured data** — text-to-SQL over a normalized store
-   plus JSON tool calls for summarized data.
-3. **Evaluation rigor** — a 25-question QA suite with automated scoring.
-4. **Data engineering** — automated outlier detection, missing-value handling,
-   checkpointed pipeline.
-5. **Communication** — production-grade logging, clear error messages, run
-   summaries.
+展示五大核心能力：
+1. **MLOps 成熟度** — 管道透明、Schema 验证、漂移检测
+2. **结构化 + 非结构化数据** — Text-to-SQL 查询数据库 + JSON 工具查询预汇总数据
+3. **评估体系** — 25 道 QA 测试题 + 自动化评分
+4. **数据工程** — 自动异常检测、缺失值处理、检查点机制
+5. **工程质量** — 生产级日志、清晰错误信息、运行摘要
 
 ---
 
-## 2. Why this matters for HKT
+## 2. 跨行业映射
 
-| Portfolio capability | Telecom equivalent |
+| 项目能力 | 行业等价场景 |
 | --- | --- |
-| Daily meter ingestion + cleaning | CDR (Call Detail Record) ingestion, drop noisy events |
-| Anomaly detection (Z-score + rolling window) | Fraud detection, network-failure detection |
-| 7-day forecast (exponential smoothing per meter) | ARPU forecast, churn risk forecast, traffic forecast |
-| Text-to-SQL agent | Ops query bot for network counters and customer care tickets |
-| Drift detection on anomaly features | Customer behavior drift, network topology drift |
-| Evaluation QA suite | A/B test scoring, model regression in CI/CD |
-| Pandera schema validation | Schema contracts between upstream (OSS) and the DS layer |
+| 每日水表数据采集 + 清洗 | CDR（通话记录）采集、过滤噪声事件 |
+| 异常检测（Z-score + 滚动窗口） | 欺诈检测、网络故障检测 |
+| 7 天预测（指数平滑） | ARPU 预测、流失风险预测、流量预测 |
+| Text-to-SQL Agent | 运维查询机器人（网络计数器、工单系统） |
+| 数据漂移检测 | 用户行为漂移、网络拓扑漂移 |
+| 评估测试套件 | A/B 测试评分、模型回归 CI/CD |
+| Pandera Schema 验证 | 上下游数据契约 |
 
-The **architectural patterns transfer** even though the data domain changes.
+**架构模式可迁移**，数据领域不同但方法论一致。
 
 ---
 
-## 3. Architecture at a glance
+## 3. 架构一览
 
 ```
-Raw data (JSON)            ─┐
+原始数据 (JSON)            ─┐
                             │
-  pipeline/  ───────────────┼──►  Pandera schema  ──►  SQLite (analytics.db)
-    ingest                   │     validation             │
-    clean  (IQR + interp)    │                            │
-    detect_anomalies         │                            │
-    predict                  │                            ▼
-    load_sql                 │              agent/  (17 LangChain tools)
-    drift (KS / chi²)        │                ├─ 14 JSON tools
-                            │                └─ 3  text-to-SQL tools
+  pipeline/  ───────────────┼──►  Pandera Schema  ──►  SQLite (analytics.db)
+    ingest                   │     验证                   │
+    clean  (IQR + 插值)      │                           │
+    detect_anomalies         │                           ▼
+    predict                  │              agent/  (13 个 LangChain 工具)
+    load_sql                 │                ├─ 10 个 JSON 工具
+    drift (KS / chi²)        │                └─ 3 个 text-to-SQL 工具
                             │
-  reports/  ◄──────────────┘  run summaries, eval reports, drift reports
-            frontend/  (ECharts dashboard, chat widget)
+  reports/  ◄──────────────┘  运行摘要、评估报告、漂移报告
+            frontend/  (ECharts 仪表盘、对话窗口)
 ```
 
-The pipeline is **stage-based with checkpoints** — if a stage fails, the
-next run resumes from the last good state.
+管道采用**分阶段 + 检查点**机制 — 某阶段失败后，下次运行从最后一个成功的检查点恢复。
 
 ---
 
-## 4. Key design decisions
+## 4. 关键设计决策
 
-### 4.1 Why Pandera (not Great Expectations or JSON Schema)?
-- **Pandera is in Python**, which means one language across the pipeline.
-- We get dtype coercion, regex matching, value-range checks, uniqueness
-  constraints — all declarative, all version-controllable.
-- Errors name the failing column and value range, so triage is fast.
-- We deliberately did not adopt Great Expectations: it brings a heavyweight
-  data-context server, which is overkill for a portfolio and adds friction.
+### 4.1 为什么用 Pandera（不用 Great Expectations）？
+- **Python 原生**，整个管道一种语言
+- 支持类型强制、正则匹配、值域检查、唯一性约束 — 全部声明式、可版本控制
+- 错误信息精确到列名和值域，排查快
+- Great Expectations 需要重量级的 data-context 服务器，对作品集项目过于复杂
 
-### 4.2 Why SQLite (not Postgres, BigQuery, etc.)?
-- **Zero infra** — the file is a sibling of the JSON outputs, no server
-  to spin up, no credentials to manage.
-- The same SQL works against any relational store. If the portfolio
-  promoted to production, the SQLite file becomes a Postgres schema; the
-  agent's text-to-SQL tools don't change.
-- **Indexes on `meterId`, `date`, `dma`** are added at load time so
-  typical queries (filter by DMA + date range) are O(log n).
+### 4.2 为什么用 SQLite（不用 Postgres）？
+- **零基础设施** — 文件和 JSON 输出同目录，无需服务器和凭证
+- SQL 语法与 Postgres 通用，生产环境可直接迁移
+- 加载时在 `meterId`、`date`、`dma` 上建索引，典型查询 O(log n)
 
-### 4.3 Why a ReAct agent (not RAG)?
-- The user's questions are *operational* (counts, top-N, comparisons), not
-  *informational* (what is the policy on...?). RAG retrieves documents;
-  an agent invokes tools. Tools are the right primitive.
-- We do keep JSON files in the agent's prompt as "summarized data", so
-  hybrid reasoning is possible — the agent decides.
-- For HKT, this maps to ops queries over CDR tables rather than knowledge
-  base lookups.
+### 4.3 为什么用 ReAct Agent（不用 RAG）？
+- 用户问题是**操作型**的（统计、Top-N、对比），不是**知识型**的（什么是...？）
+- RAG 检索文档，Agent 调用工具。工具是正确的抽象
+- JSON 文件作为"预汇总数据"放在 Agent 的 prompt 中，实现混合推理
 
-### 4.4 Why multi-agent (Planner → Executor → Synthesizer)?
-- **Separation of concerns** — planning, execution, synthesis. Easier to
-  debug, easier to swap the planner for a fine-tuned one later.
-- **Visibility** — the explicit plan can be shown to the user. Useful
-  for regulated industries (telecom is regulated).
-- The cost is latency: three LLM calls instead of one. We make this
-  optional via a mode toggle in the chat UI.
+### 4.4 为什么用多 Agent（Planner → Executor → Synthesizer）？
+- **关注点分离** — 规划、执行、综合各司其职
+- **可见性** — 显示显式计划给用户看，适合需要审计的场景
+- 成本是延迟（3 次 LLM 调用 vs 1 次），通过 UI 开关可选
 
-### 4.5 Why KS-test (not just visual drift detection)?
-- KS-test gives a single number (p-value) that we can threshold.
-- It works for any distribution shape — no normality assumption.
-- For categorical drift we use chi-square, the standard alternative.
-- Drift detection is wired into the pipeline as a stage, so every run
-  produces a JSON report (`reports/drift_report.json`).
+### 4.5 为什么用 KS 检验（不用目视漂移检测）？
+- KS 检验给出单一数值（p 值），可设阈值
+- 适用于任意分布形状，不要求正态性
+- 分类变量用卡方检验
+- 漂移检测作为管道的一个阶段，每次运行产出 JSON 报告
 
 ---
 
-## 5. Terminology glossary
+## 5. 术语表
 
-These are terms you should use naturally in the interview:
+面试中应自然使用的专业术语：
 
-- **Data Drift** — when the distribution of input features changes over
-  time, often silently degrading model performance.
-- **Schema validation** — checking the structure of a data artifact
-  (column names, types, value ranges) against a contract.
-- **Checkpointing** — saving intermediate state so a failed run can
-  resume without redoing work.
-- **Observability** — the ability to ask "what happened during this run?"
-  from logs, metrics, and traces.
-- **Run ID** — a single identifier propagated through every log line of
-  one pipeline execution; the unit of traceability.
-- **Text-to-SQL** — converting a natural-language question into a SQL
-  query that returns the answer.
-- **Hybrid search** — combining a structured query (SQL) with an
-  unstructured search (full-text / fuzzy) in one answer.
-- **Traceability** — being able to reconstruct exactly which data, code,
-  and parameters produced a given model output.
+- **Data Drift（数据漂移）** — 输入特征的分布随时间变化，通常悄然降低模型性能
+- **Schema Validation（模式验证）** — 检查数据结构是否符合契约（列名、类型、值域）
+- **Checkpointing（检查点）** — 保存中间状态，失败后可恢复而不重做已完成的工作
+- **Observability（可观测性）** — 通过日志、指标、追踪回答"这次运行发生了什么"
+- **Text-to-SQL** — 将自然语言问题转换为 SQL 查询
+- **Winsorization（缩尾处理）** — 用 IQR 边界值替代异常值，而非删除行
+- **Traceability（可追溯性）** — 能重建哪份数据、代码、参数产生了特定输出
 
 ---
 
-## 6. Likely interview Q&A
+## 6. 面试常见问答
 
-### Q1: "Walk me through your pipeline."
-> Six stages: `ingest` reads JSON outputs into DataFrames; `clean`
-> applies IQR-based outlier capping and missing-value interpolation;
-> `detect_anomalies` validates the artifact and reports distribution
-> stats; `predict` validates the forecast rows; `load_sql` writes
-> everything to a SQLite database with indexes; `drift` compares the
-> current run's distributions to the saved baseline via KS-test and
-> chi-square. Every stage logs its start/finish with a `run_id` and
-> writes a checkpoint. Pandera validates the artifact at the boundary
-> of every stage.
+### Q1: "介绍一下你的管道"
+> 六个阶段：`ingest` 读取 JSON 到 DataFrame；`clean` 用 IQR 缩尾 + 缺失值插值；
+> `detect_anomalies` 验证数据质量并报告分布统计；`predict` 验证预测行；
+> `load_sql` 写入 SQLite 并建索引；`drift` 用 KS 检验 + 卡方检验对比基线。
+> 每个阶段都有 `run_id` 日志和检查点。Pandera 在每个阶段边界做 Schema 验证。
 
-### Q2: "How would you scale this for HKT's traffic?"
-> The text-to-SQL tools work against any RDBMS — swap SQLite for
-> Postgres or Snowflake. For high-throughput ingestion, the JSON read
-> step would be replaced with Kafka or Kinesis; the rest of the
-> pipeline is unchanged. Drift detection would move from
-> "after-the-batch" to "on every window" via streaming aggregations.
-> The agent itself would sit behind a queue and become a microservice
-> rather than a CLI.
+### Q2: "如何扩展到生产环境？"
+> Text-to-SQL 工具可直接对接 Postgres 或 Snowflake。高频采集用 Kafka/Kinesis
+> 替代 JSON 读取。漂移检测从批后模式改为流式窗口。Agent 从 CLI 变成微服务，
+> 前面加消息队列。
 
-### Q3: "What happens if the data shape changes?"
-> Pandera schema validation catches it at the boundary of the affected
-> stage. The orchestrator logs the failure, leaves the checkpoint
-> from the last good stage in place, and exits with a clear error.
-> In production, this would page the on-call DS via the structured
-> log fields (`stage`, `schema`, `errors`).
+### Q3: "数据结构变了怎么办？"
+> Pandera 在受影响阶段的边界捕获错误。编排器记录失败，保留上一个好的检查点，
+> 输出清晰错误。生产环境中可通过结构化日志字段（`stage`、`schema`、`errors`）
+> 触发告警。
 
-### Q4: "Why a custom evaluator and not RAGAS?"
-> RAGAS is tuned for RAG pipelines (faithfulness, answer relevance,
-> context recall). My agent is a tool-using agent, not a retriever.
-> RAGAS wouldn't measure the right thing. My evaluator measures
-> *tool accuracy* (did it call the right tool?) and *keyword recall*
-> on the final answer — closer to what production care-about for an
-> agent. I can add an LLM-judge pass on top later for nuance.
+### Q4: "为什么不用 RAGAS 做评估？"
+> RAGAS 针对 RAG 管道（忠实度、回答相关性）。我的 Agent 是工具调用型，
+> 不是检索型。我评估的是**工具准确率**（是否调用了正确的工具）和
+> **关键词召回率** — 更贴近 Agent 的实际生产需求。
 
-### Q5: "Explain data drift and how you detect it."
-> Data drift is when the distribution of input features changes between
-> training and production. It can be *covariate shift* (P(X) changes),
-> *label shift* (P(Y) changes), or *concept drift* (P(Y|X) changes).
-> I detect it with the two-sample Kolmogorov-Smirnov test for numeric
-> columns and the chi-square test of independence for categorical
-> columns. Both produce a p-value; if it's below 0.05, I flag the
-> column. The pipeline stores a baseline on first run and compares
-> every subsequent run to it.
+### Q5: "解释数据漂移以及如何检测"
+> 数据漂移是训练和生产之间输入特征分布的变化。可以是协变量偏移 P(X) 变化、
+> 标签偏移 P(Y) 变化、或概念偏移 P(Y|X) 变化。我用 KS 检验处理数值列，
+> 卡方检验处理分类列。p 值低于 0.05 则标记为漂移。首次运行存储基线，
+> 后续运行对比基线。
 
-### Q6: "Tell me about a hard data-cleaning decision you made."
-> The cleaning stage uses IQR-based winsorization instead of dropping
-> outliers. Dropping rows would break the time-series continuity and
-> hide the truth that a meter spiked to 1000m³ last Tuesday. Capping
-> preserves the *existence* of the event while bounding the
-> *magnitude*, so downstream anomaly detection still sees the row.
-> The threshold (k=3 by default) is a trade-off: too aggressive and
-> we hide real anomalies; too lenient and we let sensor faults
-> pollute the model.
+### Q6: "讲一个困难的数据清洗决策"
+> 清洗阶段用 IQR 缩尾而非删除异常值。删除行会破坏时间序列连续性，
+> 隐藏"某水表上周二飙升到 1000m³"这个事实。缩尾保留事件的存在性，
+> 同时限制幅度，下游异常检测仍能看到该行。阈值 k=3 是权衡：
+> 太激进会隐藏真实异常，太宽松会让传感器故障污染模型。
 
-### Q7: "What would you add for a production deployment?"
-> Three things, in priority order:
-> 1. **Schema versioning** — bump the `SCHEMA_VERSION` on breaking
->    changes, write a migration in `validators.py`, fail loudly on
->    missing migrations.
-> 2. **Drift alerting** — pipe `drift_report.json` to PagerDuty or
->    Slack when `drift_count > 0`.
-> 3. **Eval in CI/CD** — block PRs that drop `pass_rate` below
->    `threshold` in `tests/evaluate.py`.
-> None of these requires a rewrite; the data is already there.
+### Q7: "生产部署你会加什么？"
+> 按优先级三件事：
+> 1. **Schema 版本控制** — 破坏性变更时 bump 版本，写迁移脚本
+> 2. **漂移告警** — drift_count > 0 时推送 PagerDuty/Slack
+> 3. **评估进 CI** — pass_rate 低于阈值时阻断 PR
+> 这些都不需要重写，数据已经就绪。
 
-### Q8: "How does the agent decide between SQL and JSON tools?"
-> The system prompt has a "tool selection guide" that maps question
-> types to tool categories. Aggregations, joins, top-N, date-range
-> filters → SQL. High-level questions like "show me Zone-3 anomalies"
-> → JSON tools that return pre-summarized data. The model picks per
-> sub-question, so one user turn can mix both. In production I'd
-> measure which path produces fewer tool errors and bias the prompt
-> accordingly.
+### Q8: "Agent 怎么决定用 SQL 还是 JSON 工具？"
+> 系统提示中有工具选择指南：聚合、JOIN、Top-N、日期范围 → SQL；
+> 高层概览如"Zone-3 异常情况" → JSON 预汇总工具。模型按子问题逐个选择，
+> 一轮对话可以混合使用两种工具。
 
-### Q9: "Why streaming SSE for the chat endpoint?"
-> The agent's planning loop can take 5–10 seconds. Without streaming,
-> the user sees a frozen UI. With SSE, the server emits `tool` events
-> as each tool finishes, then a final `answer` event. The frontend
-> shows the user *which tool is running right now*, which makes the
-> agent feel responsive and transparent. It's also how production
-> observability tools like LangSmith stream traces.
+### Q9: "为什么用流式 SSE？"
+> Agent 规划循环可能需要 5-10 秒。不用流式的话用户看到冻结的界面。
+> SSE 让服务器在每个工具完成时发出 `tool` 事件，最后发出 `answer` 事件。
+> 前端显示"正在运行哪个工具"，让 Agent 感觉响应快且透明。
 
-### Q10: "What is your biggest regret or what would you do differently?"
-> I'd split the orchestrator into a thin "runner" and a fat
-> "definition" file. Right now adding a stage means editing the
-> `STAGES` list and the `run()` function. A YAML or Python config
-> would let ops add stages without touching code. It's a small
-> refactor; I'd do it before scaling to more data sources.
+### Q10: "你最后悔什么 / 会怎么做不同？"
+> 会把编排器拆成"运行器"和"定义文件"。现在加阶段要改 `STAGES` 列表和
+> `run()` 函数。用 YAML 或 Python 配置可以让运维加阶段而不碰代码。
+> 这是个小重构，会在扩展更多数据源之前做。
 
 ---
 
-## 7. Demo script (5 minutes)
+## 7. 演示脚本（5 分钟）
 
-1. **Open with problem** (30s): "Water utilities lose 30% of water to
-   leaks. I built a system to detect anomalies in real-time. This is
-   the same architecture pattern HKT uses for CDR analytics."
+1. **开场**（30s）："水务公司因漏损损失 30% 的水量。我做了一个实时异常检测系统。这个架构同样适用于电信 CDR 分析。"
 
-2. **Show the pipeline** (1m): `python pipeline/orchestrator.py` — point
-   out the JSON logs, the checkpoint directory, the SQLite DB, the
-   drift report. Show that one re-run reuses checkpoints.
+2. **展示管道**（1m）：`python pipeline/orchestrator.py` — 指出 JSON 日志、检查点目录、SQLite 数据库、漂移报告。展示重跑时复用检查点。
 
-3. **Show the agent** (1.5m): open the dashboard, click the chat
-   widget. Ask "How many anomalies are in Zone-3?" — show the
-   streaming tool calls, the `sql_query` selection, the chart that
-   gets rendered inline. Toggle to multi-agent mode, ask the same
-   question — show the explicit plan that appears.
+3. **展示 Agent**（1.5m）：打开仪表盘，点击对话窗口。问"Zone-3 有多少异常？" — 展示流式工具调用、SQL 工具选择、内联图表。切到多 Agent 模式，问同一问题 — 展示显式计划。
 
-4. **Show the SQL** (1m): open `backend/data/analytics.db` in a
-   SQLite browser, run
-   `SELECT dma, type, COUNT(*) FROM anomalies GROUP BY dma, type`.
-   Explain: "In HKT, this is the same query you would run against
-   a CDR table or a network-counter store."
+4. **展示 SQL**（1m）：用 SQLite 浏览器打开 `backend/data/analytics.db`，运行 `SELECT dma, type, COUNT(*) FROM anomalies GROUP BY dma, type`。解释："在电信场景中，这是对 CDR 表或网络计数器表的同类查询。"
 
-5. **Show evaluation** (1m): `pytest tests/ -v` — show all green.
-   Show `reports/eval_report.md` from a real run, point out the
-   tool-accuracy metric.
+5. **展示评估**（1m）：`pytest tests/ -v` — 展示全部通过。展示 `reports/eval_report.md`，指出工具准确率指标。
 
-6. **Close with HKT angle** (30s): "HKT has 5M+ subscribers. The
-   same architecture applies: pipeline for real-time events, agent
-   for ops queries, drift detection for changing customer behavior,
-   evaluation as a CI gate. The data changes; the patterns don't."
+6. **收尾**（30s）："同样的架构可以扩展：管道处理实时事件、Agent 做运维查询、漂移检测监控行为变化、评估作为 CI 门禁。数据会变，模式不变。"
 
 ---
 
-## 8. Files to read in the repo
+## 8. 项目文件导航
 
-| File | Why it matters |
+| 文件 | 为什么重要 |
 | --- | --- |
-| `pipeline/orchestrator.py` | The pipeline runner — the MLOps spine. |
-| `pipeline/schema.py` | Pandera schemas — the data contracts. |
-| `pipeline/data_quality.py` | Outlier + missing-value handling. |
-| `pipeline/drift.py` | KS-test and chi-square drift detection. |
-| `agent/sql_tools.py` | Text-to-SQL: how the agent queries the DB. |
-| `agent/agent_executor.py` | The ReAct agent and the tool-selection prompt. |
-| `tests/qa_pairs.json` | The 25 QA pairs used to score the agent. |
-| `tests/evaluate.py` | The scoring logic. |
-| `docs/CHEAT_SHEET.md` | A one-page summary to skim before the interview. |
+| `pipeline/orchestrator.py` | 管道运行器 — MLOps 骨干 |
+| `pipeline/schema.py` | Pandera Schema — 数据契约 |
+| `pipeline/data_quality.py` | 异常值 + 缺失值处理 |
+| `pipeline/drift.py` | KS 检验 + 卡方检验漂移检测 |
+| `agent/sql_tools.py` | Text-to-SQL：Agent 如何查询数据库 |
+| `agent/agent_executor.py` | ReAct Agent 和工具选择提示 |
+| `agent/tool_router.py` | 规则引擎工具预选 |
+| `agent/memory.py` | 对话记忆摘要 |
+| `tests/qa_pairs.json` | 25 道 QA 测试题 |
+| `tests/evaluate.py` | 评分逻辑 |
 
 ---
 
-## 9. Out of scope (deliberately)
+## 9. 故意不做的（Out of Scope）
 
-- **Kafka / streaming ingestion** — would distract from the core
-  message of "pipeline transparency". Same code, different transport.
-- **MLflow / Weights & Biases** — overkill for a portfolio; not yet
-  a differentiator.
-- **Deep learning models** — current models are interpretable on
-  purpose. A telecom churn model would still be logistic regression
-  + gradient boosting until you have hundreds of millions of rows.
-- **Multi-language support** — focus is English + Chinese only.
+- **Kafka / 流式采集** — 会分散"管道透明性"的核心信息，同样的代码换传输层即可
+- **MLflow / W&B** — 对作品集过于重量级
+- **深度学习模型** — 用 Z-score + 滚动窗口 + 指数平滑是有意为之，可解释性优先
+- **多语言** — 仅支持中文 + 英文

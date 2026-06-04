@@ -1,0 +1,26 @@
+# Force CRLF for Windows script files. Without this, git on a Unix
+# dev box (or any editor that defaults to LF) would silently convert
+# CRLF → LF on commit, breaking cmd.exe / bat files at runtime.
+#
+# Symptom of a broken bat: cmd prints lines like
+#   'foo' is not recognized as an internal or external command
+# for tokens that are clearly part of `set` assignments in the file.
+#
+# NOTE: *.bat files are gitignored, so git never touches them. These
+# lines are here for completeness, but the CRLF must also be enforced
+# at the file level (see the write-bat-as-binary pattern below).
+*.bat     text eol=crlf
+*.cmd     text eol=crlf
+*.ps1     text eol=crlf
+
+# Shell scripts get LF.
+*.sh      text eol=lf
+
+# Python: PEP 8 says LF, but we accept either on read.
+*.py      text eol=lf
+
+# YAML / TOML / Markdown: LF.
+*.yml     text eol=lf
+*.yaml    text eol=lf
+*.toml    text eol=lf
+*.md      text eol=lf

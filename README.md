@@ -2,7 +2,7 @@
 
 A full-stack data analytics platform for monitoring and predicting urban water consumption across DMA (District Metered Areas). Built as a capstone project integrating real-time data processing, machine learning prediction, anomaly detection, and an AI-powered chat interface.
 
-> **Note:** This portfolio version uses synthetic demo data. The production system processes data from 8,000+ smart water meters.
+> **Two data modes are supported:** a mock generator (500 synthetic meters, no setup) and a real-data converter (9,963 Macau water meters, 30-day window). See the [Quick Start](#quick-start) section for both.
 
 ## Key Features
 
@@ -30,7 +30,7 @@ A full-stack data analytics platform for monitoring and predicting urban water c
 | Data Processing | Node.js (xlsx library) |
 | Machine Learning | Python, scikit-learn (LinearRegression), NumPy |
 | Visualization | ECharts 5 (charts), Leaflet.js (maps) |
-| AI Backend | LangChain + FastAPI (ReAct agent, 17 tools, multi-agent) |
+| AI Backend | LangChain + FastAPI (ReAct agent, 13 tools, multi-agent) |
 | MLOps Pipeline | Pandera (schemas), SQLite, scipy (KS-test drift) |
 | Build | Custom Node.js build script (CSS/JS inlining) |
 
@@ -83,6 +83,54 @@ python server.py                      # runs at localhost:8000
 # Open http://localhost:5173 and click the chat icon
 ```
 
+### Real Data Mode (Macau water data)
+The converter runs in **incremental mode by default** — it reads a
+`daily_totals.json` cache to find the last processed date, then processes
+only newer Excel files. A daily run with one new file is ~55 seconds.
+See [`docs/REAL_DATA_ARCHITECTURE.md`](docs/REAL_DATA_ARCHITECTURE.md) for
+the full design (storage tiers, SQLite windowing, daily workflow,
+backfill, --full re-derivation).
+
+```bash
+# Terminal 1: incremental update (only new Excel files processed)
+cd portfolio
+python scripts/real_data_converter.py          # ~55s / new day
+
+# Force a full re-derivation (e.g. after a converter bugfix):
+# python scripts/real_data_converter.py --full
+#
+# Back-fill from a specific date:
+# python scripts/real_data_converter.py --since 2026-01-01
+
+# Terminal 1 (cont.): build dashboard with real data
+USE_REAL_DATA=1 node frontend/build.cjs
+npx serve frontend/dist -l 5173
+
+# Terminal 2: run pipeline on real data
+python pipeline/orchestrator.py --src backend/data/output_real --db backend/data/analytics_real.db --force
+
+# Terminal 3: agent reads from real data dir + SQLite
+WATER_DATA_DIR=backend/data/output_real \
+WATER_DB_PATH=backend/data/analytics_real.db \
+python agent/server.py
+```
+
+**Storage tiers:**
+
+| Tier | What's there | Where it goes | Who reads it |
+| --- | --- | --- | --- |
+| Daily aggregates | 14 JSONs (`daily_dma`, `daily_top20`, `predictions`, ...) | `backend/data/output_real/*.json` | Dashboard, Agent JSON tools |
+| Hourly aggregates | 4 new JSONs (`hourly_dma`, `hourly_calendar`, `hourly_top_meters`, `peak_hours`) | same dir, append-only | Reserved for future dashboard views |
+| Hourly raw | per-meter per-hour rows | `backend/data/output_real/hourly_meter.db` (capped at 30 days) | Agent's text-to-SQL ad-hoc queries |
+| Internal cache | `{date: {meterId: total}}` | `daily_totals.json` (converter-only) | Converter's incremental mode |
+
+The two data modes (mock vs real) are physically isolated: different output
+directories, different SQLite files, different env vars. Switching is just
+running the other set of bats.
+
+On Windows the equivalent is one click per terminal in `bat/real/`:
+`convert_real_data.bat` (incremental) → `start_dashboard_real.bat` → `start_pipeline_real.bat` → `start_agent_real.bat`.
+
 ### Supported LLM Providers
 Set `LLM_PROVIDER` env var to switch:
 - `openai` (default) — needs `LLM_API_KEY`
@@ -110,7 +158,7 @@ portfolio/
 │   ├── drift.py                   # KS-test / chi-square drift detection
 │   └── orchestrator.py            # Stage-based pipeline runner
 ├── agent/                         # AI Agent (LangChain + FastAPI)
-│   ├── agent_tools.py             # 14 JSON tools
+│   ├── agent_tools.py             # 10 JSON tools
 │   ├── sql_tools.py               # 3 text-to-SQL tools
 │   ├── agent_executor.py          # ReAct agent + system prompt
 │   ├── multi_agent.py             # Planner → Executor → Synthesizer
@@ -165,7 +213,7 @@ Stages:
 
 ## AI Agent
 
-17 LangChain tools: 14 read from the JSON files, 3 query the SQLite
+13 LangChain tools: 10 read from the JSON files, 3 query the SQLite
 database directly via text-to-SQL. The system prompt teaches the model
 when to use which category (aggregations → SQL, summarized data → JSON).
 
@@ -234,7 +282,18 @@ docker compose up --build
 
 ### Running locally on Windows
 
-Use the `start_*.bat` scripts — they set the right env vars and dependencies automatically.
+The `bat/` folder has one-click scripts split by data source:
+
+| Script | Purpose |
+| --- | --- |
+| `bat/mock/start_dashboard.bat` | Mock data dashboard (port 5173) |
+| `bat/mock/start_agent.bat` | Mock data agent (port 8000) |
+| `bat/mock/start_pipeline.bat` | Run pipeline on mock data |
+| `bat/mock/start_tests.bat` | Run pytest |
+| `bat/real/convert_real_data.bat [N]` | Convert last N days (default 30) of real Macau Excel → JSON + SQLite |
+| `bat/real/start_pipeline_real.bat` | Run pipeline on real data |
+| `bat/real/start_dashboard_real.bat` | Real data dashboard (USE_REAL_DATA=1) |
+| `bat/real/start_agent_real.bat` | Real data agent (sets WATER_DATA_DIR + WATER_DB_PATH) |
 
 ### Secret scanning
 
