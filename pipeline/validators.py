@@ -26,6 +26,20 @@ class ValidationError(Exception):
     """Raised when an artifact fails validation. Carries context for triage."""
 
 
+def _coerce_empty_strings_to_na(df: pd.DataFrame) -> pd.DataFrame:
+    """Replace `""` with NaN in string columns.
+
+    Pandera's `nullable=True` accepts None/NaN but NOT empty strings.
+    Real Macau data (and the converter) sometimes writes `""` for missing
+    optional fields like `dma`, `buildingName`, `contractId`. We normalize
+    once here so the schema's nullable flag actually works.
+    """
+    str_cols = df.select_dtypes(include="object").columns
+    if len(str_cols) == 0:
+        return df
+    return df.replace({c: {"": pd.NA} for c in str_cols})
+
+
 def validate_dataframe(
     df: pd.DataFrame,
     schema_name: str,
@@ -42,6 +56,7 @@ def validate_dataframe(
         ValidationError: when the schema check fails.
     """
     log = plog.get_logger(f"pipeline.{stage}")
+    df = _coerce_empty_strings_to_na(df)
     try:
         result = pschema.validate(df, schema_name)
     except pa_errors.SchemaErrors as e:

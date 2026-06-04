@@ -28,6 +28,43 @@ _DEFAULT_LOG_DIR = Path(__file__).resolve().parent.parent / "logs"
 _DEFAULT_LOG_FILE = _DEFAULT_LOG_DIR / "pipeline.log"
 
 
+def _utf8_stream():
+    """Return a stdout stream configured to encode UTF-8.
+
+    On Windows the default stdout encoding is often cp950 / cp936 / cp1252,
+    which can't encode characters like U+EBF3 (the PUA variant of 氹 that
+    real Macau data sometimes uses for 路氹城區). Without this, logging
+    one of those characters raises UnicodeEncodeError and the log line
+    is dropped. We reconfigure if possible; otherwise wrap with
+    errors="replace" so the log at least goes through.
+    """
+    enc = getattr(sys.stdout, "encoding", None) or "utf-8"
+    try:
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8")
+            return sys.stdout
+    except Exception:
+        pass
+    return _SafeReplaceStream(sys.stdout, enc)
+
+
+class _SafeReplaceStream:
+    """Minimal file-like wrapper that replaces un-encodable chars with '?'."""
+
+    def __init__(self, base, enc: str) -> None:
+        self._base = base
+        self._enc = enc
+
+    def write(self, s: str) -> int:
+        return self._base.write(s.encode(self._enc, errors="replace").decode(self._enc))
+
+    def flush(self) -> None:
+        self._base.flush()
+
+    def isatty(self) -> bool:
+        return getattr(self._base, "isatty", lambda: False)()
+
+
 def new_run_id() -> str:
     """Generate a fresh run_id. Called once at the start of a pipeline execution."""
     global _RUN_ID
@@ -99,7 +136,7 @@ def _configure_root(log_file: Optional[Path] = None) -> None:
 
     fmt = JsonFormatter()
 
-    sh = logging.StreamHandler(sys.stdout)
+    sh = logging.StreamHandler(_utf8_stream())
     sh.setFormatter(fmt)
     root.addHandler(sh)
 

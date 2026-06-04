@@ -26,6 +26,10 @@ VALID_DMAS = [
     "Zone-1", "Zone-2", "Zone-3", "Zone-4", "Unclassified",
     # Real Macau zones (from MACAU-reference)
     "澳門低區", "澳門填海A區", "澳大橫琴區", "路氹城區",
+    # PUA variant: real data sometimes encodes 氹 (U+6C39) as U+EBF3
+    # (Private Use Area). Same glyph, different codepoint. Accept both
+    # so the pipeline doesn't reject otherwise-valid anomalies.
+    "路城區",
 ]
 # Anomaly types the detector can produce.
 VALID_ANOMALY_TYPES = ["spike", "drop", "zero", "watch"]
@@ -139,19 +143,25 @@ VALID_PROPERTY_TYPES = list(REAL_PROPERTY_TYPE_MAPPING.values())
 # ── Anomalies ────────────────────────────────────────────────
 
 class AnomalySchema(pa.DataFrameModel):
-    """One row per detected meter-day anomaly."""
+    """One row per detected meter-day anomaly.
+
+    `total` allows negatives because drop anomalies from sensor resets
+    or meter replacements (new meter reads lower than the one it
+    replaced) can produce negative daily deltas. These are real
+    anomalies the dashboard should surface, not data errors to filter.
+    """
 
     date: str = Field(str_length={"min_value": 10, "max_value": 10})
     meterId: str = Field(str_matches=r"^\d{6,10}$")
-    total: float = Field(ge=0, le=1000000)
+    total: float = Field(ge=-1000000, le=5000000)
     contractId: str = Field(nullable=True)
-    dma: str = Field(isin=VALID_DMAS)
+    dma: str = Field(isin=VALID_DMAS, nullable=True)
     buildingName: str = Field(nullable=True)
     reason: str
     type: str = Field(isin=VALID_ANOMALY_TYPES)
     anomalyScore: float = Field(ge=0.0, le=1.0)
-    pastMean: float = Field(ge=0)
-    pastStd: float = Field(ge=0)
+    pastMean: float = Field(ge=-1000000)
+    pastStd: float = Field(ge=-1000000)
     windowDays: int = Field(ge=1, le=365)
 
     class Config:
@@ -198,7 +208,7 @@ class PredictionRowSchema(pa.DataFrameModel):
 
     date: str = Field(str_length=10)
     meterId: str = Field(str_matches=r"^\d{6,10}$")
-    predicted: float = Field(ge=0, le=1000000)
+    predicted: float = Field(ge=0, le=5000000)
     lower: float = Field(ge=0)
     upper: float = Field(ge=0)
 
@@ -257,7 +267,7 @@ class MeterDailySchema(pa.DataFrameModel):
 
     meterId: str = Field(str_matches=r"^\d{6,10}$")
     date: str = Field(str_length=10)
-    total: float = Field(ge=0, le=1000000)
+    total: float = Field(ge=0, le=5000000)
 
     class Config:
         coerce = True
