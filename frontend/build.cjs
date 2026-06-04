@@ -6,8 +6,38 @@ const publicDir=path.resolve(__dirname,'../public/data');
 fs.mkdirSync(outDir,{recursive:true});
 fs.mkdirSync(path.join(outDir,'data'),{recursive:true});
 
-// Data files
-const dataFiles=[
+// Clean dist/data/ before writing. Mock build leaves all_data.json;
+// real build leaves 12 individual JSONs. If both coexist, the loader's
+// "try bundle first" branch picks up the stale mock file silently.
+const distDataDir = path.join(outDir, 'data');
+for (const f of fs.readdirSync(distDataDir)) {
+  fs.unlinkSync(path.join(distDataDir, f));
+}
+
+// Data files. Real data uses individual JSONs (no all_data.json — too big).
+// Mock data uses the bundle. Both are supported.
+const dataDirReal = path.resolve(__dirname, '../backend/data/output_real');
+const useRealData = process.env.USE_REAL_DATA === '1' && fs.existsSync(dataDirReal);
+const activeDataDir = useRealData ? dataDirReal : dataDir;
+
+const dataFiles = useRealData ? [
+  // Real data: 13 individual JSONs
+  {name:'meter_info.json', src:activeDataDir},
+  {name:'available_dates.json', src:activeDataDir},
+  {name:'daily_dma.json', src:activeDataDir},
+  {name:'weekly.json', src:activeDataDir},
+  {name:'daily_top20.json', src:activeDataDir},
+  {name:'rank_changes.json', src:activeDataDir},
+  {name:'monthly_main_sub_diff.json', src:activeDataDir},
+  {name:'search_index.json', src:activeDataDir},
+  {name:'cotai_calendar.json', src:activeDataDir},
+  {name:'anomalies.json', src:activeDataDir},
+  {name:'predictions.json', src:activeDataDir},
+  {name:'predictions_fitted.json', src:activeDataDir},
+  {name:'predictions_by_building.json', src:activeDataDir},
+  {name:'dma_zones.geojson', src:publicDir}
+] : [
+  // Mock data: all_data.json bundle
   {name:'all_data.json', src:dataDir},
   {name:'predictions.json', src:dataDir},
   {name:'predictions_by_building.json', src:dataDir},
@@ -60,15 +90,79 @@ template=template.replace(
 );
 
 // Replace data placeholders with fetch-based loading
+// Two paths supported:
+//   - Mock data: load all_data.json (single big file, ~3.8MB)
+//   - Real data: load individual JSONs in parallel (~2MB total, no 180MB bundle)
 const fetchCode=`
 let D,PRED,PRED_BLD;
-async function loadData(){
-  const[dp,pp,pbp]=await Promise.all([
-    fetch('data/all_data.json').then(r=>r.json()),
-    fetch('data/predictions.json').then(r=>r.json()),
-    fetch('data/predictions_by_building.json').then(r=>r.json())
+
+// Helper: try a fetch, return null on 404
+const _safeFetch=(u)=>fetch(u).then(r=>r.ok?r.json():null).catch(()=>null);
+
+async function _loadIndividual(){
+  // Real data: 12 individual JSONs loaded in parallel
+  const[dma,top20,rank,anomalies,monthlyDiff,searchIdx,cotai,weekly,dates,pred,predBld,predFitted]=await Promise.all([
+    _safeFetch('data/daily_dma.json'),
+    _safeFetch('data/daily_top20.json'),
+    _safeFetch('data/rank_changes.json'),
+    _safeFetch('data/anomalies.json'),
+    _safeFetch('data/monthly_main_sub_diff.json'),
+    _safeFetch('data/search_index.json'),
+    _safeFetch('data/cotai_calendar.json'),
+    _safeFetch('data/weekly.json'),
+    _safeFetch('data/available_dates.json'),
+    _safeFetch('data/predictions.json'),
+    _safeFetch('data/predictions_by_building.json'),
+    _safeFetch('data/predictions_fitted.json'),
   ]);
-  D=dp;PRED=pp;PRED_BLD=pbp;
+  // Assemble D object to match all_data.json shape
+  return {
+    dma:dma||[],
+    top:top20?top20.map(d=>({date:d.date,top20:d.top20})):[],
+    top20dma:[],  // not generated; computed on demand if needed
+    diff:monthlyDiff||[],
+    dates:dates||[],
+    rank:rank||[],
+    anomalies:anomalies||[],
+    cotai:cotai||[],
+    trend:dma||[],  // trend is the daily_dma array
+    search:searchIdx||[],
+    meterMonthly:{},  // not generated for real data
+    meterDaily:{},    // not generated for real data
+    weekly:weekly||[],
+    predictions:pred&&pred.predictions?pred.predictions:[],
+    generatedAt:pred?pred.generatedAt:null,
+    historicalRange:pred?pred.historicalRange:null,
+    totalMeters:pred?pred.totalMeters:0,
+    _predFitted:predFitted?predFitted.fitted:[]
+  };
+}
+
+async function _loadBundle(){
+  // Mock data: single all_data.json bundle + predictions files
+  const[dp,pp,pbp]=await Promise.all([
+    _safeFetch('data/all_data.json'),
+    _safeFetch('data/predictions.json'),
+    _safeFetch('data/predictions_by_building.json')
+  ]);
+  if(!dp)throw new Error('all_data.json not found');
+  return Object.assign({},dp,{predictions:pp&&pp.predictions?pp.predictions:[]});
+}
+
+async function loadData(){
+  // Try bundle first; fall back to individual files.
+  let bundle;
+  try{bundle=await _loadBundle();}catch(e){bundle=null;}
+  if(bundle){
+    D=bundle;
+    const[pp,pbp]=await Promise.all([_safeFetch('data/predictions.json'),_safeFetch('data/predictions_by_building.json')]);
+    PRED=pp;PRED_BLD=pbp;
+    return;
+  }
+  // Real data path
+  D=await _loadIndividual();
+  PRED=await _safeFetch('data/predictions.json');
+  PRED_BLD=await _safeFetch('data/predictions_by_building.json');
 }
 
 // Initialize after data loads
