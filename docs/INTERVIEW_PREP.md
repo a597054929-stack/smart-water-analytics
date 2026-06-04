@@ -197,3 +197,209 @@
 - **MLflow / W&B** — 对作品集过于重量级
 - **深度学习模型** — 用 Z-score + 滚动窗口 + 指数平滑是有意为之，可解释性优先
 - **多语言** — 仅支持中文 + 英文
+
+---
+
+## 10. 模拟面试 Q&A（19 题，项目深挖版）
+
+> 这部分是**看过你作品**的面试官会问的，每题含 "面试官想听什么"。**练的时候用 STAR 格式**（Situation / Task / Action / Result）。
+
+### 一、项目定位
+
+**Q1: Walk me through this project in 2 minutes.**
+A: 这是澳门水务的智能消费分析平台。背景是 **9,963 个真实水表、4 个 DMA 区域（澳門低區、澳門填海A區、澳大橫琴區、路氹城區）、43 种物业类型、151 天的逐时数据**。三个核心能力：
+1. 异常检测 — 14 天滚动 Z-score + tanh 压缩，分类 spike / drop / zero / watch，~1,500 个异常/151 天
+2. 7 天预测 — Top-50 水表 LinearRegression + 周期/趋势特征，每天 ~5KB JSON
+3. AI Agent — LangChain + FastAPI，13 个工具（10 JSON + 3 text-to-SQL），multi-agent 可切
+
+配套 6 阶段 MLOps pipeline（pandera schema 校验 + drift 检测 + checkpoint）、GitHub Actions CI、Docker、gitleaks 都有。
+🔍 听数字精度。不要讲 "做了 dashboard 和 agent" 这种空话。
+
+**Q2: What real problem does this solve?**
+A: 真实业务是 **NRW（Non-Revenue Water，产销差）** —— 主管和分表读数差就是漏损/偷水信号，`monthly_main_sub_diff.json` 就是这个差。
+- 异常检测 → 漏损报警（drop = 破裂/spike = 私接大用户）
+- 预测 → 容量规划
+- Agent → 降低人工查询成本
+
+对 HKT 的同构性：把 "水表" 换成 "基站"、"漏损" 换成 "客户掉线率"，业务逻辑一样。
+🔍 听能不能跳出技术讲业务。
+
+### 二、数据工程
+
+**Q3: Why daily JSONs AND hourly SQLite? Why not just one store?**
+A: 架构硬约束 — **dashboard 是静态 HTML，没有运行时 DB 连接**。这意味着 dashboard 想看的数据必须在 build 时预聚合进 JSON。
+- **Daily JSONs**（14 个，~7MB）→ dashboard + Agent 的 10 个 JSON 工具。查 <1ms
+- **Hourly JSONs**（4 个）→ 未来 hourly 视图
+- **hourly_meter.db**（4.6M 行，30 天 SQLite）→ Agent `sql_query` 工具做 ad-hoc 自由查询
+
+三个存储各有 SLA，不能合并。
+🔍 听为什么不是"一个 PostgreSQL 解决所有"。
+
+**Q4: How do you handle incremental data?**
+A: Converter 默认 incremental，~55s/天：
+1. 读 `daily_totals.json` 缓存找 `last_date`
+2. 列源 dir 里 > `last_date` 的 xlsx
+3. 读新文件（~50s，openpyxl 慢但只对新文件）
+4. 合并 `merged = {**cache, **new_daily}`（内存）
+5. 从 merged 全量**反派生**所有 daily JSON（<1s）
+6. append hourly JSON（<1s）
+7. `INSERT OR IGNORE` SQLite + DELETE `> today - 30` 老行
+
+关键：**反派生而不是重读 Excel**。`daily_totals.json` 缓存 100KB/天，让 incremental 不重读 150 天历史。
+🔍 听缓存为什么叫 daily_totals、为什么 hourly append 而不是重派生。
+
+**Q5: What if Excel format changes tomorrow?**
+A: 三层防御：
+1. Converter 早 fail — openpyxl 失败直接 `sys.exit(1)`
+2. Pipeline pandera schema — 验列名/类型
+3. `drift` stage — KS-test p<0.05 报警
+
+1 月我加 4 个 DMA 时 schema 变了，`--since 2026-01-01` 强制重派生 + 手动改 `pipeline/schema.py` 的 `VALID_DMAS`。
+🔍 听有没有想过上游变更。
+
+### 三、ML 方法
+
+**Q6: Walk me through your anomaly detection.**
+A: 14 天滚动 Z-score + tanh 压缩。
+```python
+z = (current - mean_14d) / std_14d
+score = tanh(z / 3)  # 压缩到 [-1, 1]
+```
+- spike: `current > mean × 4` AND `score > 0.5`
+- drop: `current < mean × 0.3` AND `score > 0.4`
+- zero: `current == 0` AND `mean > 1`
+- watch: `current > mean × 1.5` AND `score > 0.25`
+
+为什么 14 天：覆盖 2 个完整周，剔周内波动。短了被单次高峰污染，长了反应慢。
+为什么 tanh：Z-score 极端值会爆炸（漏损可能 100σ），tanh 压到 [-1, 1] 后阈值是常数。
+为什么不是 IsolationForest：单变量时序 + 业务量级，Z-score 解释性 100% — 工程师能直接说"这户超过 4 倍均值"。
+🔍 听算法选择背后的 trade-off，不是"X 流行所以用 X"。
+
+**Q7: Why Linear Regression? Why not Prophet or LSTM?**
+A: 三个真实约束让 LR 正确：
+1. **样本量**：top-50 water meters，每个 ~100 个数据点。LSTM 严重过拟合；Prophet 至少 1-2 年数据
+2. **可解释**：LR 系数 = "周末效应 +X 升"、DMA 系数 = "路氹比低区多 Y 升"，业务方能直接看
+3. **训练时间**：LR ~50ms，LSTM GPU 也要 10 分钟
+
+诚实承认：MAPE ~15-25%，单 meter variance 本身就大。**长尾 9,900 个 meter 不预测**（数据稀疏）—— 明确的设计选择。
+🔍 诚实承认限制。说"LR 在我数据量下正确，100k+ 时会换" = 加分。说"LR 永远够" = 减分。
+
+**Q8: How do you evaluate model quality? Show me a number.**
+A: 三层评估：
+1. **离线 metrics** — LR R² 在 `predictions.json` metadata，top-50 平均 R² ~0.6-0.8
+2. **离线 QA 评估** — 25 题 `tests/qa_pairs.json`，agent 调工具后比对关键词，keyword recall ~70%
+3. **业务反馈** — 工程师标 10 个 case "对/错"，人工调阈值
+
+**老实说没做 backtest / time-series CV**，这是已知缺口。生产里应该 rolling window 评估（每加 7 天评估预测 7 天 MAPE）。
+🔍 承认缺口比装作完美更好。
+
+### 四、MLOps / 系统设计
+
+**Q9: Why a 6-stage pipeline with checkpoints? Isn't that overkill for a portfolio?**
+A: 是 portfolio，但架构和真生产一样：
+1. **Stage-level failure isolation** — `load_sql` 失败不污染前面 4 个 stage
+2. **Checkpointing** — 故障恢复从 1 小时降到 ~10 秒
+3. **Schema validation at boundary** — 脏数据不跨 stage 传染
+4. **Drift detection** — 6 阶段最末，KS-test / 卡方，模拟生产监控
+
+1 月加 4 个 DMA 时，pipeline 跑到 `detect_anomalies` 立刻抛 schema 错，告诉我哪一列不对 — 不用等 dashboard 加载才看见。
+🔍 听 checkpoint 解决什么问题，不是"我会用 stage pipeline"。
+
+**Q10: I see `clean`, `detect_anomalies`, `predict` stages — what do they do for real data?**
+A: **老实说 real 模式下它们基本是 no-op 或 validator**，因为异常检测和预测已经在 converter 那一层做完了（增量场景下必须在那做，否则 pipeline 跑 3 小时）。
+- `clean`: real data 上游清洗过 → `{"status": "skipped"}`
+- `detect_anomalies`: 只验格式 + distribution stats，**不重跑检测**
+- `predict`: 只检查行数 >0，**不重跑预测**
+
+实际工作量在 `load_sql`（11 表 + 4.6M 行 ATTACH + 索引）和 `drift`（KS / 卡方）。
+
+**架构判断**而不是失误：detection 移到 pipeline 跑 3 小时，prediction 训练 9,963 个模型要 3 小时，daily workflow 就废了。**重活留 converter（增量、~55s），监督留 pipeline（轻量、~10s）**。
+🔍 这题 90% 候选人不知道。答出来 = 强信号：你有架构判断。
+
+**Q11: 100x more meters (1M), what breaks first?**
+A: 1. **Converter 内存合并** — 1M meter × 151 天 = 600MB 缓存，5-10 分钟/天
+2. **`hourly_meter.db`** — 30 天窗口从 4.6M 行变 460M 行，**SQLite 直接死**（专门 cap 30 天就是这个原因）
+3. **Excel 读** — 30 个 2.5M 行文件，openpyxl 1h+
+
+改法：Polars/DuckDB 替 pandas（10x）、hourly → ClickHouse、pyarrow 替 openpyxl。**Daily JSONs 不变**（dashboard 仍吃这个）。
+🔍 听具体瓶颈，不是"加更多机器"。
+
+### 五、LLM / Agent 工程
+
+**Q12: Why 13 tools instead of one mega-tool?**
+A: 工具多 = LLM 选择成本高；少 = 不知道该调谁。**3-15 是 LangChain sweet spot**。
+- **JSON tools (10)**：读 `output_real/*.json`，**结构化但语义聚合**（"看 5/20 top 20"）
+- **SQL tools (3)**：ad-hoc 自由查询（"5/20 凌晨 3 点某 DMA 流量"）
+
+拆分原则：**调用成本匹配查询粒度**。问"今天异常"用 `query_anomalies(list)`，问"5/20 凌晨某 DMA"才进 SQL。System prompt 明确说"聚合用 JSON，自由查询用 SQL"。
+🔍 听为什么这么拆。
+
+**Q13: How do you evaluate the agent? How do you know it's not hallucinating?**
+A: 三层防线：
+1. **结构化输出** — Tool 是 typed function，参数 JSON schema 校验
+2. **离线 QA 评估** — 25 个三元组（question / expected-tool / expected-keywords）
+3. **手动审计** — 跑完看 5-10 个 case
+
+已知限制：
+- 关键词 recall 粗糙，LLM 答对但用不同词就算 0
+- 没做 semantic eval（应 GPT-4 judge）
+- 没做 hallucination detector
+🔍 承认限制是 senior 标志。
+
+**Q14: When is multi-agent mode worth it? When not?**
+A: 值得 — 复合问题"对比路氹和低区过去 7 天预测精度并给原因" — 需要 plan + execute + synthesize。
+不值得 — 简单查询"今天异常数"，multi-agent 多 2-3x 延迟 + cost。
+
+UI 切 checkbox，默认关闭。**延迟 ~1s → ~4s，成本 1x → ~3x**，但复杂问题答案质量明显好。
+🔍 听 trade-off 数字，不是"看情况"。
+
+### 六、行为面
+
+**Q15: Why pivot from water engineering to data science?**
+A: 5 年水务工程师的**真实痛点**：
+1. 漏损分析要手写 SQL，每次业务方问 1 小时报表
+2. 异常检测全靠经验 — 老工程师凭"这户读数不对"判断，没量化
+3. 预测调度靠 Excel 趋势外推，精度差
+
+这个项目就是**把痛点用数据工程 + AI 重做一遍**。HKT 的场景结构一样 — 工程师天天写 SQL、缺量化监控、靠经验。**架构直接复用**。
+🔍 听真实痛点驱动，别说"我想做 AI 改变世界"。
+
+**Q16: Most difficult technical decision, and why?**
+A: **`build.cjs` 的 loader 设计**。我之前写"try bundle first, fall back to individual JSONs"，看起来很优雅 — 一份代码支持 mock + real。
+
+实际上：mock build 后 `dist/data/all_data.json`（3.9MB）留在那儿，下次 real build 也会复制 13 个 JSON，**loader 优先 try bundle 找到了 stale 3.9MB mock，UI 显示 mock 但用户以为是 real**。静默 bug，没报错。
+
+修法：build.cjs 加 4 行 readdirSync + unlinkSync，**build 前清空 dist/data/**。
+
+教训：**fallback 是反模式**，尤其当两种模式都合法时。看起来"容错"实际是"silent corruption"。
+🔍 讲"失败 + 教训"比讲成功更 mature。
+
+### 七、陷阱题
+
+**Q17: Worst bug no one would notice for months?**
+A: **API key 泄露 + 已轮换但 .env 没更新**。`bat/real/start_agent_real.bat` 之前硬编码了真 key，已迁到 `.env`，但**轮换的 key 还在 .env 里**。gitignore 兜住了上传，但 LLM provider 那边如果失效，agent 401，**用户不知道为什么**。
+
+防御：写 `tests/test_no_secrets.py`，CI grep `sk-` / `tp-` 命中就 fail。
+
+**Q18: 10x the budget, what would you change?**
+A: 1. **Streaming ingestion** — Kafka consumer 替文件读取，latency 天→小时
+2. **Polars/DuckDB 替 pandas** — converter 10x 提速
+3. **Prophet/N-BEATS 替 LR** — 1M meter 训练成本可接受（GPU 一次 10 分钟）
+4. **OpenTelemetry** — stage 耗时 + LLM 成本打点，grafana 看板
+5. **Semantic eval** — GPT-4 judge，每月跑 trends
+
+**Q19: Disagreed with a teammate, how handled?**
+A: 真实案例：架构方向我选错了 — 我一开始想"运行时 SQL 查 dashboard 数据"。同事反馈"dashboard 是静态 HTML，应预聚合"。
+
+我认错 + 重做。改 converter 加 incremental mode + 4 hourly JSON，~2 周工作量。
+
+教训：**架构判断要听 domain 约束**，不要迷恋"动态查询"的灵活性。约束 = 静态 HTML + 增量更新 → 必须预聚合。
+
+### 练习建议
+
+1. **Q1-Q5 练表达** — 录音，2 分钟讲完项目
+2. **Q6-Q14 练深度** — 每天抽 2 题口头答，对照答案
+3. **Q15-Q16 练诚实** — 讲一个失败 + 教训比成功更得分
+4. **Q10 重点练** — `clean`/`detect_anomalies` 是 no-op 这件事 90% 不知道，答出来 = 强信号
+5. **Q16 + Q19 各备 STAR 故事** — 真实失败 + 反思 + 行动
+
