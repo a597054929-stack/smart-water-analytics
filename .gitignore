@@ -11,6 +11,7 @@ reports/run_*.json
 reports/latest_run.json
 .DS_Store
 *.bat
+!bat/_load_env.bat
 __pycache__/
 agent/chat_history.json
 *.bak*
