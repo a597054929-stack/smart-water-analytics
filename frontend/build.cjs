@@ -115,12 +115,25 @@ async function _loadIndividual(){
     _safeFetch('data/predictions_by_building.json'),
     _safeFetch('data/predictions_fitted.json'),
   ]);
-  // Assemble D object to match all_data.json shape
+  // Real converter emits mainTotal/subsTotal/diffPercent and no
+  // subCount; the JS expects mainMonthTotal/subMonthTotal/diffPct/
+  // subCount (legacy mock-data shape). Map once here so every renderer
+  // can stay schema-blind.
+  const diff = (monthlyDiff || []).map(m => ({
+    ...m,
+    diffs: (m.diffs || []).map(d => ({
+      ...d,
+      mainMonthTotal: d.mainTotal ?? 0,
+      subMonthTotal:  d.subsTotal ?? 0,
+      diffPct:        d.diffPercent ?? 0,
+      subCount:       Array.isArray(d.subs) ? d.subs.length : 0,
+    })),
+  }));
   return {
     dma:dma||[],
     top:top20?top20.map(d=>({date:d.date,top20:d.top20})):[],
     top20dma:[],  // not generated; computed on demand if needed
-    diff:monthlyDiff||[],
+    diff,
     dates:dates||[],
     rank:rank||[],
     anomalies:anomalies||[],

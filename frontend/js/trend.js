@@ -210,7 +210,7 @@ function drawWeeklyTrendChart(){
 function drawTrendChart(){
   disposeChart('trend');
   var c=initChart(document.getElementById('trendChart'),'trend');
-  var dates=D.trend.map(function(d){return d.date}),totals=D.trend.map(function(d){var t=0;for(var v in d.dmas)t+=d.dmas[v];return t}),rain=D.trend.map(function(d){return d.rain||0});
+  var dates=D.trend.map(function(d){return d.date}),totals=D.trend.map(function(d){var t=0;for(var v in d.dmas)t+=d.dmas[v].total||0;return t}),rain=D.trend.map(function(d){return d.rain||0});
   var win=window._raWin||7;var ma=calcMA(totals,win);
 
   // 月環比：按月份著色 + 月均值參考線
@@ -279,7 +279,7 @@ function renderDmaTrend(dma){
   disposeChart('dt');
   var c=initChart(document.getElementById('dmaTrendChart'),'dt');
   var dates=D.trend.map(function(d){return d.date});
-  var vals=D.trend.map(function(d){return d.dmas[dma]||0});
+  var vals=D.trend.map(function(d){return d.dmas[dma]?d.dmas[dma].total:0});
   var ma=calcMA(vals,7);
   var preds=hwForecast(vals,7);
   var predDates=dates.slice(),predVals=new Array(vals.length).fill(null);

@@ -37,7 +37,7 @@ function renderCalendar(){
       var bg=total>0?'rgb('+(r+20)+','+(g+20)+','+(b+20)+')':'#1e293b';
       var dayTotal=0;
       var tt=D.trend.find(function(x){return x.date===ds});
-      if(tt){var dmas=tt.dmas;for(var dk in dmas)dayTotal+=dmas[dk];}
+      if(tt){var dmas=tt.dmas;for(var dk in dmas)dayTotal+=dmas[dk].total||0;}
       var totalLabel=dayTotal>0?fmt(dayTotal)+'m³':'';
       h+='<div class="cc" style="background:'+bg+'" onclick="showCotaiDay(\''+ds+'\')" title="'+ds+': '+fmt(dayTotal)+' m³">'+dd+'<span class="cdt">'+totalLabel+'</span></div>';
     }
