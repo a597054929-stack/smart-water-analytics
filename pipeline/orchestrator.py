@@ -143,14 +143,19 @@ def stage_ingest(src: Path, log) -> dict[str, pd.DataFrame]:
                 artifacts[name] = pd.DataFrame(rows)
             elif name == "predictions_building":
                 rows = []
-                for b in (data or {}).get("predictions") or []:
+                # Real data converter writes a bare list; mock data wraps it
+                # in a dict under a `predictions` key.
+                buildings = data if isinstance(data, list) else (data or {}).get("predictions") or []
+                for b in buildings:
+                    # Real data uses `buildingName`; mock data used `building`.
+                    name_b = b.get("building") or b.get("buildingName")
                     for day in b.get("predictions") or []:
                         v = day.get("predicted")
                         if v is None:
                             v = day.get("value")
                         rows.append(
                             {
-                                "building": b.get("building"),
+                                "building": name_b,
                                 "date": day.get("date"),
                                 "predicted": v,
                                 "lower": day.get("lower"),
@@ -264,17 +269,22 @@ def stage_predict(artifacts: dict[str, pd.DataFrame], log) -> dict[str, Any]:
         return out
 
 
-def stage_load_sql(artifacts: dict[str, pd.DataFrame], log, db_path: Path) -> dict[str, int]:
-    """Reload everything from JSON into SQLite (fresh DB)."""
+def stage_load_sql(artifacts: dict[str, pd.DataFrame], log, db_path: Path, src: Path) -> dict[str, int]:
+    """Reload everything from JSON into SQLite (fresh DB).
+
+    `src` is the JSON output directory; previously this stage hard-coded
+    OUTPUT_DIR which silently loaded hourly_meter.db from the mock-data path
+    when the user ran with --src pointing at real data. Now we honor --src.
+    """
     with plog.stage("load_sql") as slog:
         loader = sql_loader.SqlLoader(db_path=db_path, drop=True)
-        result = loader.load_all(OUTPUT_DIR)
+        result = loader.load_all(src)
         loader.close()
         slog.info(
             "load_sql complete",
             extra={
                 "stage": "load_sql",
-                "metrics": {"db": str(db_path), "tables": len(result), "rows": sum(result.values())},
+                "metrics": {"db": str(db_path), "src": str(src), "tables": len(result), "rows": sum(result.values())},
             },
         )
     return result
@@ -388,7 +398,7 @@ def run(
             continue
         try:
             if name == "load_sql":
-                out = fn(artifacts, log, db_path)
+                out = fn(artifacts, log, db_path, src)
             else:
                 out = fn(artifacts, log)
             stage_results[name] = out

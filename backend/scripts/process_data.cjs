@@ -826,8 +826,6 @@ fs.writeFileSync(path.join(OUT_DIR, 'daily_dma.json'), JSON.stringify(summaryArr
 
 fs.writeFileSync(path.join(OUT_DIR, 'daily_top20.json'), JSON.stringify(Object.entries(dailyTop20).sort(([a],[b])=>a.localeCompare(b)).map(([date,top20])=>({date,top20}))));
 
-fs.writeFileSync(path.join(OUT_DIR, 'daily_top20_by_dma.json'), JSON.stringify(Object.entries(dailyTop20ByDma).sort(([a],[b])=>a.localeCompare(b)).map(([date,byDma])=>({date,byDma}))));
-
 fs.writeFileSync(path.join(OUT_DIR, 'monthly_main_sub_diff.json'), JSON.stringify(monthlyDiffArr));
 
 fs.writeFileSync(path.join(OUT_DIR, 'rank_changes.json'), JSON.stringify(rankChanges));
@@ -835,8 +833,6 @@ fs.writeFileSync(path.join(OUT_DIR, 'rank_changes.json'), JSON.stringify(rankCha
 fs.writeFileSync(path.join(OUT_DIR, 'anomalies.json'), JSON.stringify(anomalies));
 
 fs.writeFileSync(path.join(OUT_DIR, 'cotai_calendar.json'), JSON.stringify(Object.entries(cotaiCalendar).sort(([a],[b])=>a.localeCompare(b)).map(([date,items])=>({date,items}))));
-
-fs.writeFileSync(path.join(OUT_DIR, 'daily_total_by_dma.json'), JSON.stringify(Object.entries(dailyTotalByDma).sort(([a],[b])=>a.localeCompare(b)).map(([date,dmas])=>({date,dmas,rain:rainfall[date]||0}))));
 
 fs.writeFileSync(path.join(OUT_DIR, 'search_index.json'), JSON.stringify(searchIndex));
 

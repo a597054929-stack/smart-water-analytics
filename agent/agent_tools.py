@@ -42,9 +42,13 @@ else:
 # import them from this module.
 
 
+_data_cache = {}
+
 def _load(filename):
-    with open(os.path.join(DATA_DIR, filename), "r", encoding="utf-8") as f:
-        return json.load(f)
+    if filename not in _data_cache:
+        with open(os.path.join(DATA_DIR, filename), "r", encoding="utf-8") as f:
+            _data_cache[filename] = json.load(f)
+    return _data_cache[filename]
 
 
 def _match_dma(query, dma_name):
@@ -56,13 +60,13 @@ def _match_dma(query, dma_name):
     return q in d or d in q
 
 
-# ── Tool 1: Query anomalies ──────────────────────────────────
+# ── Tool 1: Query anomalies (merged) ─────────────────────────
 
 @tool
-def query_anomalies(dma: str = "", month: str = "", anomaly_type: str = "", limit: int = 10) -> str:
-    """Query water consumption anomaly records. Filter by DMA zone, month, or anomaly type.
-    Use when the user asks about anomalies, unusual consumption, or alerts.
-    Parameters: dma - DMA zone name (e.g. 'Zone-3'), month - YYYY-MM format, anomaly_type - spike/drop/zero/watch, limit - max results."""
+def query_anomalies(mode: str = "list", dma: str = "", month: str = "",
+                    anomaly_type: str = "", meter_id: str = "", limit: int = 10) -> str:
+    """Query anomaly data. mode=list (default): list anomaly records; mode=stats: summary by DMA/type; mode=analyze: deep-dive a specific meter.
+    Parameters: mode=list/stats/analyze, dma - Zone name, month - YYYY-MM, anomaly_type - spike/drop/zero/watch, meter_id - for mode=analyze, limit - max results."""
     anomalies = _load("anomalies.json")
 
     if dma:
@@ -72,6 +76,50 @@ def query_anomalies(dma: str = "", month: str = "", anomaly_type: str = "", limi
     if anomaly_type:
         anomalies = [a for a in anomalies if a.get("type") == anomaly_type]
 
+    if mode == "stats":
+        dma_count = {}
+        type_count = {}
+        for a in anomalies:
+            dma_count[a.get("dma", "Unknown")] = dma_count.get(a.get("dma", "Unknown"), 0) + 1
+            type_count[a.get("type", "Unknown")] = type_count.get(a.get("type", "Unknown"), 0) + 1
+        return json.dumps({
+            "filters": {"month": month or "all", "dma": dma or "all"},
+            "total_anomalies": len(anomalies),
+            "by_dma": dict(sorted(dma_count.items(), key=lambda x: -x[1])),
+            "by_type": type_count,
+        }, ensure_ascii=False, indent=2)
+
+    if mode == "analyze":
+        if not meter_id:
+            return json.dumps({"error": "meter_id is required for mode=analyze"})
+        meter_anomalies = [a for a in anomalies if a.get("meterId") == meter_id]
+        if not meter_anomalies:
+            return json.dumps({"message": f"No anomalies found for meter {meter_id}"})
+        info = _load("meter_info.json").get(meter_id, {})
+        type_counts = {}
+        for a in meter_anomalies:
+            t = a.get("type", "unknown")
+            type_counts[t] = type_counts.get(t, 0) + 1
+        scores = [a.get("anomalyScore", 0) for a in meter_anomalies]
+        avg_score = sum(scores) / len(scores) if scores else 0
+        causes = []
+        if type_counts.get("spike", 0) > 2:
+            causes.append("Repeated spikes may indicate pipe leakage or unauthorized usage")
+        if type_counts.get("zero", 0) > 1:
+            causes.append("Multiple zero-consumption periods suggest meter malfunction or vacancy")
+        if type_counts.get("drop", 0) > 2:
+            causes.append("Frequent drops could mean intermittent supply issues")
+        if avg_score > 0.7:
+            causes.append("High average anomaly score — requires immediate investigation")
+        return json.dumps({
+            "meter_id": meter_id, "building": info.get("buildingName", "Unknown"),
+            "dma": info.get("dma", "Unknown"), "property_type": info.get("propertyType", "Unknown"),
+            "total_anomalies": len(meter_anomalies), "type_breakdown": type_counts,
+            "avg_anomaly_score": round(avg_score, 2), "recent_anomalies": meter_anomalies[:5],
+            "possible_causes": causes,
+        }, ensure_ascii=False, indent=2)
+
+    # Default: list mode
     anomalies.sort(key=lambda x: x.get("anomalyScore", 0), reverse=True)
     return json.dumps(anomalies[:limit], ensure_ascii=False, indent=2)
 
@@ -128,58 +176,56 @@ def get_anomaly_stats(month: str = "", dma: str = "") -> str:
     }, ensure_ascii=False, indent=2)
 
 
-# ── Tool 4: Predictions ──────────────────────────────────────
+# ── Tool 4: Predictions (merged) ─────────────────────────────
 
 @tool
-def get_predictions(meter_id: str = "", limit: int = 5) -> str:
-    """Get water consumption predictions (7-day forecast). Optionally filter by meter ID.
-    Use when the user asks about predictions, future trends, or forecast."""
+def get_predictions(query_type: str = "meter", meter_id: str = "",
+                    building: str = "", limit: int = 5) -> str:
+    """Get water consumption predictions (7-day forecast).
+    query_type=meter (default): per-meter predictions; query_type=building: per-building predictions.
+    Parameters: query_type=meter/building, meter_id - for meter type, building - for building type, limit - max results."""
+    if query_type == "building":
+        data = _load("predictions_by_building.json")
+        predictions = data.get("predictions", [])
+        if building:
+            pred = [p for p in predictions if building.lower() in p.get("building", "").lower()]
+            if not pred:
+                return f"No prediction found for building '{building}'"
+            return json.dumps(pred, ensure_ascii=False, indent=2)
+        top = predictions[:limit]
+        summary = [{
+            "building": p["building"], "propertyType": p.get("propertyType", ""),
+            "meterCount": p.get("meterCount", 0), "trend": p.get("trend", ""),
+            "modelScore": p.get("modelScore", 0), "avgHistorical": p.get("avgHistorical", 0),
+        } for p in top]
+        return json.dumps({"total_buildings": len(predictions), "top": summary}, ensure_ascii=False, indent=2)
+
+    # Default: meter predictions
     data = _load("predictions.json")
     predictions = data.get("predictions", [])
-
     if meter_id:
         pred = [p for p in predictions if p.get("meterId") == meter_id]
         if not pred:
             return f"No prediction found for meter {meter_id}"
-        return json.dumps(pred[0], ensure_ascii=False, indent=2)
-
-    # Return top N by model score
+        # Merge fitted data from separate file if available
+        result = dict(pred[0])
+        try:
+            fitted_data = _load("predictions_fitted.json")
+            for f in fitted_data.get("fitted", []):
+                if f.get("meterId") == meter_id:
+                    result["fitted"] = f.get("fitted", [])
+                    break
+        except (FileNotFoundError, KeyError):
+            pass
+        return json.dumps(result, ensure_ascii=False, indent=2)
     top = sorted(predictions, key=lambda x: x.get("modelScore", 0), reverse=True)[:limit]
     summary = [{
-        "meterId": p["meterId"],
-        "building": p.get("info", {}).get("buildingName", ""),
-        "dma": p.get("info", {}).get("dma", ""),
-        "trend": p.get("trend", ""),
-        "modelScore": p.get("modelScore", 0),
-        "avgHistorical": p.get("avgHistorical", 0),
+        "meterId": p["meterId"], "building": p.get("info", {}).get("buildingName", ""),
+        "dma": p.get("info", {}).get("dma", ""), "trend": p.get("trend", ""),
+        "modelScore": p.get("modelScore", 0), "avgHistorical": p.get("avgHistorical", 0),
         "next7days_avg": round(sum(x["value"] for x in p.get("predictions", [])) / max(1, len(p.get("predictions", []))), 2),
     } for p in top]
     return json.dumps({"total_predictions": len(predictions), "top": summary}, ensure_ascii=False, indent=2)
-
-
-@tool
-def get_building_predictions(building: str = "", limit: int = 10) -> str:
-    """Get building-level water consumption predictions for Zone-3.
-    Use when the user asks about building forecasts or hotel/resort predictions."""
-    data = _load("predictions_by_building.json")
-    predictions = data.get("predictions", [])
-
-    if building:
-        pred = [p for p in predictions if building.lower() in p.get("building", "").lower()]
-        if not pred:
-            return f"No prediction found for building '{building}'"
-        return json.dumps(pred, ensure_ascii=False, indent=2)
-
-    top = predictions[:limit]
-    summary = [{
-        "building": p["building"],
-        "propertyType": p.get("propertyType", ""),
-        "meterCount": p.get("meterCount", 0),
-        "trend": p.get("trend", ""),
-        "modelScore": p.get("modelScore", 0),
-        "avgHistorical": p.get("avgHistorical", 0),
-    } for p in top]
-    return json.dumps({"total_buildings": len(predictions), "top": summary}, ensure_ascii=False, indent=2)
 
 
 # ── Tool 5: Data overview ────────────────────────────────────
@@ -202,14 +248,44 @@ def get_data_overview() -> str:
     }, ensure_ascii=False, indent=2)
 
 
-# ── Tool 6: Daily DMA data ──────────────────────────────────
+# ── Tool 6: Consumption data (merged) ───────────────────────
 
 @tool
-def query_daily_dma(date: str = "", dma: str = "", limit: int = 7) -> str:
-    """Query daily DMA consumption summary. Filter by date or DMA zone.
-    Use when the user asks about daily usage, consumption by zone, or specific dates."""
+def query_consumption(mode: str = "daily", date: str = "", dma: str = "",
+                      month1: str = "", month2: str = "", limit: int = 7) -> str:
+    """Query water consumption data. mode=daily: daily DMA summary; mode=weekly: weekly trends; mode=compare: month-over-month comparison.
+    Parameters: mode=daily/weekly/compare, date - for daily, dma - zone filter, month1/month2 - for compare (YYYY-MM), limit - rows."""
     daily = _load("daily_dma.json")
 
+    if mode == "weekly":
+        return json.dumps(_load("weekly.json"), ensure_ascii=False, indent=2)
+
+    if mode == "compare":
+        if not month1 or not month2:
+            return json.dumps({"error": "month1 and month2 are required for compare mode"})
+        def month_stats(month):
+            total = 0; days = 0; res_total = 0; nonres_total = 0; count = 0
+            for day in daily:
+                if not day["date"].startswith(month):
+                    continue
+                days += 1
+                for dma_name, stats in day.get("dmas", {}).items():
+                    if dma and not _match_dma(dma, dma_name):
+                        continue
+                    total += stats.get("total", 0)
+                    res_total += stats.get("residential", 0)
+                    nonres_total += stats.get("nonResidential", 0)
+                    count = max(count, stats.get("meterCount", 0))
+            return {"month": month, "total": round(total, 1),
+                    "daily_avg": round(total / max(days, 1), 1),
+                    "residential": round(res_total, 1), "nonResidential": round(nonres_total, 1), "days": days}
+        s1 = month_stats(month1)
+        s2 = month_stats(month2)
+        change = round((s2["total"] - s1["total"]) / max(s1["total"], 1) * 100, 1)
+        return json.dumps({"comparison": [s1, s2], "change_percent": change,
+                           "direction": "increased" if change > 0 else "decreased"}, ensure_ascii=False, indent=2)
+
+    # Default: daily mode
     results = []
     for day in daily:
         if date and date not in day["date"]:
@@ -218,8 +294,7 @@ def query_daily_dma(date: str = "", dma: str = "", limit: int = 7) -> str:
             if dma and not _match_dma(dma, dma_name):
                 continue
             results.append({
-                "date": day["date"],
-                "dma": dma_name,
+                "date": day["date"], "dma": dma_name,
                 "total": round(stats["total"], 1),
                 "residential": round(stats.get("residential", 0), 1),
                 "nonResidential": round(stats.get("nonResidential", 0), 1),
@@ -227,20 +302,10 @@ def query_daily_dma(date: str = "", dma: str = "", limit: int = 7) -> str:
             })
         if len(results) >= limit * 5:
             break
-
     return json.dumps(results[:limit * 5], ensure_ascii=False, indent=2)
 
 
-# ── Tool 7: Weekly comparison ────────────────────────────────
-
-@tool
-def query_weekly() -> str:
-    """Get weekly consumption comparison data including weekday vs weekend patterns.
-    Use when the user asks about weekly trends or weekday/weekend comparison."""
-    return json.dumps(_load("weekly.json"), ensure_ascii=False, indent=2)
-
-
-# ── Tool 8: Rank changes ─────────────────────────────────────
+# ── Tool 7: Rank changes ─────────────────────────────────────
 
 @tool
 def query_rank_changes(limit: int = 10) -> str:
@@ -290,53 +355,7 @@ def generate_chart(chart_type: str, dma: str = "Zone-3", days: int = 30) -> str:
     return gen(chart_type, dma=dma, days=days)
 
 
-# ── Tool 11: Month-over-month comparison ─────────────────────
-
-@tool
-def compare_months(month1: str, month2: str, dma: str = "") -> str:
-    """Compare water consumption between two months (e.g. '2026-03' vs '2026-04').
-    Shows total consumption, meter count, and percentage change.
-    Use when the user asks to compare months or see trends."""
-    daily = _load("daily_dma.json")
-
-    def month_stats(month):
-        total = 0
-        count = 0
-        days = 0
-        res_total = 0
-        nonres_total = 0
-        for day in daily:
-            if not day["date"].startswith(month):
-                continue
-            days += 1
-            for dma_name, stats in day.get("dmas", {}).items():
-                if dma and not _match_dma(dma, dma_name):
-                    continue
-                total += stats.get("total", 0)
-                res_total += stats.get("residential", 0)
-                nonres_total += stats.get("nonResidential", 0)
-                count = max(count, stats.get("meterCount", 0))
-        return {
-            "month": month,
-            "total": round(total, 1),
-            "daily_avg": round(total / max(days, 1), 1),
-            "residential": round(res_total, 1),
-            "nonResidential": round(nonres_total, 1),
-            "days": days,
-        }
-
-    s1 = month_stats(month1)
-    s2 = month_stats(month2)
-    change = round((s2["total"] - s1["total"]) / max(s1["total"], 1) * 100, 1)
-
-    return json.dumps({
-        "comparison": [s1, s2],
-        "change_percent": change,
-        "direction": "increased" if change > 0 else "decreased",
-    }, ensure_ascii=False, indent=2)
-
-
-# ── Tool 12: Anomaly deep analysis ──────────────────────────
+# ── Tool 10: Anomaly deep analysis ───────────────────────────
 
 @tool
 def analyze_anomaly(meter_id: str) -> str:
@@ -467,7 +486,13 @@ def get_current_page_context() -> str:
     the start of every turn. This tool is useful when the user has switched
     tabs mid-conversation and you need a fresh read.
     """
+    import sys
     ctx = get_page_context()
+    print(
+        f"[tool:get_current_page_context] called, PAGE_STATE={dict(PAGE_STATE)}, "
+        f"returned_ctx={ctx}",
+        file=sys.stderr, flush=True,
+    )
     if not ctx:
         return json.dumps({"context": "no page context available"})
     return json.dumps({"context": ctx}, ensure_ascii=False)
@@ -476,19 +501,14 @@ def get_current_page_context() -> str:
 # ── Export all tools ──────────────────────────────────────────
 
 ALL_TOOLS = [
-    query_anomalies,
+    query_anomalies,      # merged: list/stats/analyze modes
     query_meters,
-    get_anomaly_stats,
-    get_predictions,
-    get_building_predictions,
+    get_predictions,      # merged: meter/building types
     get_data_overview,
-    query_daily_dma,
-    query_weekly,
+    query_consumption,    # merged: daily/weekly/compare modes (replaces query_daily_dma, query_weekly, compare_months)
     query_rank_changes,
     query_monthly_diff,
     generate_chart,
-    compare_months,
-    analyze_anomaly,
     generate_report,
     get_current_page_context,
 ]

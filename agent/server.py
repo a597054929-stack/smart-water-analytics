@@ -183,17 +183,42 @@ async def chat(req: ChatRequest):
                 # LangChain requires all system messages to be a contiguous
                 # block at the very start of the list. Strip any stale system
                 # entries persisted from prior turns, then build a fresh
-                # sequence: [context_system?, ...history, user].
-                context_msg = None
+                # sequence: [context_system?, memory_system?, ...history, user].
+                system_msgs = []
                 if req.context:
-                    context_msg = {
+                    system_msgs.append({
                         "role": "system",
                         "content": _format_context_message(req.context),
-                    }
+                    })
+
                 history_no_system = [m for m in chat_history if m.get("role") != "system"]
-                messages = ([context_msg] if context_msg else []) + history_no_system + [
+
+                # Inject conversation memory from older messages that were trimmed
+                from memory import build_memory_message
+                if len(chat_history) > 6:
+                    old_messages = chat_history[:-6]
+                    memory_msg = build_memory_message(old_messages)
+                    if memory_msg:
+                        system_msgs.append(memory_msg)
+
+                # Tool pre-selection: inject hint for likely tools
+                from tool_router import route_question, format_tool_hint
+                tool_recs = route_question(question)
+                if tool_recs:
+                    hint = format_tool_hint(tool_recs)
+                    system_msgs.append({"role": "system", "content": hint})
+
+                messages = system_msgs + history_no_system + [
                     {"role": "user", "content": question}
                 ]
+
+                # Diagnostic: log message count and tool calls
+                sys_msg_count = sum(1 for m in messages if m.get("role") == "system")
+                print(
+                    f"[chat] msgs={len(messages)} "
+                    f"(sys={sys_msg_count} hist={len(history_no_system)} user=1)",
+                    file=sys.stderr, flush=True,
+                )
 
                 final_answer = ""
                 chart = None
@@ -203,6 +228,10 @@ async def chat(req: ChatRequest):
                         if node_name == "tools" and "messages" in node_output:
                             for msg in node_output["messages"]:
                                 if hasattr(msg, "name") and msg.name:
+                                    print(
+                                        f"[chat] tool={msg.name}",
+                                        file=sys.stderr, flush=True,
+                                    )
                                     yield f"data: {json.dumps({'type': 'tool', 'name': msg.name})}\n\n"
 
                         if node_name == "agent" and "messages" in node_output:
@@ -218,6 +247,11 @@ async def chat(req: ChatRequest):
                                             chart = data["echarts_option"]
                                     except (json.JSONDecodeError, TypeError):
                                         pass
+
+                print(
+                    f"[chat] final_answer_preview={final_answer[:300]}",
+                    file=sys.stderr, flush=True,
+                )
 
                 if not final_answer:
                     result = agent.invoke({"messages": messages})
@@ -237,8 +271,8 @@ async def chat(req: ChatRequest):
             # Save to history
             chat_history.append({"role": "user", "content": question})
             chat_history.append({"role": "assistant", "content": final_answer})
-            if len(chat_history) > 20:
-                chat_history[:] = chat_history[-20:]
+            if len(chat_history) > 6:
+                chat_history[:] = chat_history[-6:]
             save_history(chat_history)
 
         except Exception as e:
@@ -266,11 +300,21 @@ async def chat_sync(req: ChatRequest):
             pass
 
         agent = get_agent()
-        context_msg = None
+        system_msgs = []
         if req.context:
-            context_msg = {"role": "system", "content": _format_context_message(req.context)}
+            system_msgs.append({"role": "system", "content": _format_context_message(req.context)})
         history_no_system = [m for m in chat_history if m.get("role") != "system"]
-        messages = ([context_msg] if context_msg else []) + history_no_system + [
+        from memory import build_memory_message
+        if len(chat_history) > 6:
+            old_messages = chat_history[:-6]
+            memory_msg = build_memory_message(old_messages)
+            if memory_msg:
+                system_msgs.append(memory_msg)
+        from tool_router import route_question, format_tool_hint
+        tool_recs = route_question(question)
+        if tool_recs:
+            system_msgs.append({"role": "system", "content": format_tool_hint(tool_recs)})
+        messages = system_msgs + history_no_system + [
             {"role": "user", "content": question}
         ]
         result = agent.invoke({"messages": messages})
@@ -286,8 +330,8 @@ async def chat_sync(req: ChatRequest):
 
         chat_history.append({"role": "user", "content": question})
         chat_history.append({"role": "assistant", "content": answer})
-        if len(chat_history) > 20:
-            chat_history[:] = chat_history[-20:]
+        if len(chat_history) > 6:
+            chat_history[:] = chat_history[-6:]
         save_history(chat_history)
 
         return ChatResponse(answer=answer, chart=chart, context_used=req.context)

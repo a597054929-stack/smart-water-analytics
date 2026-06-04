@@ -24,9 +24,10 @@ Tables created:
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Optional
 
 import pandas as pd
 
@@ -40,6 +41,14 @@ except ImportError:
 DEFAULT_DATA_DIR = Path(__file__).resolve().parent.parent / "backend" / "data"
 DEFAULT_OUTPUT_DIR = DEFAULT_DATA_DIR / "output"
 DEFAULT_DB_PATH = DEFAULT_DATA_DIR / "analytics.db"
+
+
+def _resolve_db_path() -> Path:
+    """Return WATER_DB_PATH env override or default analytics.db."""
+    env_path = os.environ.get("WATER_DB_PATH")
+    if env_path:
+        return Path(env_path)
+    return DEFAULT_DB_PATH
 
 
 # ── Helpers ──────────────────────────────────────────────────
@@ -135,7 +144,7 @@ class SqlLoader:
         for t in [
             "meters", "meter_daily", "anomalies", "daily_dma", "weekly",
             "rank_changes", "monthly_diff", "predictions", "predictions_building",
-            "search_index",
+            "search_index", "hourly_meter",
         ]:
             cur.execute(f"DROP TABLE IF EXISTS {t}")
         self.conn.commit()
@@ -181,13 +190,59 @@ class SqlLoader:
 
     def load_meter_daily(self, src: Path) -> int:
         # meter_daily.json is {meterId: {date: value}} — explode to rows.
-        data = _read_json(src / "meter_daily.json") or {}
+        # Real data converter no longer writes this file (daily aggregates live
+        # in daily_dma.json), so missing-file is the common case.
+        path = src / "meter_daily.json"
+        if not path.exists():
+            self.log.info("skip meter_daily: file not found (use daily_dma)")
+            return 0
+        data = _read_json(path) or {}
         rows: list[dict] = []
         for meter_id, series in data.items():
             for date, total in (series or {}).items():
                 rows.append({"meterId": meter_id, "date": date, "total": total})
         df = pd.DataFrame(rows)
         return self._write(df, "meter_daily", ["meterId", "date"])
+
+    def load_hourly_meter(self, src: Path) -> int:
+        """Real-data only: ingest hourly_meter.db (created by the converter).
+
+        The hourly table holds ~15M rows for 30 days of real data, so we
+        ATTACH the converter's SQLite file as a read-only database and
+        copy into analytics.db in one shot.
+        """
+        hourly_db = src / "hourly_meter.db"
+        if not hourly_db.exists():
+            self.log.info("skip hourly_meter: hourly_meter.db not found (mock data)")
+            return 0
+        # Drop existing table to allow re-runs
+        cur = self.conn.cursor()
+        cur.execute("DROP TABLE IF EXISTS hourly_meter")
+        self.conn.commit()
+
+        # Attach the hourly database and copy all rows.
+        attach_cur = self.conn.cursor()
+        attach_cur.execute(f"ATTACH DATABASE '{hourly_db.as_posix()}' AS hourly")
+        attach_cur.execute(
+            "CREATE TABLE hourly_meter AS SELECT * FROM hourly.hourly_meter"
+        )
+        attach_cur.execute("DETACH DATABASE hourly")
+        self.conn.commit()
+
+        # Indexes
+        self._create_indexes("hourly_meter", ["meterId", "datetime"])
+
+        cur = self.conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM hourly_meter")
+        n = cur.fetchone()[0]
+        self.log.info(
+            "wrote hourly_meter",
+            extra={
+                "stage": "load_sql",
+                "metrics": {"table": "hourly_meter", "rows": n},
+            },
+        )
+        return n
 
     def load_anomalies(self, src: Path) -> int:
         df = _df_of_list(src / "anomalies.json")
@@ -241,10 +296,16 @@ class SqlLoader:
         return self._write(df, "predictions", ["meterId", "date"])
 
     def load_predictions_building(self, src: Path) -> int:
-        data = _read_json(src / "predictions_by_building.json") or {}
+        data = _read_json(src / "predictions_by_building.json")
+        # Mock data wraps a `predictions` list; real data is a bare list.
+        if isinstance(data, dict):
+            buildings = data.get("predictions") or []
+        else:
+            buildings = data or []
         rows: list[dict] = []
-        for b in data.get("predictions") or []:
-            name = b.get("building")
+        for b in buildings:
+            # Real data uses `buildingName`; mock data used `building`.
+            name = b.get("building") or b.get("buildingName")
             for day in b.get("predictions") or []:
                 v = day.get("predicted")
                 if v is None:
@@ -272,6 +333,7 @@ class SqlLoader:
         results: dict[str, int] = {}
         results["meters"] = self.load_meters(src)
         results["meter_daily"] = self.load_meter_daily(src)
+        results["hourly_meter"] = self.load_hourly_meter(src)
         results["anomalies"] = self.load_anomalies(src)
         results["daily_dma"] = self.load_daily_dma(src)
         results["weekly"] = self.load_weekly(src)
@@ -293,7 +355,9 @@ class SqlLoader:
         self.conn.close()
 
 
-def list_tables(db_path: Path = DEFAULT_DB_PATH) -> list[dict]:
+def list_tables(db_path: Optional[Path] = None) -> list[dict]:
+    if db_path is None:
+        db_path = _resolve_db_path()
     """Return a list of {name, n_rows} for every table in the analytics DB."""
     if not db_path.exists():
         return []
@@ -312,7 +376,9 @@ def list_tables(db_path: Path = DEFAULT_DB_PATH) -> list[dict]:
     return tables
 
 
-def get_table_schema(table_name: str, db_path: Path = DEFAULT_DB_PATH) -> list[dict]:
+def get_table_schema(table_name: str, db_path: Optional[Path] = None) -> list[dict]:
+    if db_path is None:
+        db_path = _resolve_db_path()
     """Return column metadata for a table."""
     if not db_path.exists():
         return []
@@ -327,7 +393,9 @@ def get_table_schema(table_name: str, db_path: Path = DEFAULT_DB_PATH) -> list[d
     ]
 
 
-def run_query(sql: str, db_path: Path = DEFAULT_DB_PATH, limit: int = 1000) -> tuple[list[str], list[tuple]]:
+def run_query(sql: str, db_path: Optional[Path] = None, limit: int = 1000) -> tuple[list[str], list[tuple]]:
+    if db_path is None:
+        db_path = _resolve_db_path()
     """Execute a read-only SQL query. Returns (column_names, rows).
 
     For safety:

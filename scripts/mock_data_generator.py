@@ -328,7 +328,7 @@ def build_top20_by_dma(all_consumption, meter_map):
     return result
 
 def build_daily_total_by_dma(daily_dma):
-    """Build daily total by DMA."""
+    """Build daily total by DMA (kept for all_data.json bundle)."""
     result = []
     for day in daily_dma:
         dmas = {}
@@ -336,6 +336,10 @@ def build_daily_total_by_dma(daily_dma):
             dmas[dma] = round(day['dmas'][dma]['total'], 0)
         result.append({'date': day['date'], 'dmas': dmas, 'rain': day['rain']})
     return result
+
+# NOTE: build_daily_total_by_dma and build_top20_by_dma are still called
+# because their output is included in all_data.json (used by the frontend).
+# The standalone JSON files are no longer written.
 
 def build_monthly_diff(all_consumption, meters, meter_map):
     """Build monthly main-sub meter diff. Sub-meters have mainCode pointing to main meter ID."""
@@ -697,6 +701,22 @@ def main():
     predictions = build_predictions(all_consumption, meters, meter_map)
     print("  predictions.json")
 
+    # Split: fitted data goes to separate file (large, rarely needed)
+    predictions_fitted = {
+        'generatedAt': predictions['generatedAt'],
+        'historicalRange': predictions['historicalRange'],
+        'totalMeters': predictions['totalMeters'],
+        'fitted': [{
+            'meterId': p['meterId'],
+            'fitted': p['fitted'],
+            'info': p.get('info', {}),
+        } for p in predictions['predictions']]
+    }
+    # Remove fitted from predictions to reduce file size
+    for p in predictions['predictions']:
+        p.pop('fitted', None)
+    print("  predictions_fitted.json")
+
     predictions_by_building = build_predictions_by_building(all_consumption, meters, meter_map)
     print("  predictions_by_building.json")
 
@@ -727,14 +747,13 @@ def main():
     files = {
         'all_data.json': all_data,
         'predictions.json': predictions,
+        'predictions_fitted.json': predictions_fitted,
         'predictions_by_building.json': predictions_by_building,
         'anomalies.json': anomalies,
         'available_dates.json': DATES,
         'cotai_calendar.json': cotai_calendar,
         'daily_dma.json': daily_dma,
         'daily_top20.json': daily_top20,
-        'daily_top20_by_dma.json': daily_top20_by_dma,
-        'daily_total_by_dma.json': daily_total_by_dma,
         'meter_info.json': {m['id']: {
             'dma': m['dma'],
             'propertyType': m['propertyType'],

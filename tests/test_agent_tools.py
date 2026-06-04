@@ -83,16 +83,16 @@ def test_get_data_overview():
     assert isinstance(data, dict)
 
 
-def test_query_daily_dma():
-    from agent.agent_tools import query_daily_dma
-    out = query_daily_dma.invoke({"dma": "Zone-2", "limit": 3})
+def test_query_consumption_daily():
+    from agent.agent_tools import query_consumption
+    out = query_consumption.invoke({"mode": "daily", "dma": "Zone-2", "limit": 3})
     data = json.loads(out)
     assert isinstance(data, list)
 
 
-def test_query_weekly():
-    from agent.agent_tools import query_weekly
-    out = query_weekly.invoke({})
+def test_query_consumption_weekly():
+    from agent.agent_tools import query_consumption
+    out = query_consumption.invoke({"mode": "weekly"})
     data = json.loads(out)
     assert isinstance(data, list)
 
