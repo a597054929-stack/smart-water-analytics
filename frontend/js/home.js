@@ -9,11 +9,11 @@ function renderKPI(){
   var totalToday=0,totalPrev=0,totalRes=0,totalNonRes=0,resCnt=0,nonResCnt=0;
   for(var k in dma.dmas){
     var v=dma.dmas[k];
-    if(k==='未分類')continue;
+    if(k==='未分類'||k==='Unclassified')continue;
     totalToday+=v.total;totalRes+=v.residential;totalNonRes+=v.nonResidential;
     resCnt+=v.resCount;nonResCnt+=v.nonResCount;
   }
-  if(prevDma)for(var k in prevDma.dmas){if(k!=='未分類')totalPrev+=prevDma.dmas[k].total;}
+  if(prevDma)for(var k in prevDma.dmas){if(k!=='未分類'&&k!=='Unclassified')totalPrev+=prevDma.dmas[k].total;}
 
   // 環比變化
   var changePct=totalPrev>0?((totalToday-totalPrev)/totalPrev*100).toFixed(1):null;
@@ -55,7 +55,7 @@ function renderHome(){
   h+='</div></section>';
 
   // DMA 對比分析
-  var dmaNames2=D.dma.length?Object.keys(D.dma[0].dmas).filter(function(k2){return k2!=='未分類'}):[];
+  var dmaNames2=D.dma.length?Object.keys(D.dma[0].dmas).filter(function(k2){return k2!=='未分類'&&k2!=='Unclassified'}):[];
   h+='<section class="card"><h2>📊 DMA 對比分析</h2>';
   h+='<div class="ms" style="margin-bottom:6px"><button class="mb active" onclick="drawDmaCompare(\'trend\',this)">用水趨勢</button><button class="mb" onclick="drawDmaCompare(\'nrw\',this)">NRW 對比</button><button class="mb" onclick="drawDmaCompare(\'anomaly\',this)">異常分布</button><button class="mb" onclick="drawDmaCompare(\'residential\',this)">住宅/非住宅</button></div>';
   h+='<div class="chart-actions"><button class="export-btn" onclick="exportChart(\'dmaCompare\',\'DMA對比\')">匯出 PNG</button></div>';
@@ -139,7 +139,7 @@ function drawDmaCompare(view,btn){
   if(!el)return;
   var c=initChart(el,'dmaCompare');
   var dates=D.dma.map(function(d){return d.date});
-  var dmaNames=D.dma.length?Object.keys(D.dma[0].dmas).filter(function(k){return k!=='未分類'}):[];
+  var dmaNames=D.dma.length?Object.keys(D.dma[0].dmas).filter(function(k){return k!=='未分類'&&k!=='Unclassified'}):[];
 
   if(view==='trend'){
     var series=dmaNames.map(function(dma){

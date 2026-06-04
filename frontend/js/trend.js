@@ -7,7 +7,7 @@ function renderTrend(){
   h+='<div id="trendResChart" class="chart" style="height:450px;display:none"></div>';
   h+='<div id="trendWeeklyChart" class="chart" style="height:450px;display:none"></div>';
   h+='</section>';
-  var dmaNames=D.trend.length?Object.keys(D.trend[0].dmas).filter(function(k){return k!=='未分類'}):[];
+  var dmaNames=D.trend.length?Object.keys(D.trend[0].dmas).filter(function(k){return k!=='未分類'&&k!=='Unclassified'}):[];
   h+='<section class="card"><h2>🏚️ 分DMA趨勢</h2><div class="ms">';
   dmaNames.forEach(function(d){h+='<button class="mb" onclick="renderDmaTrend(\''+esc(d)+'\')">'+esc(d)+'</button>';});
   h+='</div><div class="chart-actions"><button class="export-btn" onclick="exportChart(\'dt\',\'DMA趨勢\')">匯出 PNG</button></div><div id="dmaTrendChart" class="chart" style="height:400px"></div></section>';
@@ -128,10 +128,10 @@ function drawResTrendChart(){
   var c=initChart(el,'trendRes');
   var dates=D.dma.map(function(d){return d.date});
   var resData=D.dma.map(function(d){
-    var t=0;for(var k in d.dmas){if(k!=='未分類')t+=d.dmas[k].residential;}return Math.round(t);
+    var t=0;for(var k in d.dmas){if(k!=='未分類'&&k!=='Unclassified')t+=d.dmas[k].residential;}return Math.round(t);
   });
   var nonResData=D.dma.map(function(d){
-    var t=0;for(var k in d.dmas){if(k!=='未分類')t+=d.dmas[k].nonResidential;}return Math.round(t);
+    var t=0;for(var k in d.dmas){if(k!=='未分類'&&k!=='Unclassified')t+=d.dmas[k].nonResidential;}return Math.round(t);
   });
   c.setOption({backgroundColor:'transparent',tooltip:{trigger:'axis'},
     legend:{data:['住宅','非住宅'],textStyle:{color:'#94a3b8'}},
@@ -162,7 +162,7 @@ function drawWeeklyTrendChart(){
         var dd=new Date(dates[j]);
         var day=dd.getDay();
         var total=0;
-        for(var k in D.dma[j].dmas){if(k!=='未分類')total+=D.dma[j].dmas[k].total;}
+        for(var k in D.dma[j].dmas){if(k!=='未分類'&&k!=='Unclassified')total+=D.dma[j].dmas[k].total;}
         if(day===0||day===6){weTotal+=total;weCount++;}
         else{wdTotal+=total;wdCount++;}
       }
@@ -181,7 +181,7 @@ function drawWeeklyTrendChart(){
       var dd=new Date(dates[j]);
       var day=dd.getDay();
       var total=0;
-      for(var k in D.dma[j].dmas){if(k!=='未分類')total+=D.dma[j].dmas[k].total;}
+      for(var k in D.dma[j].dmas){if(k!=='未分類'&&k!=='Unclassified')total+=D.dma[j].dmas[k].total;}
       if(day===0||day===6){weTotal+=total;weCount++;}
       else{wdTotal+=total;wdCount++;}
     }
