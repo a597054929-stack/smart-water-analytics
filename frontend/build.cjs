@@ -55,6 +55,17 @@ for(const f of dataFiles){
   }
 }
 
+// Real data path writes 12 individual JSONs but no all_data.json bundle.
+// _loadBundle tries all_data.json first as a "find the mock bundle" probe
+// and falls through to _loadIndividual on 404. To silence the 404 in the
+// browser console (and any 404-monitor tooling), write a stub all_data.json
+// containing the JSON literal `null` so the fetch returns 200 + null.
+if(useRealData){
+  const stubPath=path.join(outDir,'data','all_data.json');
+  fs.writeFileSync(stubPath,'null');
+  console.log('stubbed: all_data.json (null) — silence 404 in real-data mode');
+}
+
 // Read template
 const templatePath=path.resolve(__dirname,'./template.html');
 let template=fs.readFileSync(templatePath,'utf8');
