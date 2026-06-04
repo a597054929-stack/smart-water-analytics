@@ -1,6 +1,19 @@
 // === 趨勢頁 ===
 function renderTrend(){
+  // Date-range filter. window._trendStart/_trendEnd are YYYY-MM-DD
+  // (or null = no filter). Defaults to the full available range.
+  if(window._trendStart===undefined){
+    window._trendStart=D.dates[0]||'';
+    window._trendEnd=D.dates[D.dates.length-1]||'';
+  }
   var h='<section class="card"><h2>📈 用水趨勢 + 降雨量</h2>';
+  h+='<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">';
+  h+='<span style="color:var(--muted);font-size:12px">📅 時間範圍</span>';
+  h+='<input type="date" class="di" min="'+D.dates[0]+'" max="'+D.dates[D.dates.length-1]+'" value="'+window._trendStart+'" onchange="window._trendStart=this.value;drawTrendChart();if(window._trendView===\'residential\')drawResTrendChart();else if(window._trendView===\'weekly\')drawWeeklyTrendChart();">';
+  h+='<span style="color:var(--muted)">~</span>';
+  h+='<input type="date" class="di" min="'+D.dates[0]+'" max="'+D.dates[D.dates.length-1]+'" value="'+window._trendEnd+'" onchange="window._trendEnd=this.value;drawTrendChart();if(window._trendView===\'residential\')drawResTrendChart();else if(window._trendView===\'weekly\')drawWeeklyTrendChart();">';
+  h+='<button class="nb" onclick="window._trendStart=D.dates[0];window._trendEnd=D.dates[D.dates.length-1];renderTrend()">↺ 全程</button>';
+  h+='</div>';
   h+='<div class="ms" style="margin-bottom:6px"><button class="mb active" id="btnRA7" onclick="toggleRA(7,this)">7天均值</button><button class="mb" id="btnRA14" onclick="toggleRA(14,this)">14天均值</button><button class="mb" id="btnPred" onclick="togglePred(this)">7天預測</button><button class="mb" id="btnMoM" onclick="toggleMoM(this)">月環比</button><button class="mb" id="btnRes" onclick="switchTrendView(\'residential\',this)">住宅趨勢</button><button class="mb" id="btnWeekly" onclick="switchTrendView(\'weekly\',this)">週度趨勢</button></div>';
   h+='<div class="chart-actions"><button class="export-btn" onclick="exportChart(\'trend\',\'用水趨勢\')">匯出 PNG</button></div>';
   h+='<div id="trendChart" class="chart" style="height:450px"></div>';
@@ -14,6 +27,17 @@ function renderTrend(){
   document.getElementById('page-trend').innerHTML=h;
   window._raWin=7; window._showPred=false; window._showMoM=false;
   drawTrendChart();
+}
+
+// Returns D.trend entries clipped to the active date range. D.trend and
+// D.dma are the same array (see build.cjs loader), so the same slice
+// drives the residential/weekly views.
+function _getFilteredTrend(){
+  var s=window._trendStart, e=window._trendEnd;
+  if(!s && !e) return D.trend;
+  return D.trend.filter(function(d){
+    return (!s || d.date>=s) && (!e || d.date<=e);
+  });
 }
 
 function toggleMoM(btn){
@@ -126,11 +150,12 @@ function drawResTrendChart(){
   var el=document.getElementById('trendResChart');
   if(!el)return;
   var c=initChart(el,'trendRes');
-  var dates=D.dma.map(function(d){return d.date});
-  var resData=D.dma.map(function(d){
+  var data=_getFilteredTrend();
+  var dates=data.map(function(d){return d.date});
+  var resData=data.map(function(d){
     var t=0;for(var k in d.dmas){if(k!=='未分類'&&k!=='Unclassified')t+=d.dmas[k].residential;}return Math.round(t);
   });
-  var nonResData=D.dma.map(function(d){
+  var nonResData=data.map(function(d){
     var t=0;for(var k in d.dmas){if(k!=='未分類'&&k!=='Unclassified')t+=d.dmas[k].nonResidential;}return Math.round(t);
   });
   c.setOption({backgroundColor:'transparent',tooltip:{trigger:'axis'},
@@ -151,7 +176,8 @@ function drawWeeklyTrendChart(){
   var c=initChart(el,'trendWeekly');
   // 計算週度匯總
   var weeklyData=[];
-  var dates=D.dma.map(function(d){return d.date});
+  var data=_getFilteredTrend();
+  var dates=data.map(function(d){return d.date});
   var weekStart=0;
   for(var i=0;i<dates.length;i++){
     var d=new Date(dates[i]);
@@ -162,7 +188,7 @@ function drawWeeklyTrendChart(){
         var dd=new Date(dates[j]);
         var day=dd.getDay();
         var total=0;
-        for(var k in D.dma[j].dmas){if(k!=='未分類'&&k!=='Unclassified')total+=D.dma[j].dmas[k].total;}
+        for(var k in data[j].dmas){if(k!=='未分類'&&k!=='Unclassified')total+=data[j].dmas[k].total;}
         if(day===0||day===6){weTotal+=total;weCount++;}
         else{wdTotal+=total;wdCount++;}
       }
@@ -181,7 +207,7 @@ function drawWeeklyTrendChart(){
       var dd=new Date(dates[j]);
       var day=dd.getDay();
       var total=0;
-      for(var k in D.dma[j].dmas){if(k!=='未分類'&&k!=='Unclassified')total+=D.dma[j].dmas[k].total;}
+      for(var k in data[j].dmas){if(k!=='未分類'&&k!=='Unclassified')total+=data[j].dmas[k].total;}
       if(day===0||day===6){weTotal+=total;weCount++;}
       else{wdTotal+=total;wdCount++;}
     }
@@ -210,7 +236,8 @@ function drawWeeklyTrendChart(){
 function drawTrendChart(){
   disposeChart('trend');
   var c=initChart(document.getElementById('trendChart'),'trend');
-  var dates=D.trend.map(function(d){return d.date}),totals=D.trend.map(function(d){var t=0;for(var v in d.dmas)t+=d.dmas[v].total||0;return t}),rain=D.trend.map(function(d){return d.rain||0});
+  var data=_getFilteredTrend();
+  var dates=data.map(function(d){return d.date}),totals=data.map(function(d){var t=0;for(var v in d.dmas)t+=d.dmas[v].total||0;return t}),rain=data.map(function(d){return d.rain||0});
   var win=window._raWin||7;var ma=calcMA(totals,win);
 
   // 月環比：按月份著色 + 月均值參考線
@@ -278,8 +305,9 @@ function drawTrendChart(){
 function renderDmaTrend(dma){
   disposeChart('dt');
   var c=initChart(document.getElementById('dmaTrendChart'),'dt');
-  var dates=D.trend.map(function(d){return d.date});
-  var vals=D.trend.map(function(d){return d.dmas[dma]?d.dmas[dma].total:0});
+  var data=_getFilteredTrend();
+  var dates=data.map(function(d){return d.date});
+  var vals=data.map(function(d){return d.dmas[dma]?d.dmas[dma].total:0});
   var ma=calcMA(vals,7);
   var preds=hwForecast(vals,7);
   var predDates=dates.slice(),predVals=new Array(vals.length).fill(null);

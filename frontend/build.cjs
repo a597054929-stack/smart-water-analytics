@@ -35,6 +35,10 @@ const dataFiles = useRealData ? [
   {name:'predictions.json', src:activeDataDir},
   {name:'predictions_fitted.json', src:activeDataDir},
   {name:'predictions_by_building.json', src:activeDataDir},
+  // 14MB per-meter daily history — needed by the anomaly "show curve"
+  // overlay. Largest single file in the bundle; could be replaced with
+  // a per-meter endpoint if load time becomes a problem.
+  {name:'daily_totals.json', src:activeDataDir},
   {name:'dma_zones.geojson', src:publicDir}
 ] : [
   // Mock data: all_data.json bundle
@@ -111,8 +115,8 @@ let D,PRED,PRED_BLD;
 const _safeFetch=(u)=>fetch(u).then(r=>r.ok?r.json():null).catch(()=>null);
 
 async function _loadIndividual(){
-  // Real data: 12 individual JSONs loaded in parallel
-  const[dma,top20,rank,anomalies,monthlyDiff,searchIdx,cotai,weekly,dates,pred,predBld,predFitted]=await Promise.all([
+  // Real data: 14 individual JSONs loaded in parallel
+  const[dma,top20,rank,anomalies,monthlyDiff,searchIdx,cotai,weekly,dates,pred,predBld,predFitted,dailyTotals,meterInfo]=await Promise.all([
     _safeFetch('data/daily_dma.json'),
     _safeFetch('data/daily_top20.json'),
     _safeFetch('data/rank_changes.json'),
@@ -125,6 +129,12 @@ async function _loadIndividual(){
     _safeFetch('data/predictions.json'),
     _safeFetch('data/predictions_by_building.json'),
     _safeFetch('data/predictions_fitted.json'),
+    // 14MB — transposed into D.meterDaily so the anomaly "show curve"
+    // overlay can plot a single meter's 14-day history on demand.
+    _safeFetch('data/daily_totals.json'),
+    // meterId → dma + display fields, used to compute the per-DMA
+    // top 50 each day (the system-wide top20 rarely covers small DMAs).
+    _safeFetch('data/meter_info.json'),
   ]);
   // Real converter emits mainTotal/subsTotal/diffPercent and no
   // subCount; the JS expects mainMonthTotal/subMonthTotal/diffPct/
@@ -140,10 +150,58 @@ async function _loadIndividual(){
       subCount:       Array.isArray(d.subs) ? d.subs.length : 0,
     })),
   }));
+  // Transpose {date:{meterId:total}} → {meterId:{date:total}} for the
+  // anomaly overlay. ~9,963 meters × 151 dates = ~1.5M entries; runs in
+  // <1s in the browser. Anomaly "show curve" reads D.meterDaily[meterId].
+  const meterDaily = {};
+  if (dailyTotals) {
+    Object.keys(dailyTotals).forEach(function(date) {
+      const day = dailyTotals[date];
+      Object.keys(day).forEach(function(meterId) {
+        if (!meterDaily[meterId]) meterDaily[meterId] = {};
+        meterDaily[meterId][date] = day[meterId];
+      });
+    });
+  }
+  // Build per-DMA top 50 per day. daily_top20 only has the system-wide
+  // top 20, so a small DMA like 澳門低區 (Macau peninsula) often has 0
+  // entries — clicking into that DMA's detail page used to render an
+  // empty table. Scan all meters per day, group by DMA via meter_info,
+  // and keep the top 50.
+  const top20dma = [];
+  if (dailyTotals && meterInfo) {
+    const dates = Object.keys(dailyTotals).sort();
+    for (const date of dates) {
+      const day = dailyTotals[date];
+      const byDma = {};
+      for (const meterId of Object.keys(day)) {
+        const info = meterInfo[meterId];
+        if (!info) continue;
+        const dma = info.dma || 'Unclassified';
+        if (!byDma[dma]) byDma[dma] = [];
+        byDma[dma].push({
+          meterId: meterId,
+          total: day[meterId],
+          dma: dma,
+          contractId: info.contractId,
+          propertyType: info.propertyType,
+          buildingName: info.buildingName,
+        });
+      }
+      for (const dma of Object.keys(byDma)) {
+        byDma[dma].sort((a, b) => b.total - a.total);
+        byDma[dma] = byDma[dma].slice(0, 50);
+      }
+      top20dma.push({ date: date, byDma: byDma });
+    }
+  }
   return {
     dma:dma||[],
     top:top20?top20.map(d=>({date:d.date,top20:d.top20})):[],
-    top20dma:[],  // not generated; computed on demand if needed
+    // Per-DMA top 50 per day, built above from daily_totals+meter_info.
+    // Replaces the old "group the system-wide top20 by DMA" approach
+    // which left small DMAs (e.g. 澳門低區) with zero entries.
+    top20dma:top20dma,
     diff,
     dates:dates||[],
     rank:rank||[],
@@ -152,7 +210,7 @@ async function _loadIndividual(){
     trend:dma||[],  // trend is the daily_dma array
     search:searchIdx||[],
     meterMonthly:{},  // not generated for real data
-    meterDaily:{},    // not generated for real data
+    meterDaily:meterDaily,  // built from daily_totals.json above
     weekly:weekly||[],
     predictions:pred&&pred.predictions?pred.predictions:[],
     generatedAt:pred?pred.generatedAt:null,
