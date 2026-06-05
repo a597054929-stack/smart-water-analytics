@@ -37,7 +37,7 @@ function getDmaColor(name){
 }
 
 // === 全局状态 ===
-let _selMeters={},_anomCfg={spikeMult:4,minScore:0.25},_anomCfgOpen=false;
+let _selMeters={};
 let selDate,selDma='',charts={},selDiffMeter=null;
 
 // === Demo mode: all data is fictional, no password needed ===

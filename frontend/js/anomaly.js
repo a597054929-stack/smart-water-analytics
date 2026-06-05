@@ -1,11 +1,6 @@
 // === 異常檢測頁 ===
 function renderAnomaly(){
-  var h='<section class="card"><h2>⚠ 異常用水檢測 <span class="hint">(滾動14天視窗基準)</span></h2>';
-  h+='<span class="cf-toggle" onclick="_anomCfgOpen=!_anomCfgOpen;renderAnomaly()">'+(_anomCfgOpen?'▼ 隱藏設定':'▶ 過濾設定')+'</span>';
-  h+='<div class="cf '+(_anomCfgOpen?'open':'')+'"><div class="cf-inner">';
-  h+='<div class="cf-row"><label>暴增倍數</label><input type="range" min="2" max="8" step="0.5" value="'+_anomCfg.spikeMult+'" oninput="_anomCfg.spikeMult=parseFloat(this.value);renderAnomaly()"><span class="val">'+_anomCfg.spikeMult.toFixed(1)+'×</span></div>';
-  h+='<div class="cf-row"><label>最小分數</label><input type="range" min="0.1" max="0.8" step="0.05" value="'+_anomCfg.minScore+'" oninput="_anomCfg.minScore=parseFloat(this.value);renderAnomaly()"><span class="val">'+_anomCfg.minScore.toFixed(2)+'</span></div>';
-  h+='</div></div>';
+  var h='<section class="card"><h2>⚠ 異常用水檢測</h2>';
   var ts='display:inline-block;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px;margin-right:4px;';
   var aOn=ts+'background:#38bdf8;color:#0f172a;font-weight:600;';
   var aOff=ts+'background:#334155;color:#cbd5e1;';
@@ -51,13 +46,6 @@ function renderAnomaly(){
   }
   var filtered = dateFilter ? pool : pool.slice(0, 200);
   if(window._anomType!=='all')filtered=filtered.filter(function(a){return a.type===window._anomType;});
-  // data_error entries don't have anomalyScore / pastMean — skip those
-  // filters for them. The detection is "value > 40,000 m³" so score
-  // would be undefined; render them as high-severity rows.
-  if(window._anomType!=='data_error'){
-    filtered=filtered.filter(function(a){return a.anomalyScore===undefined||a.anomalyScore>=_anomCfg.minScore;});
-    if(_anomCfg.spikeMult<4)filtered=filtered.filter(function(a){return a.type!=='spike'||!a.pastMean||a.total/a.pastMean>=_anomCfg.spikeMult;});
-  }
   if(filtered.length){
     h+='<table><thead><tr><th>日期</th><th>類型</th><th>表位編號</th><th>建築物</th><th>DMA</th><th class="num">當日</th><th class="num">14天均值</th><th class="num">分數</th><th>原因</th></tr></thead><tbody>';
     filtered.forEach(function(a){
