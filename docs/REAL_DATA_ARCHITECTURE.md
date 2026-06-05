@@ -68,7 +68,7 @@ Excel 原始数据（每天一个 .xlsx，~25K 行小时记录）
 | **Daily JSON 全量重派生** | 反派生（异常、Top-N、排名）需要全量数据；纯 Python 内存计算比读 Excel 快得多 |
 | **Hourly JSON 增量 append** | Hourly 视图只看消费模式，不需要重派生旧数据 |
 | **hourly_meter.db 滚动到 30 天** | SQLite 在 7M 行时还快；30 天 ≈ 7M 行 ≈ 600MB；超过会显著拖慢 ATTACH |
-| **daily_totals.json 是内部缓存** | 让 incremental 不重读历史 Excel；24MB / 151 天；**仅供 converter 自己使用**，dashboard/agent 不读 |
+| **daily_totals.json 是内部缓存** | 让 incremental 不重读历史 Excel；13.5 MB / 151 天（修复 cache 浮点噪声后从 24 MB 缩到 13.5 MB）；**仅供 converter 自己使用**，dashboard/agent 不读 |
 
 ---
 

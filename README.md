@@ -2,7 +2,7 @@
 
 A full-stack data analytics platform for monitoring and predicting urban water consumption across DMA (District Metered Areas). Built as a capstone project integrating real-time data processing, machine learning prediction, anomaly detection, and an AI-powered chat interface.
 
-> **Two data modes are supported:** a mock generator (500 synthetic meters, no setup) and a real-data converter (9,963 Macau water meters, 30-day window). See the [Quick Start](#quick-start) section for both.
+> **Two data modes are supported:** a mock generator (500 synthetic meters, 125 days) and a real-data converter (9,963 Macau water meters in reference, 6,630 with active daily readings, 151-day daily cache + 30-day hourly window). See the [Quick Start](#quick-start) section for both.
 
 ## Key Features
 
@@ -90,6 +90,22 @@ only newer Excel files. A daily run with one new file is ~55 seconds.
 See [`docs/REAL_DATA_ARCHITECTURE.md`](docs/REAL_DATA_ARCHITECTURE.md) for
 the full design (storage tiers, SQLite windowing, daily workflow,
 backfill, --full re-derivation).
+
+#### Data volume (current as of 2026-06-05)
+
+| Tier | Meters | Rows | Size | Window |
+|------|--------|------|------|--------|
+| `backend/data/output_real/meter_info.json` | **9,963** | — | 2.6 MB | reference (master list of registered Macau meters) |
+| `backend/data/output_real/daily_totals.json` | **6,630** | **905,805** | 13.5 MB | 151 days (2026-01-01 → 2026-05-31) |
+| `backend/data/output_real/hourly_meter.db` | **6,551** | **4,600,794** | 2,725 MB | 30 days rolling (windowed via `--hourly-window`) |
+| `backend/data/analytics_real.db` `meters` table | 9,963 | — | 354 MB | full (the `meters` table mirrors the reference) |
+| `backend/data/output_mock/all_data.json` (mock mode) | 500 | 62,500 | — | 125 days |
+
+The 3,333-meter gap between the 9,963 reference count and the 6,630
+active daily count is meters that were registered but had no consumption
+in the 1月-5月 window (closed accounts, seasonal buildings, or simply
+no Excel entries for the period). All pipeline JSONs / dashboard /
+agent see the 6,630 active set.
 
 ```bash
 # Terminal 1: incremental update (only new Excel files processed)
