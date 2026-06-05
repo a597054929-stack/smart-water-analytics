@@ -1,0 +1,501 @@
+{
+  "generated_at": "2026-06-05T14:27:39.160453Z",
+  "n_pairs": 25,
+  "pass_rate": 0.72,
+  "tool_accuracy": 0.8,
+  "avg_kw_recall": 0.8,
+  "avg_latency_s": 17.019,
+  "failure_rate": 0.0,
+  "threshold": 0.8,
+  "verdict": "fail",
+  "per_qa": [
+    {
+      "question": "How many anomalies are in Zone-3?",
+      "expected_tool": "sql_query",
+      "expected_keywords": [
+        "Zone-3",
+        "12"
+      ],
+      "tool_calls": [
+        "query_anomalies",
+        "query_anomalies"
+      ],
+      "tool_match": false,
+      "kw_recall": 1.0,
+      "elapsed_s": 6.869,
+      "answer_chars": 273,
+      "error": null,
+      "pass_": false
+    },
+    {
+      "question": "What are the top 5 highest-scoring anomalies?",
+      "expected_tool": "sql_query",
+      "expected_keywords": [
+        "anomalyScore",
+        "DESC"
+      ],
+      "tool_calls": [
+        "query_anomalies",
+        "query_anomalies"
+      ],
+      "tool_match": false,
+      "kw_recall": 0.0,
+      "elapsed_s": 13.2,
+      "answer_chars": 1294,
+      "error": null,
+      "pass_": false
+    },
+    {
+      "question": "Show me anomalies in Zone-3",
+      "expected_tool": "query_anomalies",
+      "expected_keywords": [
+        "Zone-3"
+      ],
+      "tool_calls": [
+        "query_anomalies",
+        "query_anomalies"
+      ],
+      "tool_match": true,
+      "kw_recall": 1.0,
+      "elapsed_s": 21.619,
+      "answer_chars": 1630,
+      "error": null,
+      "pass_": true
+    },
+    {
+      "question": "What are the anomaly statistics for Zone-1?",
+      "expected_tool": "get_anomaly_stats",
+      "expected_keywords": [
+        "Zone-1",
+        "total"
+      ],
+      "tool_calls": [
+        "query_anomalies",
+        "query_anomalies"
+      ],
+      "tool_match": false,
+      "kw_recall": 0.5,
+      "elapsed_s": 9.828,
+      "answer_chars": 349,
+      "error": null,
+      "pass_": false
+    },
+    {
+      "question": "Give me an overview of the data",
+      "expected_tool": "get_data_overview",
+      "expected_keywords": [
+        "meters",
+        "anomalies"
+      ],
+      "tool_calls": [
+        "get_data_overview",
+        "get_data_overview"
+      ],
+      "tool_match": true,
+      "kw_recall": 1.0,
+      "elapsed_s": 7.986,
+      "answer_chars": 876,
+      "error": null,
+      "pass_": true
+    },
+    {
+      "question": "How many residential meters do we have?",
+      "expected_tool": "query_meters",
+      "expected_keywords": [
+        "residential"
+      ],
+      "tool_calls": [
+        "query_meters",
+        "query_meters",
+        "sql_query",
+        "sql_query"
+      ],
+      "tool_match": true,
+      "kw_recall": 1.0,
+      "elapsed_s": 9.886,
+      "answer_chars": 78,
+      "error": null,
+      "pass_": true
+    },
+    {
+      "question": "Predict next week consumption for meter 3586950",
+      "expected_tool": "get_predictions",
+      "expected_keywords": [
+        "3586950"
+      ],
+      "tool_calls": [
+        "get_predictions",
+        "get_predictions"
+      ],
+      "tool_match": true,
+      "kw_recall": 1.0,
+      "elapsed_s": 14.588,
+      "answer_chars": 951,
+      "error": null,
+      "pass_": true
+    },
+    {
+      "question": "Show predictions for a building",
+      "expected_tool": "get_predictions",
+      "expected_keywords": [
+        "building"
+      ],
+      "tool_calls": [
+        "get_current_page_context",
+        "get_predictions",
+        "get_current_page_context",
+        "get_predictions"
+      ],
+      "tool_match": true,
+      "kw_recall": 1.0,
+      "elapsed_s": 17.51,
+      "answer_chars": 1300,
+      "error": null,
+      "pass_": true
+    },
+    {
+      "question": "What is the weekly trend?",
+      "expected_tool": "query_consumption",
+      "expected_keywords": [
+        "week"
+      ],
+      "tool_calls": [
+        "query_consumption",
+        "query_consumption"
+      ],
+      "tool_match": true,
+      "kw_recall": 0.0,
+      "elapsed_s": 14.745,
+      "answer_chars": 880,
+      "error": null,
+      "pass_": false
+    },
+    {
+      "question": "Which meters have been in the top 20 the longest?",
+      "expected_tool": "query_rank_changes",
+      "expected_keywords": [
+        "top"
+      ],
+      "tool_calls": [
+        "query_rank_changes",
+        "query_rank_changes"
+      ],
+      "tool_match": true,
+      "kw_recall": 1.0,
+      "elapsed_s": 15.261,
+      "answer_chars": 1768,
+      "error": null,
+      "pass_": true
+    },
+    {
+      "question": "Show me the non-revenue water situation",
+      "expected_tool": "query_monthly_diff",
+      "expected_keywords": [
+        "diff",
+        "main"
+      ],
+      "tool_calls": [
+        "query_monthly_diff",
+        "query_monthly_diff"
+      ],
+      "tool_match": true,
+      "kw_recall": 1.0,
+      "elapsed_s": 18.635,
+      "answer_chars": 1449,
+      "error": null,
+      "pass_": true
+    },
+    {
+      "question": "Compare January and February consumption",
+      "expected_tool": "query_consumption",
+      "expected_keywords": [
+        "January",
+        "February"
+      ],
+      "tool_calls": [
+        "query_consumption",
+        "query_consumption",
+        "get_data_overview",
+        "get_data_overview",
+        "query_consumption",
+        "query_consumption"
+      ],
+      "tool_match": true,
+      "kw_recall": 1.0,
+      "elapsed_s": 16.98,
+      "answer_chars": 893,
+      "error": null,
+      "pass_": true
+    },
+    {
+      "question": "Draw a trend chart for Zone-2",
+      "expected_tool": "generate_chart",
+      "expected_keywords": [
+        "Zone-2"
+      ],
+      "tool_calls": [
+        "generate_chart",
+        "generate_chart"
+      ],
+      "tool_match": true,
+      "kw_recall": 1.0,
+      "elapsed_s": 17.736,
+      "answer_chars": 1649,
+      "error": null,
+      "pass_": true
+    },
+    {
+      "question": "Investigate meter 3586950 anomalies",
+      "expected_tool": "analyze_anomaly",
+      "expected_keywords": [
+        "3586950"
+      ],
+      "tool_calls": [
+        "query_anomalies",
+        "get_predictions",
+        "query_anomalies",
+        "get_predictions"
+      ],
+      "tool_match": false,
+      "kw_recall": 1.0,
+      "elapsed_s": 20.072,
+      "answer_chars": 1567,
+      "error": null,
+      "pass_": false
+    },
+    {
+      "question": "Generate a Zone-3 monthly report",
+      "expected_tool": "generate_report",
+      "expected_keywords": [
+        "Zone-3"
+      ],
+      "tool_calls": [
+        "generate_report",
+        "generate_report"
+      ],
+      "tool_match": true,
+      "kw_recall": 1.0,
+      "elapsed_s": 9.869,
+      "answer_chars": 1181,
+      "error": null,
+      "pass_": true
+    },
+    {
+      "question": "What is the total daily consumption by DMA?",
+      "expected_tool": "sql_query",
+      "expected_keywords": [
+        "dma",
+        "total"
+      ],
+      "tool_calls": [
+        "list_tables_tool",
+        "list_tables_tool",
+        "get_table_schema_tool",
+        "get_table_schema_tool",
+        "sql_query",
+        "sql_query"
+      ],
+      "tool_match": true,
+      "kw_recall": 1.0,
+      "elapsed_s": 18.492,
+      "answer_chars": 1025,
+      "error": null,
+      "pass_": true
+    },
+    {
+      "question": "Top 5 meters by total consumption",
+      "expected_tool": "sql_query",
+      "expected_keywords": [
+        "meterId",
+        "DESC"
+      ],
+      "tool_calls": [
+        "list_tables_tool",
+        "list_tables_tool",
+        "get_table_schema_tool",
+        "get_table_schema_tool",
+        "sql_query",
+        "sql_query"
+      ],
+      "tool_match": true,
+      "kw_recall": 0.0,
+      "elapsed_s": 13.005,
+      "answer_chars": 667,
+      "error": null,
+      "pass_": false
+    },
+    {
+      "question": "What is the average anomaly score by DMA?",
+      "expected_tool": "sql_query",
+      "expected_keywords": [
+        "anomalyScore",
+        "AVG"
+      ],
+      "tool_calls": [
+        "list_tables_tool",
+        "get_table_schema_tool",
+        "list_tables_tool",
+        "get_table_schema_tool",
+        "sql_query",
+        "sql_query"
+      ],
+      "tool_match": true,
+      "kw_recall": 0.5,
+      "elapsed_s": 13.621,
+      "answer_chars": 914,
+      "error": null,
+      "pass_": true
+    },
+    {
+      "question": "What tables are available?",
+      "expected_tool": "list_tables_tool",
+      "expected_keywords": [
+        "anomalies",
+        "meters"
+      ],
+      "tool_calls": [
+        "list_tables_tool",
+        "list_tables_tool"
+      ],
+      "tool_match": true,
+      "kw_recall": 1.0,
+      "elapsed_s": 7.293,
+      "answer_chars": 913,
+      "error": null,
+      "pass_": true
+    },
+    {
+      "question": "What columns does the anomalies table have?",
+      "expected_tool": "get_table_schema_tool",
+      "expected_keywords": [
+        "dma",
+        "anomalyScore"
+      ],
+      "tool_calls": [
+        "get_table_schema_tool",
+        "get_table_schema_tool"
+      ],
+      "tool_match": true,
+      "kw_recall": 1.0,
+      "elapsed_s": 9.604,
+      "answer_chars": 801,
+      "error": null,
+      "pass_": true
+    },
+    {
+      "question": "Show me daily consumption data",
+      "expected_tool": "query_consumption",
+      "expected_keywords": [
+        "date"
+      ],
+      "tool_calls": [
+        "query_consumption",
+        "query_consumption"
+      ],
+      "tool_match": true,
+      "kw_recall": 1.0,
+      "elapsed_s": 16.995,
+      "answer_chars": 1420,
+      "error": null,
+      "pass_": true
+    },
+    {
+      "question": "List all meters in Zone-2",
+      "expected_tool": "query_meters",
+      "expected_keywords": [
+        "Zone-2"
+      ],
+      "tool_calls": [
+        "query_meters",
+        "query_meters"
+      ],
+      "tool_match": true,
+      "kw_recall": 1.0,
+      "elapsed_s": 9.303,
+      "answer_chars": 1133,
+      "error": null,
+      "pass_": true
+    },
+    {
+      "question": "Show me watch anomalies",
+      "expected_tool": "query_anomalies",
+      "expected_keywords": [
+        "watch"
+      ],
+      "tool_calls": [
+        "query_anomalies",
+        "query_anomalies"
+      ],
+      "tool_match": true,
+      "kw_recall": 1.0,
+      "elapsed_s": 11.607,
+      "answer_chars": 1271,
+      "error": null,
+      "pass_": true
+    },
+    {
+      "question": "Compare Zone-1 and Zone-3 consumption",
+      "expected_tool": "query_consumption",
+      "expected_keywords": [
+        "Zone-1",
+        "Zone-3"
+      ],
+      "tool_calls": [
+        "query_consumption",
+        "query_consumption",
+        "query_consumption",
+        "query_consumption"
+      ],
+      "tool_match": true,
+      "kw_recall": 1.0,
+      "elapsed_s": 13.291,
+      "answer_chars": 1117,
+      "error": null,
+      "pass_": true
+    },
+    {
+      "question": "Generate a comprehensive report",
+      "expected_tool": "generate_report",
+      "expected_keywords": [
+        "anomalies",
+        "consumption"
+      ],
+      "tool_calls": [
+        "get_data_overview",
+        "get_data_overview",
+        "list_tables_tool",
+        "list_tables_tool",
+        "get_table_schema_tool",
+        "get_table_schema_tool",
+        "get_table_schema_tool",
+        "get_table_schema_tool",
+        "get_table_schema_tool",
+        "get_table_schema_tool",
+        "get_table_schema_tool",
+        "get_table_schema_tool",
+        "sql_query",
+        "sql_query",
+        "sql_query",
+        "sql_query",
+        "sql_query",
+        "sql_query",
+        "sql_query",
+        "sql_query",
+        "sql_query",
+        "sql_query",
+        "sql_query",
+        "sql_query",
+        "sql_query",
+        "sql_query",
+        "sql_query",
+        "sql_query"
+      ],
+      "tool_match": false,
+      "kw_recall": 0.0,
+      "elapsed_s": 97.49,
+      "answer_chars": 1391,
+      "error": null,
+      "pass_": false
+    }
+  ]
+}

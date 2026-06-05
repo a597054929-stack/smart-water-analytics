@@ -4,6 +4,18 @@ All notable changes to the Smart Water Analytics project.
 
 ## 2026-06-05
 
+### Agent Optimization — Few-shot Examples + Self-Refinement SQL
+- **Few-shot examples in system prompt** (`agent/agent_executor.py`) — added 7 worked examples (pure JSON / pure SQL / top-N / mixed compare / Cantonese fuzzy DMA / multi-step investigate / schema-discovery→aggregate) + a routing decision rule. Prompt tokens: 304 → 723 (+138%) but the examples make the JSON-vs-SQL split explicit, so the LLM no longer has to infer it from prose.
+- **Self-refinement SQL loop** (`agent/sql_refinement.py`, new ~200 lines) — wraps the raw `sql_query` tool: on error, asks an LLM (with 3 few-shot examples) to rewrite the SQL and retries up to 2 times. Critically, retries are **inside the tool, not in ReAct** — the agent doesn't see them, so a self-repair doesn't consume a ReAct step. Returns a structured response with an `attempts` key on success and `refinement_exhausted: true` on failure. Set `SQL_REFINEMENT_LOG=/path/to/log.jsonl` to record every refinement event for inspection.
+- **Agent tool registration updated** (`agent/agent_tools.py`) — `ALL_TOOLS` now prefers the refined `sql_query` from `sql_refinement`; falls back to raw if the refinement module can't load (e.g. missing LLM config). `list_tables_tool` and `get_table_schema_tool` stay raw (they don't fail meaningfully).
+- **11 new tests** in `tests/test_sql_refinement.py` — cover `_extract_sql` (bare / fenced / with-WITH / trailing-semicolon / prose-prefix), `_FEW_SHOT` prompt sanity, drop-in signature parity, first-try success path, and 2 live LLM tests (gated behind `RUN_LIVE=1`). All 63 unit tests pass.
+- **QA pairs sync** (`tests/qa_pairs.json`) — update 4 stale `expected_tool` values to match the merged tool names: `compare_months` / `query_weekly` / `query_daily_dma` / `get_building_predictions` all now point at the current `query_consumption` (with mode) / `get_predictions` (with query_type). The eval was previously grading against tool names that no longer exist.
+
+### Evaluation Results
+- **Before (baseline, after QA-pair fix)**: 18/25 = 72% pass, 80% tool accuracy, 80% avg keyword recall, 17s avg latency
+- Self-refinement verified on 4 smoke cases: typo table name (2 attempts, repaired), bad column (2 attempts, repaired), correct query (1 attempt, no LLM call), garbage (3 attempts, exhausted with structured error)
+- Threshold stays at 80%; the remaining 7 failures are routing edge cases (e.g. "top 5 anomalies" — LLM picks `query_anomalies` instead of `sql_query` even though the examples show both paths) rather than SQL errors
+
 ### Data Quality
 - **`scripts/real_data_converter.py` now caps per-meter daily consumption at 40,000 m³ using `abs(consumption) > MAX_METER_DAILY`** — catches both positive typos (e.g. +42,940,982 m³) and negative meter rollovers. Largest legitimate consumer in Macau is ~5,000-15,000 m³/day; 40,000 leaves headroom for industrial / large resort users but still catches the 1月8日 incident.
 - Add `data_errors.json` sidecar (append-only cumulative) — powers the Data Integrity banner, anomaly type filter, and CSV export. New entries are appended on every converter run; old entries are preserved across runs.

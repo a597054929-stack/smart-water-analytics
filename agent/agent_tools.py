@@ -518,14 +518,27 @@ ALL_TOOLS = [
 # `agent/` has no __init__.py and is not a real package, so a relative
 # import like `from .sql_tools` would always fail. Use the same sys.path
 # bootstrap as sql_tools.py itself.
+#
+# 2026-06-05: sql_query now self-refines on errors. We prefer the refined
+# version from sql_refinement (drop-in replacement: same name, same
+# signature, same return shape plus an `attempts` key on success and
+# `refinement_exhausted` on failure). Falls back to the raw tool if
+# the refinement module can't be imported (e.g. missing LLM config).
 try:
     import sys
     from pathlib import Path
     _agent_dir = str(Path(__file__).resolve().parent)
     if _agent_dir not in sys.path:
         sys.path.insert(0, _agent_dir)
-    from sql_tools import ALL_SQL_TOOLS  # type: ignore
-    ALL_TOOLS = list(ALL_TOOLS) + list(ALL_SQL_TOOLS)
+    from sql_tools import list_tables_tool, get_table_schema_tool  # raw helpers
+    try:
+        from sql_refinement import sql_query  # refined: 2 retries on error
+        _sql_query = sql_query
+    except Exception as _ref_err:
+        import sys as _sys
+        print(f"[agent_tools] self-refinement unavailable, using raw sql_query: {_ref_err}", file=_sys.stderr)
+        from sql_tools import sql_query as _sql_query  # type: ignore
+    ALL_TOOLS = list(ALL_TOOLS) + [list_tables_tool, get_table_schema_tool, _sql_query]
 except (ImportError, Exception) as _sql_err:
     # Don't silently swallow this — it means SQL tools are missing and the
     # agent will tell the user "no SQL tools available". Surface it to the

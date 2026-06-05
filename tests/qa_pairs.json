@@ -54,14 +54,14 @@
     {
       "id": "building_predictions",
       "question": "Show predictions for a building",
-      "expected_tool": "get_building_predictions",
+      "expected_tool": "get_predictions",
       "expected_keywords": ["building"],
       "difficulty": "medium"
     },
     {
       "id": "weekly_trend",
       "question": "What is the weekly trend?",
-      "expected_tool": "query_weekly",
+      "expected_tool": "query_consumption",
       "expected_keywords": ["week"],
       "difficulty": "easy"
     },
@@ -82,7 +82,7 @@
     {
       "id": "compare_two_months",
       "question": "Compare January and February consumption",
-      "expected_tool": "compare_months",
+      "expected_tool": "query_consumption",
       "expected_keywords": ["January", "February"],
       "difficulty": "medium"
     },
@@ -145,7 +145,7 @@
     {
       "id": "daily_dma_rainy",
       "question": "Show me daily consumption data",
-      "expected_tool": "query_daily_dma",
+      "expected_tool": "query_consumption",
       "expected_keywords": ["date"],
       "difficulty": "easy"
     },
@@ -166,7 +166,7 @@
     {
       "id": "compare_two_dmas",
       "question": "Compare Zone-1 and Zone-3 consumption",
-      "expected_tool": "compare_months",
+      "expected_tool": "query_consumption",
       "expected_keywords": ["Zone-1", "Zone-3"],
       "difficulty": "medium"
     },
