@@ -1,17 +1,16 @@
 // === KPI 計算 ===
 function renderKPI(){
-  var dma=findD(D.dma,selDate);
+  var dma=findD(D.dmaDirect,selDate);
   if(!dma)return '';
   var dateIdx=D.dates.indexOf(selDate);
-  var prevDma=dateIdx>0?findD(D.dma,D.dates[dateIdx-1]):null;
+  var prevDma=dateIdx>0?findD(D.dmaDirect,D.dates[dateIdx-1]):null;
 
   // 總用水量
-  var totalToday=0,totalPrev=0,totalRes=0,totalNonRes=0,resCnt=0,nonResCnt=0;
+  var totalToday=0,totalPrev=0;
   for(var k in dma.dmas){
     var v=dma.dmas[k];
     if(k==='未分類'||k==='Unclassified')continue;
-    totalToday+=v.total;totalRes+=v.residential;totalNonRes+=v.nonResidential;
-    resCnt+=v.resCount;nonResCnt+=v.nonResCount;
+    totalToday+=v.total;
   }
   if(prevDma)for(var k in prevDma.dmas){if(k!=='未分類'&&k!=='Unclassified')totalPrev+=prevDma.dmas[k].total;}
 
@@ -29,33 +28,69 @@ function renderKPI(){
     nrwPct=mt>0?((mt-st)/mt*100).toFixed(1)+'%':'-';
   }
 
-  // 今日異常數
-  var anomToday=D.anomalies.filter(function(a){return a.date===selDate;}).length;
-
-  // 住宅占比
-  var resPct=totalToday>0?(totalRes/totalToday*100).toFixed(1):0;
+  // 今日異常 + 類型分組（給 hover 提示用）
+  var anomTodayList=D.anomalies.filter(function(a){return a.date===selDate;});
+  var anomToday=anomTodayList.length;
+  var anomBreakdown={'spike':0,'drop':0,'zero':0,'watch':0,'data_error':0};
+  anomTodayList.forEach(function(a){if(anomBreakdown[a.type]!==undefined)anomBreakdown[a.type]++;});
+  var anomTip='類型分組: 暴增 '+anomBreakdown.spike+' | 暴跌 '+anomBreakdown.drop
+    +' | 歸零 '+anomBreakdown.zero+' | 關注 '+anomBreakdown.watch
+    +' | 數據異常 '+anomBreakdown.data_error
+    +'\\n（點擊切到異常頁）';
 
   var nrwSub=D.diff&&D.diff.length?D.diff[D.diff.length-1].month:'';
   return '<div class="kpi-grid">'
     +'<div class="kpi"><div class="label">今日總用水</div><div class="value">'+fmt(totalToday)+'</div><div class="sub">m³</div>'+(changePct!==null?'<div class="change '+changeClass+'">'+changeIcon+Math.abs(changePct)+'% 較昨日</div>':'')+'</div>'
     +'<div class="kpi"><div class="label">NRW率</div><div class="value">'+nrwPct+'</div><div class="sub">'+nrwSub+'</div></div>'
-    +'<div class="kpi"><div class="label">住宅占比</div><div class="value">'+resPct+'%</div><div class="sub">'+fmt(totalRes)+' m³</div></div>'
-    +'<div class="kpi"><div class="label">今日異常</div><div class="value" style="'+(anomToday>0?'color:var(--red)':'')+'">'+anomToday+'</div><div class="sub">條告警</div></div>'
+    +'<div class="kpi" style="cursor:pointer" title="'+anomTip+'" onclick="showTab(\'anomaly\');window._anomDate=\''+selDate+'\';renderAnomaly()"><div class="label">今日異常 <span style="font-size:10px;color:#94a3b8">ⓘ</span></div><div class="value" style="'+(anomToday>0?'color:var(--red)':'')+'">'+anomToday+'</div><div class="sub">條告警</div></div>'
     +'<div class="kpi"><div class="label">降雨量</div><div class="value">'+(dma.rain||0)+'</div><div class="sub">mm</div></div>'
     +'</div>';
 }
 
+// === Data Integrity 摘要 ===
+// 顯示被剔除的偽數據筆數 + 排除的總水量。點擊 → 異常頁 "數據異常" 過濾。
+function renderDataIntegrity(){
+  var errs=D.dataErrors||[];
+  if(!errs.length)return '';
+  var sorted=errs.slice().sort(function(a,b){return b.date.localeCompare(a.date);});
+  var totalExcluded=errs.reduce(function(s,e){return s+(e.rawValue||0);},0);
+  var latest=sorted[0];
+  // 最新 5 筆
+  var rows=sorted.slice(0,5).map(function(e){
+    return '<tr>'
+      +'<td>'+e.date+'</td>'
+      +'<td class="contract">'+esc(e.meterId)+'</td>'
+      +'<td style="color:#ef4444;font-weight:600;text-align:right">'+fmt(e.rawValue)+' m³</td>'
+      +'<td style="font-size:11px;color:#94a3b8">'+esc(e.reason||'')+'</td>'
+      +'</tr>';
+  }).join('');
+  return '<section class="card" style="border-left:3px solid #ef4444">'
+    +'<h2 style="display:flex;align-items:center;gap:8px">'
+    +'🛡️ 數據完整性 <span class="hint">(已自動識別並排除 '+errs.length+' 筆異常值)</span>'
+    +'<button class="nb" style="margin-left:auto" onclick="showTab(\'anomaly\');window._anomType=\'data_error\';renderAnomaly()">查看全部 →</button>'
+    +'</h2>'
+    +'<div class="kpi-grid" style="margin-bottom:12px">'
+    +'<div class="kpi"><div class="label">排除筆數</div><div class="value" style="color:#ef4444">'+errs.length+'</div><div class="sub">筆</div></div>'
+    +'<div class="kpi"><div class="label">累計排除水量</div><div class="value">'+fmt(totalExcluded)+'</div><div class="sub">m³</div></div>'
+    +'<div class="kpi"><div class="label">最近一筆</div><div class="value" style="font-size:18px">'+latest.date+'</div><div class="sub">水表 '+esc(latest.meterId)+'</div></div>'
+    +'</div>'
+    +'<details><summary style="cursor:pointer;color:#94a3b8;font-size:12px;margin-bottom:6px">▶ 最近 5 筆明細</summary>'
+    +'<table><thead><tr><th>日期</th><th>水表</th><th style="text-align:right">原始值</th><th>原因</th></tr></thead><tbody>'+rows+'</tbody></table>'
+    +'</details></section>';
+}
+
 // === 首頁概覽 ===
 function renderHome(){
-  var dma=findD(D.dma,selDate),top=findD(D.top,selDate),rain=dma?dma.rain||0:0;
+  var dma=findD(D.dmaDirect,selDate),top=findD(D.topDirect,selDate),rain=dma?dma.rain||0:0;
   var h='<section class="card"><h2>📅 選擇日期</h2><div class="dc"><input type="date" class="di" min="'+D.dates[0]+'" max="'+D.dates[D.dates.length-1]+'" value="'+selDate+'" onchange="pickDate(this.value)"><div class="dn"><button class="nb" onclick="changeDate(-1)" '+(D.dates.indexOf(selDate)<=0?'disabled':'')+'>◀ 前一天</button><span class="dd">'+selDate+(rain?' 🌧️'+rain+'mm':'')+'</span><button class="nb" onclick="changeDate(1)" '+(D.dates.indexOf(selDate)>=D.dates.length-1?'disabled':'')+'>後一天 ▶</button></div><div class="qd"><button class="qb" onclick="pickDate(D.dates[D.dates.length-1])">最新</button><button class="qb" onclick="pickDate(D.dates[0])">最早</button></div></div></section>';
   h+=renderKPI();
+  h+=renderDataIntegrity();
   h+='<section class="card"><h2>🏚️ DMA分區概覽 <span class="hint">（點擊進入詳情）</span></h2><div class="dg">';
   if(dma)for(var k in dma.dmas){var v=dma.dmas[k];var ds=calcDmaStats(k);h+='<div class="dc2" style="border-left-color:'+(DC[k]||'#666')+'" onclick="pickDma(\''+esc(k)+'\')"><div class="dn2">'+esc(k)+' →</div><div class="dv">'+fmt(v.total)+' m³</div><div class="ds"><span>🏠 住宅: '+fmt(v.residential)+' m³ ('+v.resCount+'表)</span><span>🏢 非住宅: '+fmt(v.nonResidential)+' m³ ('+v.nonResCount+'表)</span><span>📊 日均: '+fmt(ds.avgDaily)+' m³</span><span>⚠ 異常: '+ds.anomalyCount+'條</span><span>💧 NRW: '+ds.nrwPct+'</span></div></div>';}
   h+='</div></section>';
 
   // DMA 對比分析
-  var dmaNames2=D.dma.length?Object.keys(D.dma[0].dmas).filter(function(k2){return k2!=='未分類'&&k2!=='Unclassified'}):[];
+  var dmaNames2=D.dmaDirect.length?Object.keys(D.dmaDirect[0].dmas).filter(function(k2){return k2!=='未分類'&&k2!=='Unclassified'}):[];
   h+='<section class="card"><h2>📊 DMA 對比分析</h2>';
   h+='<div class="ms" style="margin-bottom:6px"><button class="mb active" onclick="drawDmaCompare(\'trend\',this)">用水趨勢</button><button class="mb" onclick="drawDmaCompare(\'nrw\',this)">NRW 對比</button><button class="mb" onclick="drawDmaCompare(\'anomaly\',this)">異常分布</button><button class="mb" onclick="drawDmaCompare(\'residential\',this)">住宅/非住宅</button></div>';
   h+='<div class="chart-actions"><button class="export-btn" onclick="exportChart(\'dmaCompare\',\'DMA對比\')">匯出 PNG</button></div>';
@@ -74,7 +109,7 @@ function renderHome(){
 
 // === DMA 詳情 ===
 function renderDma(){
-  var t20=findD(D.top20dma,selDate),dma=findD(D.dma,selDate);
+  var t20=findD(D.top20dmaDirect,selDate),dma=findD(D.dmaDirect,selDate);
   var info=dma&&dma.dmas&&dma.dmas[selDma];
   var items=t20&&t20.byDma&&t20.byDma[selDma]?t20.byDma[selDma]:[];
   var h='<section class="card"><div class="breadcrumb"><span onclick="showTab(\'home\')">概覽</span><span class="sep">›</span><span class="current" style="color:'+(DC[selDma]||'#38bdf8')+'">'+esc(selDma)+'</span><span class="sep">›</span><span class="current">'+selDate+'</span></div>';
@@ -99,8 +134,8 @@ function generateReport(type){
   else{endDate=dates[dates.length-1];startDate=dates[Math.max(0,dates.length-30)];title='月報 ('+startDate+' ~ '+endDate+')';}
   var periodDates=dates.filter(d=>d>=startDate&&d<=endDate);
   var dmaStats={};
-  for(var dmaName of Object.keys(D.dma[0].dmas)){dmaStats[dmaName]={total:0,count:0,residential:0,nonResidential:0};}
-  for(var d of periodDates){var dayData2=D.dma.find(x=>x.date===d);if(!dayData2)continue;for(var[dmaName,info]of Object.entries(dayData2.dmas)){if(dmaStats[dmaName]){dmaStats[dmaName].total+=info.total;dmaStats[dmaName].residential+=info.residential;dmaStats[dmaName].nonResidential+=info.nonResidential;dmaStats[dmaName].count++;}}}
+  for(var dmaName of Object.keys(D.dmaDirect[0].dmas)){dmaStats[dmaName]={total:0,count:0,residential:0,nonResidential:0};}
+  for(var d of periodDates){var dayData2=D.dmaDirect.find(x=>x.date===d);if(!dayData2)continue;for(var[dmaName,info]of Object.entries(dayData2.dmas)){if(dmaStats[dmaName]){dmaStats[dmaName].total+=info.total;dmaStats[dmaName].residential+=info.residential;dmaStats[dmaName].nonResidential+=info.nonResidential;dmaStats[dmaName].count++;}}}
   var html='<section class="card"><h2>'+title+'</h2>';
   html+='<table><thead><tr><th>DMA</th><th class="num">總用水(m³)</th><th class="num">日均(m³)</th></tr></thead><tbody>';
   for(var[dmaName,stats]of Object.entries(dmaStats)){if(stats.count===0)continue;var avg=stats.total/stats.count;html+='<tr><td>'+dmaName+'</td><td class="num">'+Math.round(stats.total).toLocaleString()+'</td><td class="num">'+Math.round(avg).toLocaleString()+'</td></tr>';}
@@ -112,7 +147,7 @@ function closeReport(){document.getElementById('reportModal').style.display='non
 
 function calcDmaStats(dma){
   var total=0,count=0,res=0,nonRes=0,anomalyCount=0;
-  D.dma.forEach(function(d){
+  D.dmaDirect.forEach(function(d){
     var info=d.dmas[dma];
     if(info){total+=info.total;count++;res+=info.residential;nonRes+=info.nonResidential;}
   });
@@ -138,13 +173,13 @@ function drawDmaCompare(view,btn){
   var el=document.getElementById('dmaCompareChart');
   if(!el)return;
   var c=initChart(el,'dmaCompare');
-  var dates=D.dma.map(function(d){return d.date});
-  var dmaNames=D.dma.length?Object.keys(D.dma[0].dmas).filter(function(k){return k!=='未分類'&&k!=='Unclassified'}):[];
+  var dates=D.dmaDirect.map(function(d){return d.date});
+  var dmaNames=D.dmaDirect.length?Object.keys(D.dmaDirect[0].dmas).filter(function(k){return k!=='未分類'&&k!=='Unclassified'}):[];
 
   if(view==='trend'){
     var series=dmaNames.map(function(dma){
       return{name:dma,type:'line',smooth:true,showSymbol:false,
-        data:D.dma.map(function(d){return d.dmas[dma]?Math.round(d.dmas[dma].total):0}),
+        data:D.dmaDirect.map(function(d){return d.dmas[dma]?Math.round(d.dmas[dma].total):0}),
         itemStyle:{color:DC[dma]||'#6b6b80'},lineStyle:{width:2}};
     });
     c.setOption({backgroundColor:'transparent',tooltip:{trigger:'axis'},legend:{data:dmaNames,textStyle:{color:'#94a3b8'}},
@@ -190,7 +225,7 @@ function drawDmaCompare(view,btn){
   else if(view==='residential'){
     var resData=dmaNames.map(function(dma){
       var total=0,res=0;
-      D.dma.forEach(function(d){if(d.dmas[dma]){total+=d.dmas[dma].total;res+=d.dmas[dma].residential;}});
+      D.dmaDirect.forEach(function(d){if(d.dmas[dma]){total+=d.dmas[dma].total;res+=d.dmas[dma].residential;}});
       return total>0?Math.round(res/total*1000)/10:0;
     });
     var nonResData=resData.map(function(v){return Math.round((100-v)*10)/10});

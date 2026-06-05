@@ -1,0 +1,45 @@
+{
+  "per_column": {
+    "total": {
+      "type": "numeric",
+      "test": "ks_2samp",
+      "p_value": 1.0,
+      "statistic": 0.0,
+      "drift": false,
+      "n_baseline": 48,
+      "n_current": 48
+    },
+    "anomalyScore": {
+      "type": "numeric",
+      "test": "ks_2samp",
+      "p_value": 1.0,
+      "statistic": 0.0,
+      "drift": false,
+      "n_baseline": 48,
+      "n_current": 48
+    },
+    "type": {
+      "type": "categorical",
+      "test": "chi2",
+      "p_value": 1.0,
+      "statistic": 0.0,
+      "drift": false,
+      "n_baseline": null,
+      "n_current": null
+    },
+    "dma": {
+      "type": "categorical",
+      "test": "chi2",
+      "p_value": 1.0,
+      "statistic": 0.0,
+      "drift": false,
+      "n_baseline": null,
+      "n_current": null
+    }
+  },
+  "drift_count": 0,
+  "flagged_columns": [],
+  "overall_status": "ok",
+  "threshold": 0.05,
+  "generated_at": "2026-06-05T06:36:39.207919Z"
+}

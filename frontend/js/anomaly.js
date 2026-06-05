@@ -22,28 +22,64 @@ function renderAnomaly(){
   h+='<span style="'+(window._anomType==='drop'?aOn:aOff)+'" onclick="window._anomType=&quot;drop&quot;;renderAnomaly()">暴跌</span>';
   h+='<span style="'+(window._anomType==='zero'?aOn:aOff)+'" onclick="window._anomType=&quot;zero&quot;;renderAnomaly()">歸零</span>';
   h+='<span style="'+(window._anomType==='watch'?aOn:aOff)+'" onclick="window._anomType=&quot;watch&quot;;renderAnomaly()">關注</span>';
+  h+='<span style="'+(window._anomType==='data_error'?aOn:aOff)+'" onclick="window._anomType=&quot;data_error&quot;;renderAnomaly()">數據異常</span>';
   h+='<span style="'+aOff+'margin-left:6px" onclick="exportAnomalyCsv()">💾 匯出CSV</span>';
+  // Sort: 'date' (default — the order the converter wrote) or 'score'
+  // (highest anomalyScore first; useful when scanning many entries).
+  if(!window._anomSort)window._anomSort='date';
+  h+='<span style="display:inline-block;margin-left:8px;color:#94a3b8;font-size:11px">排序:</span>';
+  h+='<span style="'+(window._anomSort==='date'?aOn:aOff)+'" onclick="window._anomSort=&quot;date&quot;;renderAnomaly()">日期</span>';
+  h+='<span style="'+(window._anomSort==='score'?aOn:aOff)+'" onclick="window._anomSort=&quot;score&quot;;renderAnomaly()">分數</span>';
   h+='</div>';
-  var byType={'spike':0,'drop':0,'zero':0,'watch':0};
+  var byType={'spike':0,'drop':0,'zero':0,'watch':0,'data_error':0};
   D.anomalies.forEach(function(a){if(byType.hasOwnProperty(a.type))byType[a.type]++;});
-  h+='<p style="color:#64748b;font-size:11px;margin-bottom:8px">暴增'+byType.spike+' | 暴跌'+byType.drop+' | 歸零'+byType.zero+' | 關注'+byType.watch+' (共'+D.anomalies.length+'條)</p>';
+  h+='<p style="color:#64748b;font-size:11px;margin-bottom:8px">暴增'+byType.spike+' | 暴跌'+byType.drop+' | 歸零'+byType.zero+' | 關注'+byType.watch+' | 數據異常'+byType.data_error+' (共'+D.anomalies.length+'條)</p>';
   var dateFilter=window._anomDate;
-  var filtered=dateFilter?D.anomalies.filter(function(a){return a.date===dateFilter}):D.anomalies.slice(0,200);
+  // When no date filter is set, sort then slice — sorting by score means
+  // "show me the worst 200" instead of "the latest 200".
+  var pool = dateFilter ? D.anomalies.filter(function(a){return a.date===dateFilter}) : D.anomalies.slice();
+  if(window._anomSort==='score'){
+    // data_error rows always surface first (severity='high'), then by
+    // anomalyScore desc, undefined scores last.
+    pool.sort(function(a,b){
+      if(a.type==='data_error' && b.type!=='data_error') return -1;
+      if(b.type==='data_error' && a.type!=='data_error') return 1;
+      var sa = (a.anomalyScore==null) ? -1 : a.anomalyScore;
+      var sb = (b.anomalyScore==null) ? -1 : b.anomalyScore;
+      return sb - sa;
+    });
+  }
+  var filtered = dateFilter ? pool : pool.slice(0, 200);
   if(window._anomType!=='all')filtered=filtered.filter(function(a){return a.type===window._anomType;});
-  filtered=filtered.filter(function(a){return a.anomalyScore>=_anomCfg.minScore;});
-  if(_anomCfg.spikeMult<4)filtered=filtered.filter(function(a){return a.type!=='spike'||a.total/a.pastMean>=_anomCfg.spikeMult;});
+  // data_error entries don't have anomalyScore / pastMean — skip those
+  // filters for them. The detection is "value > 40,000 m³" so score
+  // would be undefined; render them as high-severity rows.
+  if(window._anomType!=='data_error'){
+    filtered=filtered.filter(function(a){return a.anomalyScore===undefined||a.anomalyScore>=_anomCfg.minScore;});
+    if(_anomCfg.spikeMult<4)filtered=filtered.filter(function(a){return a.type!=='spike'||!a.pastMean||a.total/a.pastMean>=_anomCfg.spikeMult;});
+  }
   if(filtered.length){
     h+='<table><thead><tr><th>日期</th><th>類型</th><th>表位編號</th><th>建築物</th><th>DMA</th><th class="num">當日</th><th class="num">14天均值</th><th class="num">分數</th><th>原因</th></tr></thead><tbody>';
     filtered.forEach(function(a){
-      var tc2={'spike':'#f87171','drop':'#fb923c','zero':'#a78bfa','watch':'#fbbf24'};
-      var tn={'spike':'暴增','drop':'暴跌','zero':'歸零','watch':'關注'};
-      h+='<tr class="warn" style="cursor:pointer" onclick="window._anomTarget={meterId:'+JSON.stringify(esc(a.meterId)).replace(/"/g,'&quot;')+',contractId:'+JSON.stringify(mask(a.contractId||a.meterId)).replace(/"/g,'&quot;')+',anomalyDate:'+JSON.stringify(a.date).replace(/"/g,'&quot;')+',anomalyType:'+JSON.stringify(a.type).replace(/"/g,'&quot;')+'};showAnomCurve()">';
+      var tc2={'spike':'#f87171','drop':'#fb923c','zero':'#a78bfa','watch':'#fbbf24','data_error':'#ef4444'};
+      var tn={'spike':'暴增','drop':'暴跌','zero':'歸零','watch':'關注','data_error':'數據異常'};
+      // data_error rows aren't clickable for the curve overlay (no
+      // pastMean context) — they were already excluded from the cache
+      // so the 14-day history wouldn't be meaningful.
+      var onClick = a.type==='data_error' ? '' :
+        'onclick="window._anomTarget={meterId:'+JSON.stringify(esc(a.meterId)).replace(/"/g,'&quot;')+
+        ',contractId:'+JSON.stringify(mask(a.contractId||a.meterId)).replace(/"/g,'&quot;')+
+        ',anomalyDate:'+JSON.stringify(a.date).replace(/"/g,'&quot;')+
+        ',anomalyType:'+JSON.stringify(a.type).replace(/"/g,'&quot;')+'};showAnomCurve()"';
+      h+='<tr class="warn" style="cursor:'+(a.type==='data_error'?'default':'pointer')+'" '+onClick+'>';
       h+='<td>'+a.date+'</td>';
       h+='<td><span class="tag" style="background:'+(tc2[a.type]||'#666')+'">'+tn[a.type]+'</span></td>';
       h+='<td>'+esc(a.meterId)+'</td>';
-      h+='<td class="'+(isUnlocked?'':'masked')+'" onclick="clickMasked()">'+maskBuilding(a.buildingName)+'</td>';
-      h+='<td><span class="tag" style="background:'+(DC[a.dma]||'#666')+'">'+esc(a.dma)+'</span></td>';
-      h+='<td class="num">'+fmt(a.total)+'</td>';
+      h+='<td class="'+(isUnlocked?'':'masked')+'" onclick="clickMasked()">'+maskBuilding(a.buildingName||'')+'</td>';
+      h+='<td><span class="tag" style="background:'+(DC[a.dma]||'#666')+'">'+esc(a.dma||'')+'</span></td>';
+      // For data_error rows show the raw dropped value; for the rest
+      // show the daily total.
+      h+='<td class="num">'+(a.type==='data_error'?fmt(a.rawValue):fmt(a.total))+'</td>';
       h+='<td class="num">'+(a.pastMean?fmt(a.pastMean):'-')+'</td>';
       h+='<td class="num '+(a.anomalyScore>=0.7?'neg':'')+'">'+(a.anomalyScore!=null?a.anomalyScore.toFixed(2):'-')+'</td>';
       h+='<td style="font-size:11px">'+a.reason+'</td></tr>';
@@ -117,6 +153,18 @@ function exportAnomalyCsv(){
   if(window._anomType&&window._anomType!=='all')anoms=anoms.filter(function(a){return a.type===window._anomType});
   var rows=[['日期','類型','水表ID','建築物','DMA','當日','14天均值','分數','原因']];
   anoms.forEach(function(a){rows.push([a.date,a.type,a.meterId,a.buildingName||'',a.dma||'',a.total,a.pastMean||'',a.anomalyScore!=null?a.anomalyScore.toFixed(3):'',a.reason||''])});
+  // data_error 行的 rawValue/total 字段差異很大（total 可能是 0 或 undefined）
+  // 所以單獨開一個區塊，每行以 "#DATA_ERROR" 開頭作標記，方便 Excel
+  // 用篩選/IF 區分。
+  if((D.dataErrors||[]).length){
+    rows.push([]);  // 空行分隔
+    rows.push(['# 以下為 data_errors 區塊：源數據識別為偽值，已從快取中排除']);
+    rows.push(['日期','類型','水表ID','建築物','DMA','原始值(m³)','原因']);
+    D.dataErrors.forEach(function(e){
+      var a = D.anomalies.find(function(x){return x.type==='data_error' && x.date===e.date && x.meterId===e.meterId});
+      rows.push([e.date,'data_error',e.meterId,(a&&a.buildingName)||'',(a&&a.dma)||'',e.rawValue,e.reason||'']);
+    });
+  }
   exportCsv(rows,'anomalies.csv');
 }
 

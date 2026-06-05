@@ -32,9 +32,9 @@ const dataFiles = useRealData ? [
   {name:'search_index.json', src:activeDataDir},
   {name:'cotai_calendar.json', src:activeDataDir},
   {name:'anomalies.json', src:activeDataDir},
+  {name:'data_errors.json', src:activeDataDir},
   {name:'predictions.json', src:activeDataDir},
   {name:'predictions_fitted.json', src:activeDataDir},
-  {name:'predictions_by_building.json', src:activeDataDir},
   // 14MB per-meter daily history — needed by the anomaly "show curve"
   // overlay. Largest single file in the bundle; could be replaced with
   // a per-meter endpoint if load time becomes a problem.
@@ -44,7 +44,6 @@ const dataFiles = useRealData ? [
   // Mock data: all_data.json bundle
   {name:'all_data.json', src:dataDir},
   {name:'predictions.json', src:dataDir},
-  {name:'predictions_by_building.json', src:dataDir},
   {name:'dma_zones.geojson', src:publicDir}
 ];
 
@@ -109,25 +108,115 @@ template=template.replace(
 //   - Mock data: load all_data.json (single big file, ~3.8MB)
 //   - Real data: load individual JSONs in parallel (~2MB total, no 180MB bundle)
 const fetchCode=`
-let D,PRED,PRED_BLD;
+let D,PRED;
 
 // Helper: try a fetch, return null on 404
 const _safeFetch=(u)=>fetch(u).then(r=>r.ok?r.json():null).catch(()=>null);
 
+// Round to 2 decimals (m³). xlsx source is in liters; values in JS-land
+// are already m³, this is just for the wire-format payloads we build
+// in the loader (directDailyDma, etc.).
+function round2(x){return Math.round(x*100)/100;}
+
+// Mirror of scripts/real_data_converter.py:_build_weekly. Operates on
+// the [{date, dmas: {dma: {total, residential, nonResidential}}}] shape.
+// Returns 7-day windows: {weekStart, weekEnd, label, dates, totalByDma,
+// grandTotal, weekdayAvg, weekendAvg, wdByDmaRes, rain, dailyTotals}.
+// The trend tab recomputes its own weekly view from D.trend; this
+// preserves the historical weekly.json contract for chat tools.
+function _buildWeeklyFromDma(dailyDma){
+  if(!dailyDma || !dailyDma.length) return [];
+  const MACAU_DMAS=['澳門低區','澳門填海A區','澳大橫琴區','路氹城區'];
+  const byDate={};
+  for(const x of dailyDma) byDate[x.date]=x;
+  const first=dailyDma[0].date;
+  const last=dailyDma[dailyDma.length-1].date;
+  const startMs=Date.parse(first);
+  const lastMs=Date.parse(last);
+  const weeks=[];
+  const numWeeks=Math.ceil((lastMs-startMs)/86400000/7)+1;
+  for(let w=0; w<numWeeks; w++){
+    const wsMs=startMs+w*7*86400000;
+    const weMs=Math.min(wsMs+6*86400000, lastMs);
+    const dates=[];
+    for(let t=wsMs; t<=weMs; t+=86400000){
+      const d=new Date(t);
+      const y=d.getUTCFullYear();
+      const m=String(d.getUTCMonth()+1).padStart(2,'0');
+      const dd=String(d.getUTCDate()).padStart(2,'0');
+      dates.push(y+'-'+m+'-'+dd);
+    }
+    if(!dates.length) break;
+    const totalByDma={}; const wd={};
+    for(const dma of MACAU_DMAS){
+      totalByDma[dma]=0;
+      wd[dma]={res:0, nonRes:0, wd:0, we:0};
+    }
+    const dailyTotals=[];
+    for(const d of dates){
+      const day=byDate[d];
+      if(!day) continue;
+      let dayTotal=0;
+      for(const dma of MACAU_DMAS){
+        const v=day.dmas[dma] || {total:0, residential:0, nonResidential:0};
+        totalByDma[dma] += v.total;
+        const dow=new Date(d+'T00:00:00Z').getUTCDay();
+        const isWe=dow===0 || dow===6;
+        wd[dma][isWe?'we':'wd'] += 1;
+        // Mirror the Python converter exactly: both branches add the
+        // same res+nonRes regardless of weekend. (Looks like a
+        // long-standing bug in the Python, but the JS must match its
+        // output for chat-tool compatibility.)
+        wd[dma].res += v.residential;
+        wd[dma].nonRes += v.nonResidential;
+        dayTotal += v.total;
+      }
+      dailyTotals.push({date:d, total:Math.round(dayTotal*100)/100});
+    }
+    const grand=Object.values(totalByDma).reduce((a,b)=>a+b,0);
+    const wdRes={};
+    for(const dma of MACAU_DMAS){
+      const x=wd[dma];
+      wdRes[dma]={
+        resWdAvg: Math.round(x.res / Math.max(1, x.wd)*100)/100,
+        resWeAvg: Math.round(x.res / Math.max(1, x.we)*100)/100,
+        nonResWdAvg: Math.round(x.nonRes / Math.max(1, x.wd)*100)/100,
+        nonResWeAvg: Math.round(x.nonRes / Math.max(1, x.we)*100)/100,
+      };
+    }
+    const wdCount=dates.filter(d=>{const dow=new Date(d+'T00:00:00Z').getUTCDay(); return dow!==0&&dow!==6;}).length;
+    const weCount=dates.length-wdCount;
+    weeks.push({
+      weekStart: dates[0],
+      weekEnd: dates[dates.length-1],
+      label: dates[0].slice(5)+'~'+dates[dates.length-1].slice(5),
+      dates: dates,
+      totalByDma: Object.fromEntries(Object.entries(totalByDma).map(([k,v])=>[k, Math.round(v)])),
+      grandTotal: Math.round(grand),
+      weekdayAvg: Math.round(grand / Math.max(1, wdCount)*100)/100,
+      weekendAvg: Math.round(grand / Math.max(1, weCount)*100)/100,
+      wdByDmaRes: wdRes,
+      rain: 0,
+      dailyTotals: dailyTotals
+    });
+  }
+  return weeks;
+}
+
 async function _loadIndividual(){
   // Real data: 14 individual JSONs loaded in parallel
-  const[dma,top20,rank,anomalies,monthlyDiff,searchIdx,cotai,weekly,dates,pred,predBld,predFitted,dailyTotals,meterInfo]=await Promise.all([
+  const[dma,top20,rank,anomalies,dataErrors,monthlyDiff,searchIdx,cotai,weekly,dates,pred,predFitted,dailyTotals,meterInfo]=await Promise.all([
     _safeFetch('data/daily_dma.json'),
     _safeFetch('data/daily_top20.json'),
     _safeFetch('data/rank_changes.json'),
     _safeFetch('data/anomalies.json'),
+    _safeFetch('data/data_errors.json'),
     _safeFetch('data/monthly_main_sub_diff.json'),
     _safeFetch('data/search_index.json'),
     _safeFetch('data/cotai_calendar.json'),
     _safeFetch('data/weekly.json'),
     _safeFetch('data/available_dates.json'),
     _safeFetch('data/predictions.json'),
-    _safeFetch('data/predictions_by_building.json'),
     _safeFetch('data/predictions_fitted.json'),
     // 14MB — transposed into D.meterDaily so the anomaly "show curve"
     // overlay can plot a single meter's 14-day history on demand.
@@ -154,37 +243,120 @@ async function _loadIndividual(){
   // anomaly overlay. ~9,963 meters × 151 dates = ~1.5M entries; runs in
   // <1s in the browser. Anomaly "show curve" reads D.meterDaily[meterId].
   const meterDaily = {};
+  // Same transposition collapsed to months: {meterId: {YYYY-MM: total}}.
+  // Drives search.js showMeterDetail(), calendar.js heatmap, and
+  // diff.js sub-meter drilldown. Real data has no per-meter monthly
+  // file — we derive it from the daily totals we already have.
+  const meterMonthly = {};
   if (dailyTotals) {
     Object.keys(dailyTotals).forEach(function(date) {
+      const month = date.slice(0, 7);
       const day = dailyTotals[date];
       Object.keys(day).forEach(function(meterId) {
+        const v = day[meterId];
         if (!meterDaily[meterId]) meterDaily[meterId] = {};
-        meterDaily[meterId][date] = day[meterId];
+        meterDaily[meterId][date] = v;
+        if (!meterMonthly[meterId]) meterMonthly[meterId] = {};
+        meterMonthly[meterId][month] = (meterMonthly[meterId][month] || 0) + v;
       });
     });
   }
-  // Build per-DMA top 50 per day. daily_top20 only has the system-wide
-  // top 20, so a small DMA like 澳門低區 (Macau peninsula) often has 0
-  // entries — clicking into that DMA's detail page used to render an
-  // empty table. Scan all meters per day, group by DMA via meter_info,
-  // and keep the top 50.
-  const top20dma = [];
+
+  // ── DIRECT-only aggregation for home + trend ───────────────────
+  // Home and trend are about *supply* at the DMA level — sub-meters
+  // (INDIRECT) re-measure water that's already been counted on the
+  // parent main meter, so including them double-counts. Restrict
+  // daily_dma, weekly, daily_top20, and the per-DMA top50 to the
+  // 1,886 DIRECT meters only. Other tabs (map, calendar, search,
+  // diff, rank) see all meters via D.dma / D.top / D.top20dma.
+  const MACAU_DMAS = ['澳門低區','澳門填海A區','澳大橫琴區','路氹城區'];
+  const directDailyTotals = {};
+  let directDailyDma = [];
+  let directWeekly = [];
+  let directTop20 = [];
+  let directTop20dma = [];
   if (dailyTotals && meterInfo) {
-    const dates = Object.keys(dailyTotals).sort();
+    // Filter: keep only meters where supplyMode === 'DIRECT'.
+    for (const date of Object.keys(dailyTotals)) {
+      const src = dailyTotals[date];
+      const dst = {};
+      for (const mid of Object.keys(src)) {
+        const info = meterInfo[mid];
+        if (info && info.supplyMode === 'DIRECT') {
+          dst[mid] = src[mid];
+        }
+      }
+      directDailyTotals[date] = dst;
+    }
+    // Re-aggregate daily_dma shape: {date, dmas: {dma: {total, ...}}}.
+    const dates = Object.keys(directDailyTotals).sort();
     for (const date of dates) {
-      const day = dailyTotals[date];
+      const day = directDailyTotals[date];
+      const dmas = {};
+      for (const dma of MACAU_DMAS) {
+        dmas[dma] = { total: 0, residential: 0, nonResidential: 0,
+                      resCount: 0, nonResCount: 0, meterCount: 0 };
+      }
+      for (const mid of Object.keys(day)) {
+        const info = meterInfo[mid];
+        if (!info) continue;
+        const dma = MACAU_DMAS.includes(info.dma) ? info.dma : 'Unclassified';
+        if (!dmas[dma]) {
+          dmas[dma] = { total: 0, residential: 0, nonResidential: 0,
+                        resCount: 0, nonResCount: 0, meterCount: 0 };
+        }
+        const v = day[mid];
+        dmas[dma].total += v;
+        dmas[dma].meterCount += 1;
+        if (info.isResidential) {
+          dmas[dma].residential += v;
+          dmas[dma].resCount += 1;
+        } else {
+          dmas[dma].nonResidential += v;
+          dmas[dma].nonResCount += 1;
+        }
+      }
+      // Round for the wire.
+      for (const dma of Object.keys(dmas)) {
+        const x = dmas[dma];
+        x.total = round2(x.total);
+        x.residential = round2(x.residential);
+        x.nonResidential = round2(x.nonResidential);
+      }
+      directDailyDma.push({ date: date, dmas: dmas });
+    }
+    // Weekly aggregation (7-day windows). Mirrors _build_weekly in the
+    // converter but operates on the DIRECT-only daily_dma we just made.
+    directWeekly = _buildWeeklyFromDma(directDailyDma);
+    // System-wide top 20 per day (DIRECT only).
+    for (const date of dates) {
+      const day = directDailyTotals[date];
+      const items = [];
+      for (const mid of Object.keys(day)) {
+        const info = meterInfo[mid];
+        if (!info) continue;
+        items.push({
+          meterId: mid, total: day[mid], dma: info.dma || 'Unclassified',
+          contractId: info.contractId, propertyType: info.propertyType,
+          buildingName: info.buildingName,
+        });
+      }
+      items.sort((a, b) => b.total - a.total);
+      directTop20.push({ date: date, top20: items.slice(0, 20) });
+    }
+    // Per-DMA top 50 per day (DIRECT only). Same logic as before but
+    // the source dict is already DIRECT-filtered.
+    for (const date of dates) {
+      const day = directDailyTotals[date];
       const byDma = {};
-      for (const meterId of Object.keys(day)) {
-        const info = meterInfo[meterId];
+      for (const mid of Object.keys(day)) {
+        const info = meterInfo[mid];
         if (!info) continue;
         const dma = info.dma || 'Unclassified';
         if (!byDma[dma]) byDma[dma] = [];
         byDma[dma].push({
-          meterId: meterId,
-          total: day[meterId],
-          dma: dma,
-          contractId: info.contractId,
-          propertyType: info.propertyType,
+          meterId: mid, total: day[mid], dma: dma,
+          contractId: info.contractId, propertyType: info.propertyType,
           buildingName: info.buildingName,
         });
       }
@@ -192,26 +364,71 @@ async function _loadIndividual(){
         byDma[dma].sort((a, b) => b.total - a.total);
         byDma[dma] = byDma[dma].slice(0, 50);
       }
-      top20dma.push({ date: date, byDma: byDma });
+      directTop20dma.push({ date: date, byDma: byDma });
+    }
+  }
+
+  // All-meters per-DMA top 50 + system-wide top 20 (used by map, etc.).
+  // Built from the unfiltered dailyTotals so sub-meters show up too.
+  const allTop20 = [];
+  const allTop20dma = [];
+  if (dailyTotals && meterInfo) {
+    const dates = Object.keys(dailyTotals).sort();
+    for (const date of dates) {
+      const day = dailyTotals[date];
+      const items = [];
+      const byDma = {};
+      for (const mid of Object.keys(day)) {
+        const info = meterInfo[mid];
+        if (!info) continue;
+        const item = {
+          meterId: mid, total: day[mid], dma: info.dma || 'Unclassified',
+          contractId: info.contractId, propertyType: info.propertyType,
+          buildingName: info.buildingName,
+        };
+        items.push(item);
+        const dma = item.dma;
+        if (!byDma[dma]) byDma[dma] = [];
+        byDma[dma].push(item);
+      }
+      items.sort((a, b) => b.total - a.total);
+      for (const dma of Object.keys(byDma)) {
+        byDma[dma].sort((a, b) => b.total - a.total);
+        byDma[dma] = byDma[dma].slice(0, 50);
+      }
+      allTop20.push({ date: date, top20: items.slice(0, 20) });
+      allTop20dma.push({ date: date, byDma: byDma });
     }
   }
   return {
+    // Raw upstream values: include both DIRECT and INDIRECT meters. Most
+    // tabs (map, calendar, search, diff, rank) need to see the full
+    // picture, including sub-meters, because their analytics depend on
+    // the main-vs-sub relationship (NRW, anomaly grouping, sub-meter
+    // drilldown). See *Direct below for the supply-only view.
     dma:dma||[],
-    top:top20?top20.map(d=>({date:d.date,top20:d.top20})):[],
-    // Per-DMA top 50 per day, built above from daily_totals+meter_info.
-    // Replaces the old "group the system-wide top20 by DMA" approach
-    // which left small DMAs (e.g. 澳門低區) with zero entries.
-    top20dma:top20dma,
+    top:allTop20,
+    top20dma:allTop20dma,
     diff,
     dates:dates||[],
     rank:rank||[],
     anomalies:anomalies||[],
     cotai:cotai||[],
-    trend:dma||[],  // trend is the daily_dma array
+    trend:dma||[],  // trend aliases the per-DMA daily data
     search:searchIdx||[],
-    meterMonthly:{},  // not generated for real data
+    meterMonthly:meterMonthly,  // built from daily_totals.json above
     meterDaily:meterDaily,  // built from daily_totals.json above
     weekly:weekly||[],
+    dataErrors:dataErrors||[],  // meter-day values dropped as data errors
+    // DIRECT-only supply view: home + trend use these because sub-meters
+    // re-measure water already counted on parent main meters (double
+    // counting). Anomaly tab is DIRECT-only by construction (converter
+    // filters at detection time).
+    dmaDirect:directDailyDma,
+    topDirect:directTop20,
+    top20dmaDirect:directTop20dma,
+    trendDirect:directDailyDma,
+    weeklyDirect:directWeekly,
     predictions:pred&&pred.predictions?pred.predictions:[],
     generatedAt:pred?pred.generatedAt:null,
     historicalRange:pred?pred.historicalRange:null,
@@ -222,10 +439,9 @@ async function _loadIndividual(){
 
 async function _loadBundle(){
   // Mock data: single all_data.json bundle + predictions files
-  const[dp,pp,pbp]=await Promise.all([
+  const[dp,pp]=await Promise.all([
     _safeFetch('data/all_data.json'),
     _safeFetch('data/predictions.json'),
-    _safeFetch('data/predictions_by_building.json')
   ]);
   if(!dp)throw new Error('all_data.json not found');
   return Object.assign({},dp,{predictions:pp&&pp.predictions?pp.predictions:[]});
@@ -237,14 +453,12 @@ async function loadData(){
   try{bundle=await _loadBundle();}catch(e){bundle=null;}
   if(bundle){
     D=bundle;
-    const[pp,pbp]=await Promise.all([_safeFetch('data/predictions.json'),_safeFetch('data/predictions_by_building.json')]);
-    PRED=pp;PRED_BLD=pbp;
+    PRED=await _safeFetch('data/predictions.json');
     return;
   }
   // Real data path
   D=await _loadIndividual();
   PRED=await _safeFetch('data/predictions.json');
-  PRED_BLD=await _safeFetch('data/predictions_by_building.json');
 }
 
 // Initialize after data loads

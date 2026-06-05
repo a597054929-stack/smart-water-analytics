@@ -134,10 +134,14 @@ python scripts/real_data_converter.py --hourly-window 60
 | `anomalies.json` | `[{date, meterId, type, score, ...}]` | 视异常数量 | 14 天滚动窗口 |
 | `predictions.json` | `{predictions: [{meterId, predictions: [{date, value}], ...}]}` | ~46 KB | Top-50 指数平滑 |
 | `predictions_fitted.json` | `{fitted: [...]}` | ~16 KB | 历史拟合值 |
-| `predictions_by_building.json` | `[{buildingName, predictions: [...]}]` | ~13 KB | 按建筑聚合 |
 | `meter_info.json` | `{meterId: {dma, propertyType, ...}}` | ~2.5 MB | 水表元数据 |
 | `search_index.json` | `[{id, contract, building, dma, type}]` | ~1.5 MB | 模糊搜索索引 |
 | `available_dates.json` | `["2026-01-01", ...]` | <1 KB | 排序日期列表 |
+| `data_errors.json` | `[{date, meterId, rawValue, reason}]` | ~8 KB | 误值累计表（abs>4000 m³/日） |
+
+**Removed in 2026-06-05:** `predictions_by_building.json`（按建築物聚合預測已被
+"按 meter" 視圖取代，節省 ~13KB + 一次 IPC）。`scripts/real_data_converter.py`
+不再生成此文件，`frontend/build.cjs` 也不再 copy。
 
 ### Hourly aggregates（dashboard 未来用，目前未被消费）
 
@@ -234,7 +238,7 @@ bat\real\convert_real_data.bat --since 2026-04-01
 ### 修正数据错误（converter bug 修了之后）
 
 ```bat
-REM 删除 cache，强制全量重派生
+REM 删除 cache，强制全量重派生（3 小时）
 del backend\data\output_real\daily_totals.json
 bat\real\convert_real_data.bat --full
 
@@ -242,6 +246,38 @@ REM 重跑 pipeline + 重建 dashboard
 bat\real\start_pipeline_real.bat --force
 bat\real\start_dashboard_real.bat
 ```
+
+#### 快速修补路径（仅 cache + 下游 JSON 重新计算，~30 秒）
+
+适用于 converter 修复属于**纯函数 bug**（如阈值检查、cap 改 abs()、取整）
+而非**源数据解析**变化。直接用脚本修补缓存再重生 JSON：
+
+```python
+# 修补 cache + data_errors + 重新生成下游
+python -X utf8 -u << 'PYEOF'
+import sys; sys.path.insert(0, 'scripts')
+import real_data_converter as rdc
+cache = rdc._load_daily_totals_cache()
+# 1. 删掉剩余坏值 + 追加到 data_errors.json
+# 2. round(v, 2) 所有值
+# 3. 重新调 _build_daily_dma / _build_anomalies / ...
+# 4. 写回下游 12 个 JSON
+PYEOF
+
+REM 重建 dashboard
+USE_REAL_DATA=1 node frontend/build.cjs
+```
+
+#### 已知 per-meter 设置错误 → `corrections.json`
+
+第三种"修正"路径：**不修源数据、不改 converter 代码**，只在外部 JSON 加一条：
+
+1. 编辑 `backend/data/corrections.json`，加一条 `{meterId, start, end, factor, reason}`
+2. 跑 converter 任意模式（增量 / `--since` / `--full`），修正自动应用
+3. 重建 dashboard
+
+适用场景：meter 设置错误（×N / +N 偏移）、某天 meter 实际停用、某建筑集体修正等。
+详见 `docs/DEBUGGING_LOG.md` "外部 corrections 文件（meter 712720）" 章节。
 
 ---
 
@@ -254,6 +290,8 @@ bat\real\start_dashboard_real.bat
 | Predictions 用 top-50 训练 | 长尾水表的预测不准 | 是设计选择（数据稀疏） |
 | `daily_totals.json` 是隐式状态 | 删除后下次跑会当首次 | 有保护（找不到时回退到 --full 行为） |
 | Hourly JSONs append-only | backfill 会乱序 | 用 `--full` 重建 |
+| 单水表日 cap 4000 m³ | 超过此值视作数据误值并丢弃 | `data_errors.json` 累计记录，异常页可查；详见 `docs/DEBUGGING_LOG.md` "1月8日 4294 万吨误值事件" |
+| 已知 per-meter 数据修正（设置错误等） | 修复孤例需要改 converter 代码 | 编辑 `backend/data/corrections.json`（提交到 git），converter 启动时加载，**无需改代码** |
 
 ---
 

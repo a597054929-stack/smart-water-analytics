@@ -87,6 +87,10 @@ USAGE_DIR = DATA_ROOT / "Macau 2026"
 OUTPUT_DIR = ROOT / "backend" / "data" / "output_real"
 DAILY_SQLITE = ROOT / "backend" / "data" / "output_real" / "hourly_meter.db"
 DAILY_TOTALS_CACHE = OUTPUT_DIR / "daily_totals.json"
+# Per-meter data corrections. Format: [{meterId, start, end, factor, reason}, ...]
+# factor is a multiplier (0.1 = ÷10). Applied BEFORE the cap check, so a
+# corrected value can pass a tighter cap. Missing file = no corrections.
+DEFAULT_CORRECTIONS_FILE = ROOT / "backend" / "data" / "corrections.json"
 
 # === Constants ===
 MACAU_DMAS = ["澳門低區", "澳門填海A區", "澳大橫琴區", "路氹城區"]
@@ -222,16 +226,37 @@ def _save_daily_totals_cache(cache: dict) -> None:
 
 # ── Excel aggregation ────────────────────────────────────────
 
-def _aggregate_dates(usage_dates: list[datetime], meter_map: dict) -> tuple[dict, list[tuple]]:
+def _aggregate_dates(usage_dates: list[datetime], meter_map: dict,
+                    corrections: list[dict] | None = None) -> tuple[dict, list[tuple], list[dict]]:
     """Process a list of daily Excel files.
 
     Returns:
         daily:    {date_str: {meterId: total}}                — for the cache + aggregates
         hourly_rows: [(meterId, "YYYY-MM-DD HH:00", val, reading)] — for SQLite
+        data_errors: [{date, meterId, rawValue, reason}]       — values dropped as bad data
+
+    Hard cap on per-meter daily total: a single meter-day > 4,000 m³ is
+    almost certainly a fire-system test, a meter rollover, or a typo.
+    Largest legitimate consumer in Macau is a single hotel/casino at
+    ~3,000-3,800 m³/day (the few real top-20 entries cluster there); 4,000
+    leaves headroom for the largest legitimate users but still catches
+    the 42,940,982 m³ typo (1月8日 incident — meter 713911 reported 4,294×
+    any plausible reading) and the 26,000-27,000 m³ ×10 error (4/16-4/27
+    — meter 712720 misconfigured). We drop the value from the cache but
+    record it in `data_errors.json` so the anomaly tab can surface it as
+    a DATA_ERROR row.
+
+    `corrections` is a list of {meterId, start, end, factor, reason}
+    loaded from `backend/data/corrections.json`. Applied row-by-row
+    BEFORE the cap check, so a 10× reading corrected to ~2,700 m³ passes
+    the tighter 4,000 cap. None = no corrections.
     """
+    MAX_METER_DAILY = 4_000  # m³; above this is treated as data error
+    corrections = corrections or []
     daily: dict[str, dict[str, float]] = defaultdict(dict)
     hourly_rows: list[tuple[str, str, float, float]] = []
     missing_meters: set[str] = set()
+    data_errors: list[dict] = []
 
     for i, d in enumerate(usage_dates):
         f = USAGE_DIR / f"{d.strftime('%Y%m%d')}.xlsx"
@@ -253,13 +278,42 @@ def _aggregate_dates(usage_dates: list[datetime], meter_map: dict) -> tuple[dict
             if pd.isna(mid_raw):
                 continue
             mid = str(int(mid_raw))
+            # Source xlsx reports 用水量 in liters. Convert to m³ at the
+            # source so every downstream artifact (daily_totals cache,
+            # daily_dma, anomalies, predictions, hourly_meter.db) is in
+            # m³. Round to 2 decimals — sub-centilitre precision is
+            # below the meter resolution and just inflates the cache.
+            # Frontend labels all axes/totals as m³ — the prior L
+            # assumption meant the dashboard showed values 1000× too
+            # high (e.g. 32,722,814 m³ total/day ≈ 32.7k m³ actual).
             consumption = float(r["用水量"]) if pd.notna(r["用水量"]) else 0.0
+            consumption = round(consumption / 1000.0, 2)
+            # Per-meter corrections (e.g. known 10× configuration error).
+            # Applied here so a corrected value passes the tighter cap.
+            consumption = _apply_correction(mid, date_str, consumption, corrections)
             reading = float(r["讀值"]) if pd.notna(r["讀值"]) else 0.0
             ts = r["抄錶日期"]
             hour = ts.hour if hasattr(ts, "hour") else 0
+            # Hard cap: drop suspiciously large meter-day values so they
+            # don't pollute DMA totals / anomaly z-scores / predictions.
+            # Use abs() because negative readings (e.g. meter rollover
+            # recorded as -42,940,982) would otherwise bypass the cap —
+            # they cancel out a positive spike, but individually each
+            # reading is still garbage data.
+            if abs(consumption) > MAX_METER_DAILY:
+                data_errors.append({
+                    "date": date_str,
+                    "meterId": mid,
+                    "rawValue": consumption,
+                    "reason": f"daily_total>{MAX_METER_DAILY}m³ (likely fire-test / typo)",
+                })
+                continue
             # daily aggregate: only the total is cached; hourly detail lives in
             # hourly_meter.db and in the in-memory loop below (new days only)
-            daily[date_str][mid] = daily[date_str].get(mid, 0.0) + consumption
+            # Re-round after each row-sum to suppress IEEE-754 noise (e.g.
+            # 24 rows of round(x, 2) summing to 3.3299999999999996 instead
+            # of 3.33). Safe because every input is already 2-dp.
+            daily[date_str][mid] = round(daily[date_str].get(mid, 0.0) + consumption, 2)
             hourly_rows.append((
                 mid, f"{date_str} {hour:02d}:00", consumption, reading
             ))
@@ -270,7 +324,47 @@ def _aggregate_dates(usage_dates: list[datetime], meter_map: dict) -> tuple[dict
 
     if missing_meters:
         print(f"  WARN: {len(missing_meters)} meters in usage files have no reference data")
-    return dict(daily), hourly_rows
+    if data_errors:
+        print(f"  ⚠ {len(data_errors)} meter-day value(s) dropped as data errors "
+              f"(>{MAX_METER_DAILY} m³/day)")
+    return dict(daily), hourly_rows, data_errors
+
+
+# ── Per-meter corrections ───────────────────────────────────
+
+def _load_corrections(path: Path) -> list[dict]:
+    """Read per-meter corrections from external JSON. Empty list if missing.
+
+    Validates required fields. Bad entries raise with a clear message.
+    """
+    if not path.exists():
+        return []
+    with path.open("r", encoding="utf-8") as f:
+        corrections = json.load(f)
+    if not isinstance(corrections, list):
+        raise ValueError(f"corrections file must be a JSON array, got {type(corrections).__name__}")
+    required = {"meterId", "start", "end", "factor"}
+    for i, c in enumerate(corrections):
+        missing = required - c.keys()
+        if missing:
+            raise ValueError(f"correction #{i} missing fields {missing}: {c}")
+        if not isinstance(c["factor"], (int, float)):
+            raise ValueError(f"correction #{i} factor must be numeric: {c}")
+    return corrections
+
+
+def _apply_correction(mid: str, date_str: str, consumption: float,
+                      corrections: list[dict]) -> float:
+    """Return consumption after applying any matching per-meter correction.
+
+    Re-rounds to 2 dp. Applied BEFORE the cap check, so a corrected value
+    can pass a tighter cap. No-op if no matching correction.
+    """
+    for corr in corrections:
+        if (mid == corr["meterId"]
+                and corr["start"] <= date_str <= corr["end"]):
+            return round(consumption * corr["factor"], 2)
+    return consumption
 
 
 # ── Daily aggregate builders ─────────────────────────────────
@@ -622,7 +716,15 @@ def _build_peak_hours(new_daily_with_readings: dict, meter_map: dict) -> list[di
 # ── Anomalies & predictions ─────────────────────────────────
 
 def _detect_anomalies(daily: dict, meter_map: dict, window: int = 14) -> list[dict]:
-    """Z-score + 7-day rolling window anomaly detection on daily totals."""
+    """Z-score + 7-day rolling window anomaly detection on daily totals.
+
+    Restricted to supplyMode == 'DIRECT'. INDIRECT (sub-metered) meters
+    are downstream of a parent meter; their anomalies usually reflect
+    the parent's anomaly (or partial re-allocation), so flagging them
+    produces duplicate noise. In this 9,963-meter corpus that's
+    1,886 DIRECT vs 8,077 INDIRECT — only the 1,886 main meters are
+    checked.
+    """
     import math
     sorted_dates = sorted(daily.keys())
     if not sorted_dates:
@@ -631,6 +733,9 @@ def _detect_anomalies(daily: dict, meter_map: dict, window: int = 14) -> list[di
     # Only meters present in the first day are checked (cheap filter; the
     # first day is a representative starting sample for time series).
     for mid in daily[sorted_dates[0]].keys():
+        info = meter_map.get(mid, {})
+        if info.get("supplyMode") != "DIRECT":
+            continue
         series = [(d, daily[d].get(mid, 0.0)) for d in sorted_dates
                   if mid in daily.get(d, {})]
         if len(series) < window + 1:
@@ -742,26 +847,6 @@ def _build_predictions(daily: dict, meter_map: dict, horizon: int = 7) -> tuple[
     )
 
 
-def _build_predictions_by_building(predictions: dict, meter_map: dict) -> list[dict]:
-    """Aggregate per-meter predictions to per-building predictions for 路氹城區."""
-    by_building: dict[str, dict] = {}
-    for p in predictions.get("predictions") or []:
-        bname = p["info"].get("buildingName", "")
-        if not bname:
-            continue
-        slot = by_building.setdefault(bname, {"buildingName": bname, "daily": defaultdict(float)})
-        for pt in p["predictions"]:
-            slot["daily"][pt["date"]] += pt["value"]
-    out = []
-    for bname, slot in by_building.items():
-        out.append({
-            "buildingName": bname,
-            "predictions": [{"date": d, "value": round(v, 2)}
-                            for d, v in sorted(slot["daily"].items())]
-        })
-    return out
-
-
 # ── JSON I/O ─────────────────────────────────────────────────
 
 def _write_json(name: str, obj) -> None:
@@ -771,6 +856,20 @@ def _write_json(name: str, obj) -> None:
         json.dump(obj, f, ensure_ascii=False, indent=2)
     size_kb = path.stat().st_size / 1024
     print(f"  wrote {name:35s} {size_kb:8.1f} KB")
+
+
+def _load_data_errors() -> list[dict]:
+    """Return all data-error entries from the sidecar JSON (or [] if missing).
+
+    We accumulate over runs (append-only by construction: each run produces
+    a fresh `new_data_errors` list and we union with the prior sidecar).
+    Used so the dashboard can show a complete "data error" history.
+    """
+    path = OUTPUT_DIR / "data_errors.json"
+    if not path.exists():
+        return []
+    with path.open("r", encoding="utf-8") as f:
+        return json.load(f)
 
 
 def _append_or_init_json(name: str, new_entries: list) -> int:
@@ -867,6 +966,11 @@ def main() -> int:
         "--hourly-window", type=int, default=30,
         help="Cap hourly_meter.db to the last N days (default 30)",
     )
+    ap.add_argument(
+        "--corrections", type=str, default=str(DEFAULT_CORRECTIONS_FILE),
+        metavar="PATH",
+        help="Path to per-meter corrections JSON (default: backend/data/corrections.json)",
+    )
     args = ap.parse_args()
 
     # ── Mode detection ───────────────────────────────────
@@ -891,6 +995,10 @@ def main() -> int:
     print("\n[1/9] Loading reference meters...")
     meter_map = _load_reference_meters()
 
+    # ── Step 1.5: per-meter corrections ──────────────────
+    corrections = _load_corrections(Path(args.corrections))
+    print(f"  loaded {len(corrections)} correction(s) from {args.corrections}")
+
     # ── Step 2: decide which dates to process ────────────
     print(f"\n[2/9] Selecting usage files to process...")
     if args.full:
@@ -914,9 +1022,10 @@ def main() -> int:
 
     # ── Step 3: aggregate new days from Excel ───────────
     print(f"\n[3/9] Aggregating new days from hourly Excel files...")
-    new_daily, new_hourly_rows = _aggregate_dates(usage_dates, meter_map)
+    new_daily, new_hourly_rows, new_data_errors = _aggregate_dates(usage_dates, meter_map, corrections)
     print(f"  new daily entries : {sum(len(v) for v in new_daily.values()):,}")
     print(f"  new hourly rows   : {len(new_hourly_rows):,}")
+    print(f"  new data errors   : {len(new_data_errors)} (excluded from cache)")
 
     # ── Step 4: merge with cache & re-derive daily aggregates ──
     print(f"\n[4/9] Merging with cache and re-deriving daily aggregates...")
@@ -934,7 +1043,6 @@ def main() -> int:
     weekly = _build_weekly(daily_dma)
     anomalies = _detect_anomalies(merged, meter_map)
     predictions, predictions_fitted = _build_predictions(merged, meter_map)
-    pred_by_bld = _build_predictions_by_building(predictions, meter_map)
 
     # ── Step 5: build hourly aggregates (new dates only) ─
     # Hourly JSONs are append-only. We rebuild the new-date slice from the
@@ -956,10 +1064,29 @@ def main() -> int:
     _write_json("monthly_main_sub_diff.json", monthly_diff)
     _write_json("search_index.json", search_idx)
     _write_json("cotai_calendar.json", cotai)
-    _write_json("anomalies.json", anomalies)
+    # Merge data-error sidecar into anomalies so the anomaly tab can
+    # surface them with a dedicated type. data_errors.json is the
+    # authoritative list (append-only); the anomalies entries are a
+    # convenience for the existing renderer.
+    all_data_errors = _load_data_errors() + new_data_errors
+    _write_json("data_errors.json", all_data_errors)
+    data_error_anomalies = [
+        {
+            "date": e["date"],
+            "meterId": e["meterId"],
+            "type": "data_error",
+            "severity": "high",
+            "rawValue": e["rawValue"],
+            "reason": e["reason"],
+            "dma": (meter_map.get(e["meterId"], {}) or {}).get("dma", "Unclassified"),
+            "propertyType": (meter_map.get(e["meterId"], {}) or {}).get("propertyType", ""),
+            "buildingName": (meter_map.get(e["meterId"], {}) or {}).get("buildingName", ""),
+        }
+        for e in new_data_errors
+    ]
+    _write_json("anomalies.json", anomalies + data_error_anomalies)
     _write_json("predictions.json", predictions)
     _write_json("predictions_fitted.json", predictions_fitted)
-    _write_json("predictions_by_building.json", pred_by_bld)
     _write_json("meter_info.json", {mid: info for mid, info in meter_map.items()})
     _write_json("available_dates.json", sorted(merged.keys()))
 

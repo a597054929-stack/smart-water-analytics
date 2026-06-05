@@ -9,18 +9,17 @@ function renderTrend(){
   var h='<section class="card"><h2>📈 用水趨勢 + 降雨量</h2>';
   h+='<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">';
   h+='<span style="color:var(--muted);font-size:12px">📅 時間範圍</span>';
-  h+='<input type="date" class="di" min="'+D.dates[0]+'" max="'+D.dates[D.dates.length-1]+'" value="'+window._trendStart+'" onchange="window._trendStart=this.value;drawTrendChart();if(window._trendView===\'residential\')drawResTrendChart();else if(window._trendView===\'weekly\')drawWeeklyTrendChart();">';
+  h+='<input type="date" class="di" min="'+D.dates[0]+'" max="'+D.dates[D.dates.length-1]+'" value="'+window._trendStart+'" onchange="window._trendStart=this.value;drawTrendChart();if(window._trendView===\'weekly\')drawWeeklyTrendChart();">';
   h+='<span style="color:var(--muted)">~</span>';
-  h+='<input type="date" class="di" min="'+D.dates[0]+'" max="'+D.dates[D.dates.length-1]+'" value="'+window._trendEnd+'" onchange="window._trendEnd=this.value;drawTrendChart();if(window._trendView===\'residential\')drawResTrendChart();else if(window._trendView===\'weekly\')drawWeeklyTrendChart();">';
+  h+='<input type="date" class="di" min="'+D.dates[0]+'" max="'+D.dates[D.dates.length-1]+'" value="'+window._trendEnd+'" onchange="window._trendEnd=this.value;drawTrendChart();if(window._trendView===\'weekly\')drawWeeklyTrendChart();">';
   h+='<button class="nb" onclick="window._trendStart=D.dates[0];window._trendEnd=D.dates[D.dates.length-1];renderTrend()">↺ 全程</button>';
   h+='</div>';
-  h+='<div class="ms" style="margin-bottom:6px"><button class="mb active" id="btnRA7" onclick="toggleRA(7,this)">7天均值</button><button class="mb" id="btnRA14" onclick="toggleRA(14,this)">14天均值</button><button class="mb" id="btnPred" onclick="togglePred(this)">7天預測</button><button class="mb" id="btnMoM" onclick="toggleMoM(this)">月環比</button><button class="mb" id="btnRes" onclick="switchTrendView(\'residential\',this)">住宅趨勢</button><button class="mb" id="btnWeekly" onclick="switchTrendView(\'weekly\',this)">週度趨勢</button></div>';
+  h+='<div class="ms" style="margin-bottom:6px"><button class="mb active" id="btnRA7" onclick="toggleRA(7,this)">7天均值</button><button class="mb" id="btnRA14" onclick="toggleRA(14,this)">14天均值</button><button class="mb" id="btnPred" onclick="togglePred(this)">7天預測</button><button class="mb" id="btnMoM" onclick="toggleMoM(this)">月環比</button><button class="mb" id="btnWeekly" onclick="switchTrendView(\'weekly\',this)">週度趨勢</button></div>';
   h+='<div class="chart-actions"><button class="export-btn" onclick="exportChart(\'trend\',\'用水趨勢\')">匯出 PNG</button></div>';
   h+='<div id="trendChart" class="chart" style="height:450px"></div>';
-  h+='<div id="trendResChart" class="chart" style="height:450px;display:none"></div>';
   h+='<div id="trendWeeklyChart" class="chart" style="height:450px;display:none"></div>';
   h+='</section>';
-  var dmaNames=D.trend.length?Object.keys(D.trend[0].dmas).filter(function(k){return k!=='未分類'&&k!=='Unclassified'}):[];
+  var dmaNames=D.trendDirect.length?Object.keys(D.trendDirect[0].dmas).filter(function(k){return k!=='未分類'&&k!=='Unclassified'}):[];
   h+='<section class="card"><h2>🏚️ 分DMA趨勢</h2><div class="ms">';
   dmaNames.forEach(function(d){h+='<button class="mb" onclick="renderDmaTrend(\''+esc(d)+'\')">'+esc(d)+'</button>';});
   h+='</div><div class="chart-actions"><button class="export-btn" onclick="exportChart(\'dt\',\'DMA趨勢\')">匯出 PNG</button></div><div id="dmaTrendChart" class="chart" style="height:400px"></div></section>';
@@ -29,13 +28,13 @@ function renderTrend(){
   drawTrendChart();
 }
 
-// Returns D.trend entries clipped to the active date range. D.trend and
-// D.dma are the same array (see build.cjs loader), so the same slice
-// drives the residential/weekly views.
+// Returns D.trendDirect entries clipped to the active date range. D.trendDirect and
+// D.dmaDirect are the same array (see build.cjs loader), so the same slice
+// drives the main + weekly views.
 function _getFilteredTrend(){
   var s=window._trendStart, e=window._trendEnd;
-  if(!s && !e) return D.trend;
-  return D.trend.filter(function(d){
+  if(!s && !e) return D.trendDirect;
+  return D.trendDirect.filter(function(d){
     return (!s || d.date>=s) && (!e || d.date<=e);
   });
 }
@@ -118,10 +117,8 @@ function togglePred(btn){
 
 function showMainTrend(){
   var main=document.getElementById('trendChart');
-  var res=document.getElementById('trendResChart');
   var weekly=document.getElementById('trendWeeklyChart');
   if(main)main.style.display='';
-  if(res)res.style.display='none';
   if(weekly)weekly.style.display='none';
 }
 
@@ -130,43 +127,12 @@ function switchTrendView(view,btn){
   document.querySelectorAll('#page-trend .ms .mb').forEach(function(b){b.classList.remove('active')});
   btn.classList.add('active');
   var main=document.getElementById('trendChart');
-  var res=document.getElementById('trendResChart');
   var weekly=document.getElementById('trendWeeklyChart');
-  if(view==='residential'){
+  if(view==='weekly'){
     if(main)main.style.display='none';
-    if(weekly)weekly.style.display='none';
-    if(res)res.style.display='';
-    drawResTrendChart();
-  }else if(view==='weekly'){
-    if(main)main.style.display='none';
-    if(res)res.style.display='none';
     if(weekly)weekly.style.display='';
     drawWeeklyTrendChart();
   }
-}
-
-function drawResTrendChart(){
-  disposeChart('trendRes');
-  var el=document.getElementById('trendResChart');
-  if(!el)return;
-  var c=initChart(el,'trendRes');
-  var data=_getFilteredTrend();
-  var dates=data.map(function(d){return d.date});
-  var resData=data.map(function(d){
-    var t=0;for(var k in d.dmas){if(k!=='未分類'&&k!=='Unclassified')t+=d.dmas[k].residential;}return Math.round(t);
-  });
-  var nonResData=data.map(function(d){
-    var t=0;for(var k in d.dmas){if(k!=='未分類'&&k!=='Unclassified')t+=d.dmas[k].nonResidential;}return Math.round(t);
-  });
-  c.setOption({backgroundColor:'transparent',tooltip:{trigger:'axis'},
-    legend:{data:['住宅','非住宅'],textStyle:{color:'#94a3b8'}},
-    grid:{left:60,right:40,top:40,bottom:30},
-    xAxis:{type:'category',data:dates,axisLabel:{fontSize:10,rotate:45}},
-    yAxis:{type:'value',name:'m³',axisLabel:{formatter:function(v){return(v/1000000).toFixed(1)+'M'}}},
-    series:[
-      {name:'住宅',type:'line',stack:'total',areaStyle:{opacity:0.3},data:resData,itemStyle:{color:'#34d399'},showSymbol:false},
-      {name:'非住宅',type:'line',stack:'total',areaStyle:{opacity:0.3},data:nonResData,itemStyle:{color:'#f472b6'},showSymbol:false}
-    ]});
 }
 
 function drawWeeklyTrendChart(){

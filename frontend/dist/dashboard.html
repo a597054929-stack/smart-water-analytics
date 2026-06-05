@@ -423,18 +423,17 @@ window.addEventListener('resize',function(){Object.values(charts).forEach(functi
 // === home.js ===
 // === KPI 計算 ===
 function renderKPI(){
-  var dma=findD(D.dma,selDate);
+  var dma=findD(D.dmaDirect,selDate);
   if(!dma)return '';
   var dateIdx=D.dates.indexOf(selDate);
-  var prevDma=dateIdx>0?findD(D.dma,D.dates[dateIdx-1]):null;
+  var prevDma=dateIdx>0?findD(D.dmaDirect,D.dates[dateIdx-1]):null;
 
   // 總用水量
-  var totalToday=0,totalPrev=0,totalRes=0,totalNonRes=0,resCnt=0,nonResCnt=0;
+  var totalToday=0,totalPrev=0;
   for(var k in dma.dmas){
     var v=dma.dmas[k];
     if(k==='未分類'||k==='Unclassified')continue;
-    totalToday+=v.total;totalRes+=v.residential;totalNonRes+=v.nonResidential;
-    resCnt+=v.resCount;nonResCnt+=v.nonResCount;
+    totalToday+=v.total;
   }
   if(prevDma)for(var k in prevDma.dmas){if(k!=='未分類'&&k!=='Unclassified')totalPrev+=prevDma.dmas[k].total;}
 
@@ -452,33 +451,69 @@ function renderKPI(){
     nrwPct=mt>0?((mt-st)/mt*100).toFixed(1)+'%':'-';
   }
 
-  // 今日異常數
-  var anomToday=D.anomalies.filter(function(a){return a.date===selDate;}).length;
-
-  // 住宅占比
-  var resPct=totalToday>0?(totalRes/totalToday*100).toFixed(1):0;
+  // 今日異常 + 類型分組（給 hover 提示用）
+  var anomTodayList=D.anomalies.filter(function(a){return a.date===selDate;});
+  var anomToday=anomTodayList.length;
+  var anomBreakdown={'spike':0,'drop':0,'zero':0,'watch':0,'data_error':0};
+  anomTodayList.forEach(function(a){if(anomBreakdown[a.type]!==undefined)anomBreakdown[a.type]++;});
+  var anomTip='類型分組: 暴增 '+anomBreakdown.spike+' | 暴跌 '+anomBreakdown.drop
+    +' | 歸零 '+anomBreakdown.zero+' | 關注 '+anomBreakdown.watch
+    +' | 數據異常 '+anomBreakdown.data_error
+    +'\\n（點擊切到異常頁）';
 
   var nrwSub=D.diff&&D.diff.length?D.diff[D.diff.length-1].month:'';
   return '<div class="kpi-grid">'
     +'<div class="kpi"><div class="label">今日總用水</div><div class="value">'+fmt(totalToday)+'</div><div class="sub">m³</div>'+(changePct!==null?'<div class="change '+changeClass+'">'+changeIcon+Math.abs(changePct)+'% 較昨日</div>':'')+'</div>'
     +'<div class="kpi"><div class="label">NRW率</div><div class="value">'+nrwPct+'</div><div class="sub">'+nrwSub+'</div></div>'
-    +'<div class="kpi"><div class="label">住宅占比</div><div class="value">'+resPct+'%</div><div class="sub">'+fmt(totalRes)+' m³</div></div>'
-    +'<div class="kpi"><div class="label">今日異常</div><div class="value" style="'+(anomToday>0?'color:var(--red)':'')+'">'+anomToday+'</div><div class="sub">條告警</div></div>'
+    +'<div class="kpi" style="cursor:pointer" title="'+anomTip+'" onclick="showTab(\'anomaly\');window._anomDate=\''+selDate+'\';renderAnomaly()"><div class="label">今日異常 <span style="font-size:10px;color:#94a3b8">ⓘ</span></div><div class="value" style="'+(anomToday>0?'color:var(--red)':'')+'">'+anomToday+'</div><div class="sub">條告警</div></div>'
     +'<div class="kpi"><div class="label">降雨量</div><div class="value">'+(dma.rain||0)+'</div><div class="sub">mm</div></div>'
     +'</div>';
 }
 
+// === Data Integrity 摘要 ===
+// 顯示被剔除的偽數據筆數 + 排除的總水量。點擊 → 異常頁 "數據異常" 過濾。
+function renderDataIntegrity(){
+  var errs=D.dataErrors||[];
+  if(!errs.length)return '';
+  var sorted=errs.slice().sort(function(a,b){return b.date.localeCompare(a.date);});
+  var totalExcluded=errs.reduce(function(s,e){return s+(e.rawValue||0);},0);
+  var latest=sorted[0];
+  // 最新 5 筆
+  var rows=sorted.slice(0,5).map(function(e){
+    return '<tr>'
+      +'<td>'+e.date+'</td>'
+      +'<td class="contract">'+esc(e.meterId)+'</td>'
+      +'<td style="color:#ef4444;font-weight:600;text-align:right">'+fmt(e.rawValue)+' m³</td>'
+      +'<td style="font-size:11px;color:#94a3b8">'+esc(e.reason||'')+'</td>'
+      +'</tr>';
+  }).join('');
+  return '<section class="card" style="border-left:3px solid #ef4444">'
+    +'<h2 style="display:flex;align-items:center;gap:8px">'
+    +'🛡️ 數據完整性 <span class="hint">(已自動識別並排除 '+errs.length+' 筆異常值)</span>'
+    +'<button class="nb" style="margin-left:auto" onclick="showTab(\'anomaly\');window._anomType=\'data_error\';renderAnomaly()">查看全部 →</button>'
+    +'</h2>'
+    +'<div class="kpi-grid" style="margin-bottom:12px">'
+    +'<div class="kpi"><div class="label">排除筆數</div><div class="value" style="color:#ef4444">'+errs.length+'</div><div class="sub">筆</div></div>'
+    +'<div class="kpi"><div class="label">累計排除水量</div><div class="value">'+fmt(totalExcluded)+'</div><div class="sub">m³</div></div>'
+    +'<div class="kpi"><div class="label">最近一筆</div><div class="value" style="font-size:18px">'+latest.date+'</div><div class="sub">水表 '+esc(latest.meterId)+'</div></div>'
+    +'</div>'
+    +'<details><summary style="cursor:pointer;color:#94a3b8;font-size:12px;margin-bottom:6px">▶ 最近 5 筆明細</summary>'
+    +'<table><thead><tr><th>日期</th><th>水表</th><th style="text-align:right">原始值</th><th>原因</th></tr></thead><tbody>'+rows+'</tbody></table>'
+    +'</details></section>';
+}
+
 // === 首頁概覽 ===
 function renderHome(){
-  var dma=findD(D.dma,selDate),top=findD(D.top,selDate),rain=dma?dma.rain||0:0;
+  var dma=findD(D.dmaDirect,selDate),top=findD(D.topDirect,selDate),rain=dma?dma.rain||0:0;
   var h='<section class="card"><h2>📅 選擇日期</h2><div class="dc"><input type="date" class="di" min="'+D.dates[0]+'" max="'+D.dates[D.dates.length-1]+'" value="'+selDate+'" onchange="pickDate(this.value)"><div class="dn"><button class="nb" onclick="changeDate(-1)" '+(D.dates.indexOf(selDate)<=0?'disabled':'')+'>◀ 前一天</button><span class="dd">'+selDate+(rain?' 🌧️'+rain+'mm':'')+'</span><button class="nb" onclick="changeDate(1)" '+(D.dates.indexOf(selDate)>=D.dates.length-1?'disabled':'')+'>後一天 ▶</button></div><div class="qd"><button class="qb" onclick="pickDate(D.dates[D.dates.length-1])">最新</button><button class="qb" onclick="pickDate(D.dates[0])">最早</button></div></div></section>';
   h+=renderKPI();
+  h+=renderDataIntegrity();
   h+='<section class="card"><h2>🏚️ DMA分區概覽 <span class="hint">（點擊進入詳情）</span></h2><div class="dg">';
   if(dma)for(var k in dma.dmas){var v=dma.dmas[k];var ds=calcDmaStats(k);h+='<div class="dc2" style="border-left-color:'+(DC[k]||'#666')+'" onclick="pickDma(\''+esc(k)+'\')"><div class="dn2">'+esc(k)+' →</div><div class="dv">'+fmt(v.total)+' m³</div><div class="ds"><span>🏠 住宅: '+fmt(v.residential)+' m³ ('+v.resCount+'表)</span><span>🏢 非住宅: '+fmt(v.nonResidential)+' m³ ('+v.nonResCount+'表)</span><span>📊 日均: '+fmt(ds.avgDaily)+' m³</span><span>⚠ 異常: '+ds.anomalyCount+'條</span><span>💧 NRW: '+ds.nrwPct+'</span></div></div>';}
   h+='</div></section>';
 
   // DMA 對比分析
-  var dmaNames2=D.dma.length?Object.keys(D.dma[0].dmas).filter(function(k2){return k2!=='未分類'&&k2!=='Unclassified'}):[];
+  var dmaNames2=D.dmaDirect.length?Object.keys(D.dmaDirect[0].dmas).filter(function(k2){return k2!=='未分類'&&k2!=='Unclassified'}):[];
   h+='<section class="card"><h2>📊 DMA 對比分析</h2>';
   h+='<div class="ms" style="margin-bottom:6px"><button class="mb active" onclick="drawDmaCompare(\'trend\',this)">用水趨勢</button><button class="mb" onclick="drawDmaCompare(\'nrw\',this)">NRW 對比</button><button class="mb" onclick="drawDmaCompare(\'anomaly\',this)">異常分布</button><button class="mb" onclick="drawDmaCompare(\'residential\',this)">住宅/非住宅</button></div>';
   h+='<div class="chart-actions"><button class="export-btn" onclick="exportChart(\'dmaCompare\',\'DMA對比\')">匯出 PNG</button></div>';
@@ -497,7 +532,7 @@ function renderHome(){
 
 // === DMA 詳情 ===
 function renderDma(){
-  var t20=findD(D.top20dma,selDate),dma=findD(D.dma,selDate);
+  var t20=findD(D.top20dmaDirect,selDate),dma=findD(D.dmaDirect,selDate);
   var info=dma&&dma.dmas&&dma.dmas[selDma];
   var items=t20&&t20.byDma&&t20.byDma[selDma]?t20.byDma[selDma]:[];
   var h='<section class="card"><div class="breadcrumb"><span onclick="showTab(\'home\')">概覽</span><span class="sep">›</span><span class="current" style="color:'+(DC[selDma]||'#38bdf8')+'">'+esc(selDma)+'</span><span class="sep">›</span><span class="current">'+selDate+'</span></div>';
@@ -522,8 +557,8 @@ function generateReport(type){
   else{endDate=dates[dates.length-1];startDate=dates[Math.max(0,dates.length-30)];title='月報 ('+startDate+' ~ '+endDate+')';}
   var periodDates=dates.filter(d=>d>=startDate&&d<=endDate);
   var dmaStats={};
-  for(var dmaName of Object.keys(D.dma[0].dmas)){dmaStats[dmaName]={total:0,count:0,residential:0,nonResidential:0};}
-  for(var d of periodDates){var dayData2=D.dma.find(x=>x.date===d);if(!dayData2)continue;for(var[dmaName,info]of Object.entries(dayData2.dmas)){if(dmaStats[dmaName]){dmaStats[dmaName].total+=info.total;dmaStats[dmaName].residential+=info.residential;dmaStats[dmaName].nonResidential+=info.nonResidential;dmaStats[dmaName].count++;}}}
+  for(var dmaName of Object.keys(D.dmaDirect[0].dmas)){dmaStats[dmaName]={total:0,count:0,residential:0,nonResidential:0};}
+  for(var d of periodDates){var dayData2=D.dmaDirect.find(x=>x.date===d);if(!dayData2)continue;for(var[dmaName,info]of Object.entries(dayData2.dmas)){if(dmaStats[dmaName]){dmaStats[dmaName].total+=info.total;dmaStats[dmaName].residential+=info.residential;dmaStats[dmaName].nonResidential+=info.nonResidential;dmaStats[dmaName].count++;}}}
   var html='<section class="card"><h2>'+title+'</h2>';
   html+='<table><thead><tr><th>DMA</th><th class="num">總用水(m³)</th><th class="num">日均(m³)</th></tr></thead><tbody>';
   for(var[dmaName,stats]of Object.entries(dmaStats)){if(stats.count===0)continue;var avg=stats.total/stats.count;html+='<tr><td>'+dmaName+'</td><td class="num">'+Math.round(stats.total).toLocaleString()+'</td><td class="num">'+Math.round(avg).toLocaleString()+'</td></tr>';}
@@ -535,7 +570,7 @@ function closeReport(){document.getElementById('reportModal').style.display='non
 
 function calcDmaStats(dma){
   var total=0,count=0,res=0,nonRes=0,anomalyCount=0;
-  D.dma.forEach(function(d){
+  D.dmaDirect.forEach(function(d){
     var info=d.dmas[dma];
     if(info){total+=info.total;count++;res+=info.residential;nonRes+=info.nonResidential;}
   });
@@ -561,13 +596,13 @@ function drawDmaCompare(view,btn){
   var el=document.getElementById('dmaCompareChart');
   if(!el)return;
   var c=initChart(el,'dmaCompare');
-  var dates=D.dma.map(function(d){return d.date});
-  var dmaNames=D.dma.length?Object.keys(D.dma[0].dmas).filter(function(k){return k!=='未分類'&&k!=='Unclassified'}):[];
+  var dates=D.dmaDirect.map(function(d){return d.date});
+  var dmaNames=D.dmaDirect.length?Object.keys(D.dmaDirect[0].dmas).filter(function(k){return k!=='未分類'&&k!=='Unclassified'}):[];
 
   if(view==='trend'){
     var series=dmaNames.map(function(dma){
       return{name:dma,type:'line',smooth:true,showSymbol:false,
-        data:D.dma.map(function(d){return d.dmas[dma]?Math.round(d.dmas[dma].total):0}),
+        data:D.dmaDirect.map(function(d){return d.dmas[dma]?Math.round(d.dmas[dma].total):0}),
         itemStyle:{color:DC[dma]||'#6b6b80'},lineStyle:{width:2}};
     });
     c.setOption({backgroundColor:'transparent',tooltip:{trigger:'axis'},legend:{data:dmaNames,textStyle:{color:'#94a3b8'}},
@@ -613,7 +648,7 @@ function drawDmaCompare(view,btn){
   else if(view==='residential'){
     var resData=dmaNames.map(function(dma){
       var total=0,res=0;
-      D.dma.forEach(function(d){if(d.dmas[dma]){total+=d.dmas[dma].total;res+=d.dmas[dma].residential;}});
+      D.dmaDirect.forEach(function(d){if(d.dmas[dma]){total+=d.dmas[dma].total;res+=d.dmas[dma].residential;}});
       return total>0?Math.round(res/total*1000)/10:0;
     });
     var nonResData=resData.map(function(v){return Math.round((100-v)*10)/10});
@@ -640,18 +675,17 @@ function renderTrend(){
   var h='<section class="card"><h2>📈 用水趨勢 + 降雨量</h2>';
   h+='<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">';
   h+='<span style="color:var(--muted);font-size:12px">📅 時間範圍</span>';
-  h+='<input type="date" class="di" min="'+D.dates[0]+'" max="'+D.dates[D.dates.length-1]+'" value="'+window._trendStart+'" onchange="window._trendStart=this.value;drawTrendChart();if(window._trendView===\'residential\')drawResTrendChart();else if(window._trendView===\'weekly\')drawWeeklyTrendChart();">';
+  h+='<input type="date" class="di" min="'+D.dates[0]+'" max="'+D.dates[D.dates.length-1]+'" value="'+window._trendStart+'" onchange="window._trendStart=this.value;drawTrendChart();if(window._trendView===\'weekly\')drawWeeklyTrendChart();">';
   h+='<span style="color:var(--muted)">~</span>';
-  h+='<input type="date" class="di" min="'+D.dates[0]+'" max="'+D.dates[D.dates.length-1]+'" value="'+window._trendEnd+'" onchange="window._trendEnd=this.value;drawTrendChart();if(window._trendView===\'residential\')drawResTrendChart();else if(window._trendView===\'weekly\')drawWeeklyTrendChart();">';
+  h+='<input type="date" class="di" min="'+D.dates[0]+'" max="'+D.dates[D.dates.length-1]+'" value="'+window._trendEnd+'" onchange="window._trendEnd=this.value;drawTrendChart();if(window._trendView===\'weekly\')drawWeeklyTrendChart();">';
   h+='<button class="nb" onclick="window._trendStart=D.dates[0];window._trendEnd=D.dates[D.dates.length-1];renderTrend()">↺ 全程</button>';
   h+='</div>';
-  h+='<div class="ms" style="margin-bottom:6px"><button class="mb active" id="btnRA7" onclick="toggleRA(7,this)">7天均值</button><button class="mb" id="btnRA14" onclick="toggleRA(14,this)">14天均值</button><button class="mb" id="btnPred" onclick="togglePred(this)">7天預測</button><button class="mb" id="btnMoM" onclick="toggleMoM(this)">月環比</button><button class="mb" id="btnRes" onclick="switchTrendView(\'residential\',this)">住宅趨勢</button><button class="mb" id="btnWeekly" onclick="switchTrendView(\'weekly\',this)">週度趨勢</button></div>';
+  h+='<div class="ms" style="margin-bottom:6px"><button class="mb active" id="btnRA7" onclick="toggleRA(7,this)">7天均值</button><button class="mb" id="btnRA14" onclick="toggleRA(14,this)">14天均值</button><button class="mb" id="btnPred" onclick="togglePred(this)">7天預測</button><button class="mb" id="btnMoM" onclick="toggleMoM(this)">月環比</button><button class="mb" id="btnWeekly" onclick="switchTrendView(\'weekly\',this)">週度趨勢</button></div>';
   h+='<div class="chart-actions"><button class="export-btn" onclick="exportChart(\'trend\',\'用水趨勢\')">匯出 PNG</button></div>';
   h+='<div id="trendChart" class="chart" style="height:450px"></div>';
-  h+='<div id="trendResChart" class="chart" style="height:450px;display:none"></div>';
   h+='<div id="trendWeeklyChart" class="chart" style="height:450px;display:none"></div>';
   h+='</section>';
-  var dmaNames=D.trend.length?Object.keys(D.trend[0].dmas).filter(function(k){return k!=='未分類'&&k!=='Unclassified'}):[];
+  var dmaNames=D.trendDirect.length?Object.keys(D.trendDirect[0].dmas).filter(function(k){return k!=='未分類'&&k!=='Unclassified'}):[];
   h+='<section class="card"><h2>🏚️ 分DMA趨勢</h2><div class="ms">';
   dmaNames.forEach(function(d){h+='<button class="mb" onclick="renderDmaTrend(\''+esc(d)+'\')">'+esc(d)+'</button>';});
   h+='</div><div class="chart-actions"><button class="export-btn" onclick="exportChart(\'dt\',\'DMA趨勢\')">匯出 PNG</button></div><div id="dmaTrendChart" class="chart" style="height:400px"></div></section>';
@@ -660,13 +694,13 @@ function renderTrend(){
   drawTrendChart();
 }
 
-// Returns D.trend entries clipped to the active date range. D.trend and
-// D.dma are the same array (see build.cjs loader), so the same slice
-// drives the residential/weekly views.
+// Returns D.trendDirect entries clipped to the active date range. D.trendDirect and
+// D.dmaDirect are the same array (see build.cjs loader), so the same slice
+// drives the main + weekly views.
 function _getFilteredTrend(){
   var s=window._trendStart, e=window._trendEnd;
-  if(!s && !e) return D.trend;
-  return D.trend.filter(function(d){
+  if(!s && !e) return D.trendDirect;
+  return D.trendDirect.filter(function(d){
     return (!s || d.date>=s) && (!e || d.date<=e);
   });
 }
@@ -749,10 +783,8 @@ function togglePred(btn){
 
 function showMainTrend(){
   var main=document.getElementById('trendChart');
-  var res=document.getElementById('trendResChart');
   var weekly=document.getElementById('trendWeeklyChart');
   if(main)main.style.display='';
-  if(res)res.style.display='none';
   if(weekly)weekly.style.display='none';
 }
 
@@ -761,43 +793,12 @@ function switchTrendView(view,btn){
   document.querySelectorAll('#page-trend .ms .mb').forEach(function(b){b.classList.remove('active')});
   btn.classList.add('active');
   var main=document.getElementById('trendChart');
-  var res=document.getElementById('trendResChart');
   var weekly=document.getElementById('trendWeeklyChart');
-  if(view==='residential'){
+  if(view==='weekly'){
     if(main)main.style.display='none';
-    if(weekly)weekly.style.display='none';
-    if(res)res.style.display='';
-    drawResTrendChart();
-  }else if(view==='weekly'){
-    if(main)main.style.display='none';
-    if(res)res.style.display='none';
     if(weekly)weekly.style.display='';
     drawWeeklyTrendChart();
   }
-}
-
-function drawResTrendChart(){
-  disposeChart('trendRes');
-  var el=document.getElementById('trendResChart');
-  if(!el)return;
-  var c=initChart(el,'trendRes');
-  var data=_getFilteredTrend();
-  var dates=data.map(function(d){return d.date});
-  var resData=data.map(function(d){
-    var t=0;for(var k in d.dmas){if(k!=='未分類'&&k!=='Unclassified')t+=d.dmas[k].residential;}return Math.round(t);
-  });
-  var nonResData=data.map(function(d){
-    var t=0;for(var k in d.dmas){if(k!=='未分類'&&k!=='Unclassified')t+=d.dmas[k].nonResidential;}return Math.round(t);
-  });
-  c.setOption({backgroundColor:'transparent',tooltip:{trigger:'axis'},
-    legend:{data:['住宅','非住宅'],textStyle:{color:'#94a3b8'}},
-    grid:{left:60,right:40,top:40,bottom:30},
-    xAxis:{type:'category',data:dates,axisLabel:{fontSize:10,rotate:45}},
-    yAxis:{type:'value',name:'m³',axisLabel:{formatter:function(v){return(v/1000000).toFixed(1)+'M'}}},
-    series:[
-      {name:'住宅',type:'line',stack:'total',areaStyle:{opacity:0.3},data:resData,itemStyle:{color:'#34d399'},showSymbol:false},
-      {name:'非住宅',type:'line',stack:'total',areaStyle:{opacity:0.3},data:nonResData,itemStyle:{color:'#f472b6'},showSymbol:false}
-    ]});
 }
 
 function drawWeeklyTrendChart(){
@@ -1120,28 +1121,64 @@ function renderAnomaly(){
   h+='<span style="'+(window._anomType==='drop'?aOn:aOff)+'" onclick="window._anomType=&quot;drop&quot;;renderAnomaly()">暴跌</span>';
   h+='<span style="'+(window._anomType==='zero'?aOn:aOff)+'" onclick="window._anomType=&quot;zero&quot;;renderAnomaly()">歸零</span>';
   h+='<span style="'+(window._anomType==='watch'?aOn:aOff)+'" onclick="window._anomType=&quot;watch&quot;;renderAnomaly()">關注</span>';
+  h+='<span style="'+(window._anomType==='data_error'?aOn:aOff)+'" onclick="window._anomType=&quot;data_error&quot;;renderAnomaly()">數據異常</span>';
   h+='<span style="'+aOff+'margin-left:6px" onclick="exportAnomalyCsv()">💾 匯出CSV</span>';
+  // Sort: 'date' (default — the order the converter wrote) or 'score'
+  // (highest anomalyScore first; useful when scanning many entries).
+  if(!window._anomSort)window._anomSort='date';
+  h+='<span style="display:inline-block;margin-left:8px;color:#94a3b8;font-size:11px">排序:</span>';
+  h+='<span style="'+(window._anomSort==='date'?aOn:aOff)+'" onclick="window._anomSort=&quot;date&quot;;renderAnomaly()">日期</span>';
+  h+='<span style="'+(window._anomSort==='score'?aOn:aOff)+'" onclick="window._anomSort=&quot;score&quot;;renderAnomaly()">分數</span>';
   h+='</div>';
-  var byType={'spike':0,'drop':0,'zero':0,'watch':0};
+  var byType={'spike':0,'drop':0,'zero':0,'watch':0,'data_error':0};
   D.anomalies.forEach(function(a){if(byType.hasOwnProperty(a.type))byType[a.type]++;});
-  h+='<p style="color:#64748b;font-size:11px;margin-bottom:8px">暴增'+byType.spike+' | 暴跌'+byType.drop+' | 歸零'+byType.zero+' | 關注'+byType.watch+' (共'+D.anomalies.length+'條)</p>';
+  h+='<p style="color:#64748b;font-size:11px;margin-bottom:8px">暴增'+byType.spike+' | 暴跌'+byType.drop+' | 歸零'+byType.zero+' | 關注'+byType.watch+' | 數據異常'+byType.data_error+' (共'+D.anomalies.length+'條)</p>';
   var dateFilter=window._anomDate;
-  var filtered=dateFilter?D.anomalies.filter(function(a){return a.date===dateFilter}):D.anomalies.slice(0,200);
+  // When no date filter is set, sort then slice — sorting by score means
+  // "show me the worst 200" instead of "the latest 200".
+  var pool = dateFilter ? D.anomalies.filter(function(a){return a.date===dateFilter}) : D.anomalies.slice();
+  if(window._anomSort==='score'){
+    // data_error rows always surface first (severity='high'), then by
+    // anomalyScore desc, undefined scores last.
+    pool.sort(function(a,b){
+      if(a.type==='data_error' && b.type!=='data_error') return -1;
+      if(b.type==='data_error' && a.type!=='data_error') return 1;
+      var sa = (a.anomalyScore==null) ? -1 : a.anomalyScore;
+      var sb = (b.anomalyScore==null) ? -1 : b.anomalyScore;
+      return sb - sa;
+    });
+  }
+  var filtered = dateFilter ? pool : pool.slice(0, 200);
   if(window._anomType!=='all')filtered=filtered.filter(function(a){return a.type===window._anomType;});
-  filtered=filtered.filter(function(a){return a.anomalyScore>=_anomCfg.minScore;});
-  if(_anomCfg.spikeMult<4)filtered=filtered.filter(function(a){return a.type!=='spike'||a.total/a.pastMean>=_anomCfg.spikeMult;});
+  // data_error entries don't have anomalyScore / pastMean — skip those
+  // filters for them. The detection is "value > 40,000 m³" so score
+  // would be undefined; render them as high-severity rows.
+  if(window._anomType!=='data_error'){
+    filtered=filtered.filter(function(a){return a.anomalyScore===undefined||a.anomalyScore>=_anomCfg.minScore;});
+    if(_anomCfg.spikeMult<4)filtered=filtered.filter(function(a){return a.type!=='spike'||!a.pastMean||a.total/a.pastMean>=_anomCfg.spikeMult;});
+  }
   if(filtered.length){
     h+='<table><thead><tr><th>日期</th><th>類型</th><th>表位編號</th><th>建築物</th><th>DMA</th><th class="num">當日</th><th class="num">14天均值</th><th class="num">分數</th><th>原因</th></tr></thead><tbody>';
     filtered.forEach(function(a){
-      var tc2={'spike':'#f87171','drop':'#fb923c','zero':'#a78bfa','watch':'#fbbf24'};
-      var tn={'spike':'暴增','drop':'暴跌','zero':'歸零','watch':'關注'};
-      h+='<tr class="warn" style="cursor:pointer" onclick="window._anomTarget={meterId:'+JSON.stringify(esc(a.meterId)).replace(/"/g,'&quot;')+',contractId:'+JSON.stringify(mask(a.contractId||a.meterId)).replace(/"/g,'&quot;')+',anomalyDate:'+JSON.stringify(a.date).replace(/"/g,'&quot;')+',anomalyType:'+JSON.stringify(a.type).replace(/"/g,'&quot;')+'};showAnomCurve()">';
+      var tc2={'spike':'#f87171','drop':'#fb923c','zero':'#a78bfa','watch':'#fbbf24','data_error':'#ef4444'};
+      var tn={'spike':'暴增','drop':'暴跌','zero':'歸零','watch':'關注','data_error':'數據異常'};
+      // data_error rows aren't clickable for the curve overlay (no
+      // pastMean context) — they were already excluded from the cache
+      // so the 14-day history wouldn't be meaningful.
+      var onClick = a.type==='data_error' ? '' :
+        'onclick="window._anomTarget={meterId:'+JSON.stringify(esc(a.meterId)).replace(/"/g,'&quot;')+
+        ',contractId:'+JSON.stringify(mask(a.contractId||a.meterId)).replace(/"/g,'&quot;')+
+        ',anomalyDate:'+JSON.stringify(a.date).replace(/"/g,'&quot;')+
+        ',anomalyType:'+JSON.stringify(a.type).replace(/"/g,'&quot;')+'};showAnomCurve()"';
+      h+='<tr class="warn" style="cursor:'+(a.type==='data_error'?'default':'pointer')+'" '+onClick+'>';
       h+='<td>'+a.date+'</td>';
       h+='<td><span class="tag" style="background:'+(tc2[a.type]||'#666')+'">'+tn[a.type]+'</span></td>';
       h+='<td>'+esc(a.meterId)+'</td>';
-      h+='<td class="'+(isUnlocked?'':'masked')+'" onclick="clickMasked()">'+maskBuilding(a.buildingName)+'</td>';
-      h+='<td><span class="tag" style="background:'+(DC[a.dma]||'#666')+'">'+esc(a.dma)+'</span></td>';
-      h+='<td class="num">'+fmt(a.total)+'</td>';
+      h+='<td class="'+(isUnlocked?'':'masked')+'" onclick="clickMasked()">'+maskBuilding(a.buildingName||'')+'</td>';
+      h+='<td><span class="tag" style="background:'+(DC[a.dma]||'#666')+'">'+esc(a.dma||'')+'</span></td>';
+      // For data_error rows show the raw dropped value; for the rest
+      // show the daily total.
+      h+='<td class="num">'+(a.type==='data_error'?fmt(a.rawValue):fmt(a.total))+'</td>';
       h+='<td class="num">'+(a.pastMean?fmt(a.pastMean):'-')+'</td>';
       h+='<td class="num '+(a.anomalyScore>=0.7?'neg':'')+'">'+(a.anomalyScore!=null?a.anomalyScore.toFixed(2):'-')+'</td>';
       h+='<td style="font-size:11px">'+a.reason+'</td></tr>';
@@ -1215,6 +1252,18 @@ function exportAnomalyCsv(){
   if(window._anomType&&window._anomType!=='all')anoms=anoms.filter(function(a){return a.type===window._anomType});
   var rows=[['日期','類型','水表ID','建築物','DMA','當日','14天均值','分數','原因']];
   anoms.forEach(function(a){rows.push([a.date,a.type,a.meterId,a.buildingName||'',a.dma||'',a.total,a.pastMean||'',a.anomalyScore!=null?a.anomalyScore.toFixed(3):'',a.reason||''])});
+  // data_error 行的 rawValue/total 字段差異很大（total 可能是 0 或 undefined）
+  // 所以單獨開一個區塊，每行以 "#DATA_ERROR" 開頭作標記，方便 Excel
+  // 用篩選/IF 區分。
+  if((D.dataErrors||[]).length){
+    rows.push([]);  // 空行分隔
+    rows.push(['# 以下為 data_errors 區塊：源數據識別為偽值，已從快取中排除']);
+    rows.push(['日期','類型','水表ID','建築物','DMA','原始值(m³)','原因']);
+    D.dataErrors.forEach(function(e){
+      var a = D.anomalies.find(function(x){return x.type==='data_error' && x.date===e.date && x.meterId===e.meterId});
+      rows.push([e.date,'data_error',e.meterId,(a&&a.buildingName)||'',(a&&a.dma)||'',e.rawValue,e.reason||'']);
+    });
+  }
   exportCsv(rows,'anomalies.csv');
 }
 
@@ -1428,19 +1477,13 @@ function showMeterDetail(mid,contract,building){
 
 // === predict.js ===
 // === 預測頁 ===
-var _predView='building';
-
 function renderPredict(){
   if(!PRED||!PRED.predictions||!PRED.predictions.length){
     document.getElementById('page-predict').innerHTML='<section class="card"><p style="color:#64748b">暫無預測資料</p></section>';
     return;
   }
-  var h='<section class="card"><h2>🔮 用水預測</h2>';
-  h+='<div class="ms" style="margin-bottom:16px">';
-  h+='<button class="mb '+(_predView==='building'?'active':'')+'" onclick="_predView=\'building\';renderPredict()">🏢 按建築物（路氹城區）</button>';
-  h+='<button class="mb '+(_predView==='meter'?'active':'')+'" onclick="_predView=\'meter\';renderPredict()">💧 按水表（Top50）</button>';
-  h+='</div>';
-  if(_predView==='building'){h+=renderBuildingPrediction();}else{h+=renderMeterPrediction();}
+  var h='<section class="card"><h2>🔮 用水預測 (Top50 水表)</h2>';
+  h+=renderMeterPrediction();
   h+='</section>';
   if(!document.getElementById('predictDlg')){
     var dlg=document.createElement('dialog');
@@ -1452,65 +1495,6 @@ function renderPredict(){
     dlg.addEventListener('click',function(e){if(e.target===dlg)dlg.close();});
   }
   document.getElementById('page-predict').innerHTML=h;
-}
-
-function renderBuildingPrediction(){
-  if(!PRED_BLD||!PRED_BLD.predictions||!PRED_BLD.predictions.length){return '<p style="color:#64748b">暫無建築物預測資料</p>';}
-  var h='<p class="hint" style="margin-bottom:12px">基於線性迴歸模型 · DMA: '+esc(PRED_BLD.dma)+'</p>';
-  h+='<p class="hint" style="margin-bottom:12px">歷史資料: '+PRED_BLD.historicalRange.start+' ~ '+PRED_BLD.historicalRange.end+' ('+PRED_BLD.historicalRange.days+'天) · 生成時間: '+PRED_BLD.generatedAt+'</p>';
-  h+='<input type="text" class="si2" placeholder="輸入建築物名稱搜尋..." oninput="filterBuildingPredict(this.value)">';
-  var upCount=PRED_BLD.predictions.filter(function(p){return p.trend==='up'}).length;
-  var downCount=PRED_BLD.predictions.filter(function(p){return p.trend==='down'}).length;
-  h+='<div class="sr" style="margin-bottom:16px"><div class="si"><div class="sl">總建築數</div><div class="sv">'+PRED_BLD.totalBuildings+'</div></div><div class="si res"><div class="sl">📈 上升趨勢</div><div class="sv">'+upCount+'</div></div><div class="si nonres"><div class="sl">📉 下降趨勢</div><div class="sv">'+downCount+'</div></div></div>';
-  h+='<div id="buildingPredictList">'+renderBuildingList(PRED_BLD.predictions)+'</div>';
-  return h;
-}
-
-function renderBuildingList(predictions){
-  var h='<table><thead><tr><th>#</th><th>建築物</th><th>物業類型</th><th class="num">水表數</th><th class="num">歷史均值</th><th class="num">預測均值</th><th class="num">模型分</th><th>趨勢</th><th></th></tr></thead><tbody>';
-  predictions.forEach(function(p,i){
-    var avgPred=p.predictions.reduce(function(s,v){return s+v.value},0)/p.predictions.length;
-    var trendColor=p.trend==='up'?'#34d399':'#ef4444';
-    var trendIcon=p.trend==='up'?'↑':'↓';
-    h+='<tr><td>'+(i+1)+'</td><td class="contract">'+esc(p.building)+'</td><td><span class="ptag '+(p.propertyType.indexOf('001:')===0?'res':'')+'">'+esc(p.propertyType)+'</span></td><td class="num">'+p.meterCount+'</td><td class="num">'+fmt(p.avgHistorical)+'</td><td class="num">'+fmt(avgPred)+'</td><td class="num">'+p.modelScore.toFixed(2)+'</td><td style="color:'+trendColor+';font-weight:600">'+trendIcon+' '+p.trend+'</td><td><button class="nb" onclick="showBuildingDetail(\''+esc(p.building)+'\')">查看</button></td></tr>';
-  });
-  h+='</tbody></table>';
-  return h;
-}
-
-function filterBuildingPredict(q){
-  if(q.length<1){document.getElementById('buildingPredictList').innerHTML=renderBuildingList(PRED_BLD.predictions);return;}
-  var ql=q.toLowerCase();
-  var filtered=PRED_BLD.predictions.filter(function(p){return p.building.toLowerCase().includes(ql);});
-  document.getElementById('buildingPredictList').innerHTML=renderBuildingList(filtered);
-}
-
-function showBuildingDetail(building){
-  var pred=PRED_BLD.predictions.find(function(p){return p.building===building});
-  if(!pred)return;
-  var dlg=document.getElementById('predictDlg');
-  document.getElementById('predictDlgTitle').textContent='🏢 '+pred.building+' 預測詳情';
-  if(dlg.open)dlg.close();
-  dlg.showModal();
-  setTimeout(function(){
-    var fittedDates=pred.fitted.map(function(f){return f.date});
-    var fittedVals=pred.fitted.map(function(f){return f.fitted});
-    var actualVals=pred.fitted.map(function(f){return f.actual});
-    var predDates=pred.predictions.map(function(p){return p.date});
-    var predVals=pred.predictions.map(function(p){return p.value});
-    var allDates=fittedDates.concat(predDates);
-    var allActual=actualVals.concat(predDates.map(function(){return null}));
-    var allFitted=fittedVals.concat(predDates.map(function(){return null}));
-    var allPred=new Array(fittedDates.length).fill(null).concat(predVals);
-    disposeChart('pdc');
-    var c=initChart(document.getElementById('predictDlgChart'),'pdc');
-    c.setOption({backgroundColor:'transparent',tooltip:{trigger:'axis'},legend:{data:['實際用水','模型擬合','7天預測'],textStyle:{color:'#94a3b8'}},grid:{left:60,right:40,top:40,bottom:30},xAxis:{type:'category',data:allDates,axisLabel:{fontSize:9,rotate:45}},yAxis:{type:'value',name:'m³'},series:[{name:'實際用水',type:'bar',data:allActual,itemStyle:{color:'rgba(56,189,248,0.6)'},barMaxWidth:6},{name:'模型擬合',type:'line',data:allFitted,smooth:true,itemStyle:{color:'#fbbf24'},lineStyle:{width:2},showSymbol:false},{name:'7天預測',type:'line',data:allPred,itemStyle:{color:'#f472b6'},lineStyle:{type:'dashed',width:3},symbol:'circle',symbolSize:8}]});
-    var tableH='<table style="margin-top:12px"><thead><tr><th>日期</th><th>類型</th><th class="num">實際值</th><th class="num">擬合/預測值</th><th class="num">誤差</th></tr></thead><tbody>';
-    pred.fitted.forEach(function(f){var err=f.actual>0?((f.fitted-f.actual)/f.actual*100).toFixed(1):0;var cls=parseFloat(err)>0?'neg':'up';tableH+='<tr><td>'+f.date+'</td><td><span class="tag" style="background:#fbbf24">擬合</span></td><td class="num">'+fmt(f.actual)+'</td><td class="num">'+fmt(f.fitted)+'</td><td class="num '+cls+'">'+err+'%</td></tr>';});
-    pred.predictions.forEach(function(p){tableH+='<tr><td>'+p.date+'</td><td><span class="tag" style="background:#f472b6">預測</span></td><td class="num">-</td><td class="num">'+fmt(p.value)+'</td><td class="num">-</td></tr>';});
-    tableH+='</tbody></table>';
-    document.getElementById('predictDlgTable').innerHTML=tableH;
-  },50);
 }
 
 function renderMeterPrediction(){
@@ -2036,25 +2020,115 @@ function chatRenderChart(option) {
 
 <!-- Data & Init -->
 <script>
-let D,PRED,PRED_BLD;
+let D,PRED;
 
 // Helper: try a fetch, return null on 404
 const _safeFetch=(u)=>fetch(u).then(r=>r.ok?r.json():null).catch(()=>null);
 
+// Round to 2 decimals (m³). xlsx source is in liters; values in JS-land
+// are already m³, this is just for the wire-format payloads we build
+// in the loader (directDailyDma, etc.).
+function round2(x){return Math.round(x*100)/100;}
+
+// Mirror of scripts/real_data_converter.py:_build_weekly. Operates on
+// the [{date, dmas: {dma: {total, residential, nonResidential}}}] shape.
+// Returns 7-day windows: {weekStart, weekEnd, label, dates, totalByDma,
+// grandTotal, weekdayAvg, weekendAvg, wdByDmaRes, rain, dailyTotals}.
+// The trend tab recomputes its own weekly view from D.trend; this
+// preserves the historical weekly.json contract for chat tools.
+function _buildWeeklyFromDma(dailyDma){
+  if(!dailyDma || !dailyDma.length) return [];
+  const MACAU_DMAS=['澳門低區','澳門填海A區','澳大橫琴區','路氹城區'];
+  const byDate={};
+  for(const x of dailyDma) byDate[x.date]=x;
+  const first=dailyDma[0].date;
+  const last=dailyDma[dailyDma.length-1].date;
+  const startMs=Date.parse(first);
+  const lastMs=Date.parse(last);
+  const weeks=[];
+  const numWeeks=Math.ceil((lastMs-startMs)/86400000/7)+1;
+  for(let w=0; w<numWeeks; w++){
+    const wsMs=startMs+w*7*86400000;
+    const weMs=Math.min(wsMs+6*86400000, lastMs);
+    const dates=[];
+    for(let t=wsMs; t<=weMs; t+=86400000){
+      const d=new Date(t);
+      const y=d.getUTCFullYear();
+      const m=String(d.getUTCMonth()+1).padStart(2,'0');
+      const dd=String(d.getUTCDate()).padStart(2,'0');
+      dates.push(y+'-'+m+'-'+dd);
+    }
+    if(!dates.length) break;
+    const totalByDma={}; const wd={};
+    for(const dma of MACAU_DMAS){
+      totalByDma[dma]=0;
+      wd[dma]={res:0, nonRes:0, wd:0, we:0};
+    }
+    const dailyTotals=[];
+    for(const d of dates){
+      const day=byDate[d];
+      if(!day) continue;
+      let dayTotal=0;
+      for(const dma of MACAU_DMAS){
+        const v=day.dmas[dma] || {total:0, residential:0, nonResidential:0};
+        totalByDma[dma] += v.total;
+        const dow=new Date(d+'T00:00:00Z').getUTCDay();
+        const isWe=dow===0 || dow===6;
+        wd[dma][isWe?'we':'wd'] += 1;
+        // Mirror the Python converter exactly: both branches add the
+        // same res+nonRes regardless of weekend. (Looks like a
+        // long-standing bug in the Python, but the JS must match its
+        // output for chat-tool compatibility.)
+        wd[dma].res += v.residential;
+        wd[dma].nonRes += v.nonResidential;
+        dayTotal += v.total;
+      }
+      dailyTotals.push({date:d, total:Math.round(dayTotal*100)/100});
+    }
+    const grand=Object.values(totalByDma).reduce((a,b)=>a+b,0);
+    const wdRes={};
+    for(const dma of MACAU_DMAS){
+      const x=wd[dma];
+      wdRes[dma]={
+        resWdAvg: Math.round(x.res / Math.max(1, x.wd)*100)/100,
+        resWeAvg: Math.round(x.res / Math.max(1, x.we)*100)/100,
+        nonResWdAvg: Math.round(x.nonRes / Math.max(1, x.wd)*100)/100,
+        nonResWeAvg: Math.round(x.nonRes / Math.max(1, x.we)*100)/100,
+      };
+    }
+    const wdCount=dates.filter(d=>{const dow=new Date(d+'T00:00:00Z').getUTCDay(); return dow!==0&&dow!==6;}).length;
+    const weCount=dates.length-wdCount;
+    weeks.push({
+      weekStart: dates[0],
+      weekEnd: dates[dates.length-1],
+      label: dates[0].slice(5)+'~'+dates[dates.length-1].slice(5),
+      dates: dates,
+      totalByDma: Object.fromEntries(Object.entries(totalByDma).map(([k,v])=>[k, Math.round(v)])),
+      grandTotal: Math.round(grand),
+      weekdayAvg: Math.round(grand / Math.max(1, wdCount)*100)/100,
+      weekendAvg: Math.round(grand / Math.max(1, weCount)*100)/100,
+      wdByDmaRes: wdRes,
+      rain: 0,
+      dailyTotals: dailyTotals
+    });
+  }
+  return weeks;
+}
+
 async function _loadIndividual(){
   // Real data: 14 individual JSONs loaded in parallel
-  const[dma,top20,rank,anomalies,monthlyDiff,searchIdx,cotai,weekly,dates,pred,predBld,predFitted,dailyTotals,meterInfo]=await Promise.all([
+  const[dma,top20,rank,anomalies,dataErrors,monthlyDiff,searchIdx,cotai,weekly,dates,pred,predFitted,dailyTotals,meterInfo]=await Promise.all([
     _safeFetch('data/daily_dma.json'),
     _safeFetch('data/daily_top20.json'),
     _safeFetch('data/rank_changes.json'),
     _safeFetch('data/anomalies.json'),
+    _safeFetch('data/data_errors.json'),
     _safeFetch('data/monthly_main_sub_diff.json'),
     _safeFetch('data/search_index.json'),
     _safeFetch('data/cotai_calendar.json'),
     _safeFetch('data/weekly.json'),
     _safeFetch('data/available_dates.json'),
     _safeFetch('data/predictions.json'),
-    _safeFetch('data/predictions_by_building.json'),
     _safeFetch('data/predictions_fitted.json'),
     // 14MB — transposed into D.meterDaily so the anomaly "show curve"
     // overlay can plot a single meter's 14-day history on demand.
@@ -2081,37 +2155,120 @@ async function _loadIndividual(){
   // anomaly overlay. ~9,963 meters × 151 dates = ~1.5M entries; runs in
   // <1s in the browser. Anomaly "show curve" reads D.meterDaily[meterId].
   const meterDaily = {};
+  // Same transposition collapsed to months: {meterId: {YYYY-MM: total}}.
+  // Drives search.js showMeterDetail(), calendar.js heatmap, and
+  // diff.js sub-meter drilldown. Real data has no per-meter monthly
+  // file — we derive it from the daily totals we already have.
+  const meterMonthly = {};
   if (dailyTotals) {
     Object.keys(dailyTotals).forEach(function(date) {
+      const month = date.slice(0, 7);
       const day = dailyTotals[date];
       Object.keys(day).forEach(function(meterId) {
+        const v = day[meterId];
         if (!meterDaily[meterId]) meterDaily[meterId] = {};
-        meterDaily[meterId][date] = day[meterId];
+        meterDaily[meterId][date] = v;
+        if (!meterMonthly[meterId]) meterMonthly[meterId] = {};
+        meterMonthly[meterId][month] = (meterMonthly[meterId][month] || 0) + v;
       });
     });
   }
-  // Build per-DMA top 50 per day. daily_top20 only has the system-wide
-  // top 20, so a small DMA like 澳門低區 (Macau peninsula) often has 0
-  // entries — clicking into that DMA's detail page used to render an
-  // empty table. Scan all meters per day, group by DMA via meter_info,
-  // and keep the top 50.
-  const top20dma = [];
+
+  // ── DIRECT-only aggregation for home + trend ───────────────────
+  // Home and trend are about *supply* at the DMA level — sub-meters
+  // (INDIRECT) re-measure water that's already been counted on the
+  // parent main meter, so including them double-counts. Restrict
+  // daily_dma, weekly, daily_top20, and the per-DMA top50 to the
+  // 1,886 DIRECT meters only. Other tabs (map, calendar, search,
+  // diff, rank) see all meters via D.dma / D.top / D.top20dma.
+  const MACAU_DMAS = ['澳門低區','澳門填海A區','澳大橫琴區','路氹城區'];
+  const directDailyTotals = {};
+  let directDailyDma = [];
+  let directWeekly = [];
+  let directTop20 = [];
+  let directTop20dma = [];
   if (dailyTotals && meterInfo) {
-    const dates = Object.keys(dailyTotals).sort();
+    // Filter: keep only meters where supplyMode === 'DIRECT'.
+    for (const date of Object.keys(dailyTotals)) {
+      const src = dailyTotals[date];
+      const dst = {};
+      for (const mid of Object.keys(src)) {
+        const info = meterInfo[mid];
+        if (info && info.supplyMode === 'DIRECT') {
+          dst[mid] = src[mid];
+        }
+      }
+      directDailyTotals[date] = dst;
+    }
+    // Re-aggregate daily_dma shape: {date, dmas: {dma: {total, ...}}}.
+    const dates = Object.keys(directDailyTotals).sort();
     for (const date of dates) {
-      const day = dailyTotals[date];
+      const day = directDailyTotals[date];
+      const dmas = {};
+      for (const dma of MACAU_DMAS) {
+        dmas[dma] = { total: 0, residential: 0, nonResidential: 0,
+                      resCount: 0, nonResCount: 0, meterCount: 0 };
+      }
+      for (const mid of Object.keys(day)) {
+        const info = meterInfo[mid];
+        if (!info) continue;
+        const dma = MACAU_DMAS.includes(info.dma) ? info.dma : 'Unclassified';
+        if (!dmas[dma]) {
+          dmas[dma] = { total: 0, residential: 0, nonResidential: 0,
+                        resCount: 0, nonResCount: 0, meterCount: 0 };
+        }
+        const v = day[mid];
+        dmas[dma].total += v;
+        dmas[dma].meterCount += 1;
+        if (info.isResidential) {
+          dmas[dma].residential += v;
+          dmas[dma].resCount += 1;
+        } else {
+          dmas[dma].nonResidential += v;
+          dmas[dma].nonResCount += 1;
+        }
+      }
+      // Round for the wire.
+      for (const dma of Object.keys(dmas)) {
+        const x = dmas[dma];
+        x.total = round2(x.total);
+        x.residential = round2(x.residential);
+        x.nonResidential = round2(x.nonResidential);
+      }
+      directDailyDma.push({ date: date, dmas: dmas });
+    }
+    // Weekly aggregation (7-day windows). Mirrors _build_weekly in the
+    // converter but operates on the DIRECT-only daily_dma we just made.
+    directWeekly = _buildWeeklyFromDma(directDailyDma);
+    // System-wide top 20 per day (DIRECT only).
+    for (const date of dates) {
+      const day = directDailyTotals[date];
+      const items = [];
+      for (const mid of Object.keys(day)) {
+        const info = meterInfo[mid];
+        if (!info) continue;
+        items.push({
+          meterId: mid, total: day[mid], dma: info.dma || 'Unclassified',
+          contractId: info.contractId, propertyType: info.propertyType,
+          buildingName: info.buildingName,
+        });
+      }
+      items.sort((a, b) => b.total - a.total);
+      directTop20.push({ date: date, top20: items.slice(0, 20) });
+    }
+    // Per-DMA top 50 per day (DIRECT only). Same logic as before but
+    // the source dict is already DIRECT-filtered.
+    for (const date of dates) {
+      const day = directDailyTotals[date];
       const byDma = {};
-      for (const meterId of Object.keys(day)) {
-        const info = meterInfo[meterId];
+      for (const mid of Object.keys(day)) {
+        const info = meterInfo[mid];
         if (!info) continue;
         const dma = info.dma || 'Unclassified';
         if (!byDma[dma]) byDma[dma] = [];
         byDma[dma].push({
-          meterId: meterId,
-          total: day[meterId],
-          dma: dma,
-          contractId: info.contractId,
-          propertyType: info.propertyType,
+          meterId: mid, total: day[mid], dma: dma,
+          contractId: info.contractId, propertyType: info.propertyType,
           buildingName: info.buildingName,
         });
       }
@@ -2119,26 +2276,71 @@ async function _loadIndividual(){
         byDma[dma].sort((a, b) => b.total - a.total);
         byDma[dma] = byDma[dma].slice(0, 50);
       }
-      top20dma.push({ date: date, byDma: byDma });
+      directTop20dma.push({ date: date, byDma: byDma });
+    }
+  }
+
+  // All-meters per-DMA top 50 + system-wide top 20 (used by map, etc.).
+  // Built from the unfiltered dailyTotals so sub-meters show up too.
+  const allTop20 = [];
+  const allTop20dma = [];
+  if (dailyTotals && meterInfo) {
+    const dates = Object.keys(dailyTotals).sort();
+    for (const date of dates) {
+      const day = dailyTotals[date];
+      const items = [];
+      const byDma = {};
+      for (const mid of Object.keys(day)) {
+        const info = meterInfo[mid];
+        if (!info) continue;
+        const item = {
+          meterId: mid, total: day[mid], dma: info.dma || 'Unclassified',
+          contractId: info.contractId, propertyType: info.propertyType,
+          buildingName: info.buildingName,
+        };
+        items.push(item);
+        const dma = item.dma;
+        if (!byDma[dma]) byDma[dma] = [];
+        byDma[dma].push(item);
+      }
+      items.sort((a, b) => b.total - a.total);
+      for (const dma of Object.keys(byDma)) {
+        byDma[dma].sort((a, b) => b.total - a.total);
+        byDma[dma] = byDma[dma].slice(0, 50);
+      }
+      allTop20.push({ date: date, top20: items.slice(0, 20) });
+      allTop20dma.push({ date: date, byDma: byDma });
     }
   }
   return {
+    // Raw upstream values: include both DIRECT and INDIRECT meters. Most
+    // tabs (map, calendar, search, diff, rank) need to see the full
+    // picture, including sub-meters, because their analytics depend on
+    // the main-vs-sub relationship (NRW, anomaly grouping, sub-meter
+    // drilldown). See *Direct below for the supply-only view.
     dma:dma||[],
-    top:top20?top20.map(d=>({date:d.date,top20:d.top20})):[],
-    // Per-DMA top 50 per day, built above from daily_totals+meter_info.
-    // Replaces the old "group the system-wide top20 by DMA" approach
-    // which left small DMAs (e.g. 澳門低區) with zero entries.
-    top20dma:top20dma,
+    top:allTop20,
+    top20dma:allTop20dma,
     diff,
     dates:dates||[],
     rank:rank||[],
     anomalies:anomalies||[],
     cotai:cotai||[],
-    trend:dma||[],  // trend is the daily_dma array
+    trend:dma||[],  // trend aliases the per-DMA daily data
     search:searchIdx||[],
-    meterMonthly:{},  // not generated for real data
+    meterMonthly:meterMonthly,  // built from daily_totals.json above
     meterDaily:meterDaily,  // built from daily_totals.json above
     weekly:weekly||[],
+    dataErrors:dataErrors||[],  // meter-day values dropped as data errors
+    // DIRECT-only supply view: home + trend use these because sub-meters
+    // re-measure water already counted on parent main meters (double
+    // counting). Anomaly tab is DIRECT-only by construction (converter
+    // filters at detection time).
+    dmaDirect:directDailyDma,
+    topDirect:directTop20,
+    top20dmaDirect:directTop20dma,
+    trendDirect:directDailyDma,
+    weeklyDirect:directWeekly,
     predictions:pred&&pred.predictions?pred.predictions:[],
     generatedAt:pred?pred.generatedAt:null,
     historicalRange:pred?pred.historicalRange:null,
@@ -2149,10 +2351,9 @@ async function _loadIndividual(){
 
 async function _loadBundle(){
   // Mock data: single all_data.json bundle + predictions files
-  const[dp,pp,pbp]=await Promise.all([
+  const[dp,pp]=await Promise.all([
     _safeFetch('data/all_data.json'),
     _safeFetch('data/predictions.json'),
-    _safeFetch('data/predictions_by_building.json')
   ]);
   if(!dp)throw new Error('all_data.json not found');
   return Object.assign({},dp,{predictions:pp&&pp.predictions?pp.predictions:[]});
@@ -2164,14 +2365,12 @@ async function loadData(){
   try{bundle=await _loadBundle();}catch(e){bundle=null;}
   if(bundle){
     D=bundle;
-    const[pp,pbp]=await Promise.all([_safeFetch('data/predictions.json'),_safeFetch('data/predictions_by_building.json')]);
-    PRED=pp;PRED_BLD=pbp;
+    PRED=await _safeFetch('data/predictions.json');
     return;
   }
   // Real data path
   D=await _loadIndividual();
   PRED=await _safeFetch('data/predictions.json');
-  PRED_BLD=await _safeFetch('data/predictions_by_building.json');
 }
 
 // Initialize after data loads
