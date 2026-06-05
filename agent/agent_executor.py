@@ -57,44 +57,44 @@ TOOL GUIDE:
 - query_meters, get_data_overview, query_rank_changes, query_monthly_diff, generate_chart, generate_report
 - SQL tools (sql_query): for precise aggregations, top-N, joins. Workflow: list_tables_tool → get_table_schema_tool → sql_query
 
-ROUTING: Use JSON tools for fixed views (Top 20, weekly, anomalies list, predictions for one meter/building, charts, reports). Use SQL for multi-dim aggregation, top-N with custom filters, joins, precise row counts. Cantonese DMA names: 澳門→Zone-1, 氹仔/路氹→Zone-2/Zone-4, 路環→Zone-4.
+ROUTING: Use JSON tools for fixed views (Top 20, weekly, anomalies list, predictions for one meter/building, charts, reports). Use SQL for multi-dim aggregation, top-N with custom filters, joins, precise row counts. Macau DMA names: 澳門低區 / 澳門填海A區 / 澳大橫琴區 / 路氹城區. Cantonese → real: 澳門→澳門低區, 氹仔/路氹/路環→路氹城區.
 
 EXAMPLES:
 
-Q: "Show anomalies in Zone-3"
-A: query_anomalies(dma="Zone-3", mode="list", limit=20) → list top by score.
+Q: "Show anomalies in 路氹城區"
+A: query_anomalies(dma="路氹城區", mode="list", limit=20) → list top by score.
 
 Q: "Total daily consumption by DMA"
 A: list_tables_tool() → get_table_schema_tool("daily_dma") → sql_query("SELECT dma, SUM(total) AS total FROM daily_dma GROUP BY dma ORDER BY total DESC") → table.
 
 Q: "Top 5 meters by total consumption"
-A: list_tables_tool() → get_table_schema_tool("meter_daily") → sql_query("SELECT meterId, SUM(total) AS total FROM meter_daily GROUP BY meterId ORDER BY total DESC LIMIT 5") → 5 rows.
+A: list_tables_tool() → get_table_schema_tool("anomalies") → sql_query("SELECT meterId, COUNT(*) AS anomaly_count FROM anomalies GROUP BY meterId ORDER BY anomaly_count DESC LIMIT 5") → 5 rows.
 
-Q: "Compare Zone-1 and Zone-3 this week"
-A: query_consumption(mode="daily", dma="Zone-1", days=7) + query_consumption(mode="daily", dma="Zone-3", days=7) → side-by-side totals + delta.
+Q: "Compare 澳門低區 and 路氹城區 this week"
+A: query_consumption(mode="daily", dma="澳門低區", days=7) + query_consumption(mode="daily", dma="路氹城區", days=7) → side-by-side totals + delta.
 
-Q: "凼仔呢周用水"  (Cantonese)
-A: query_consumption(mode="weekly", dma="Zone-2")  # 氹仔 = Zone-2.
+Q: "氹仔呢周用水"  (Cantonese)
+A: query_consumption(mode="weekly", dma="路氹城區")  # 氹仔 = 路氹城區.
 
-Q: "Investigate meter 3586950"
-A: analyze_anomaly(meter_id="3586950") + get_predictions(query_type="meter", meter_id="3586950") → anomaly history + forecast.
+Q: "Investigate meter 711328"
+A: analyze_anomaly(meter_id="711328") + get_predictions(query_type="meter", meter_id="711328") → anomaly history + forecast.
 
 Q: "Average anomaly score by DMA"
 A: list_tables_tool() → get_table_schema_tool("anomalies") → sql_query("SELECT dma, AVG(anomalyScore) AS avg_score FROM anomalies GROUP BY dma ORDER BY avg_score DESC") → table.
 
 ASK-BACK EXAMPLES (see CLARIFICATION rule below):
 
-Q: "凼仔漏水"  (DMA + metric ambiguous)
-A: "凼仔可能指 Zone-2 或 Zone-4,漏水可能是: 1) [默认] 主分表差(NRW)  2) 异常流量事件  3) 两者都要。请选择(回数字即可):"  → NO tool calls.
+Q: "氹仔漏水"  (DMA + metric ambiguous, Cantonese 氹仔 could be either 路氹城區 or 澳大橫琴區 if user is loose with terms)
+A: "氹仔可能指 路氹城區 或 澳大橫琴區,漏水可能是: 1) [默认] 主分表差(NRW)  2) 异常流量事件  3) 两者都要。请选择(回数字即可):"  → NO tool calls.
 
 Q: "上周水损情况"  (metric ambiguous: NRW vs anomaly)
 A: "水损可指: 1) [默认] 主分表差(NRW)  2) 异常流量事件。请选择:"  → NO tool calls.
 
-Q: "凼仔的 NRW"  (metric clear, DMA defaults to Zone-2)
-A: GUESS+STATE. query_monthly_diff(dma="Zone-2") and add "(默认查 Zone-2, 如需 Zone-4 请说明)" at the top of the answer.
+Q: "氹仔的 NRW"  (metric clear, DMA defaults to 路氹城區)
+A: GUESS+STATE. query_monthly_diff(dma="路氹城區") and add "(默认查 路氹城區, 如需其他 DMA 请说明)" at the top of the answer.
 
-Q: "上周 Zone-3 用水"  (all clear)
-A: query_consumption(mode="daily", dma="Zone-3", days=7) → proceed, no question.
+Q: "上周 路氹城區 用水"  (all clear)
+A: query_consumption(mode="daily", dma="路氹城區", days=7) → proceed, no question.
 
 CLARIFICATION (IT-support style — use SPARINGLY):
 
@@ -143,7 +143,7 @@ def main():
 
     print("\nExample questions:")
     print("  - What anomalies happened recently?")
-    print("  - Show Zone-3 anomaly statistics")
+    print("  - Show 路氹城區 anomaly statistics")
     print("  - Predict next week consumption")
     print("  - How many meters are there?")
     print("  - Show me a weekly trend chart")

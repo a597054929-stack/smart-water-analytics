@@ -48,8 +48,12 @@ def test_prompt_caps_at_one_question():
 
 
 def test_prompt_under_token_budget():
-    """The full system prompt must stay under 1100 tokens (was 723 before
-    adding CLARIFICATION; budget gives 50% headroom for future tweaks)."""
+    """The full system prompt must stay under 1200 tokens. Budget bumped
+    from 1100 to 1200 in 2026-06-05 after switching the EXAMPLES from
+    mock DMA names (Zone-1..4) to real Macau names (澳門低區, 路氹城區,
+    澳大橫琴區, 澳門填海A區) — Chinese names tokenize ~3x heavier than
+    ASCII aliases, so the same example count costs ~50 more tokens.
+    1200 still leaves room for future additions (~12% headroom)."""
     from agent.agent_executor import SYSTEM_PROMPT
     try:
         import tiktoken
@@ -58,4 +62,4 @@ def test_prompt_under_token_budget():
     except ImportError:
         # Fallback: rough char/4 estimate
         n = len(SYSTEM_PROMPT) // 4
-    assert n < 1100, f"Prompt tokens {n} exceeded budget 1100"
+    assert n < 1200, f"Prompt tokens {n} exceeded budget 1200"

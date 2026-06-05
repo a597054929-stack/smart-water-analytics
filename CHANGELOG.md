@@ -4,6 +4,19 @@ All notable changes to the Smart Water Analytics project.
 
 ## 2026-06-05
 
+### Real-Data Re-Eval (calibration follow-up)
+- **Switched eval target from mock to real data** after user feedback ("我不理解为什么你会问zone3这些, 这个不是只存在在mock文件吗"). Previous mock-data eval was using `Zone-1..4` DMA names and a mock meter ID `3586950` that don't exist in production.
+- **QA pairs calibrated** (`tests/qa_pairs.json`) — water meter `711328` (existed in mock only) replaced with `753832` (131 anomalies in real `anomalies` table, 澳門低區 / 政府長者公寓, has full coverage). Pairs `#7 predictions_meter` and `#14 anomaly_investigate` updated; keyword for `#7` also bumped from `711328` → `753832`.
+- **System prompt SQL example fixed** (`agent/agent_executor.py:71`) — the "Top 5 meters by total consumption" example referenced `meter_daily` table, which **does not exist in real DB** (real schema: `anomalies`, `daily_dma`, `hourly_meter`, `meters`, `monthly_diff`, `predictions`, `predictions_building`, `rank_changes`, `search_index`, `weekly`). Replaced with a query against `anomalies` (similar shape, real data has plenty). Without this fix, the LLM would have followed its own example and hit `no such table: meter_daily` on real data.
+- **Test budget bumped to 1200 tokens** in `tests/test_clarification_prompt.py` (from 1100) — Chinese DMA names like `澳門低區` tokenize ~3x heavier than ASCII aliases, so the same example count costs ~50 more tokens. 1200 still leaves ~5% headroom. Final prompt: 1149 tokens.
+- **28-pair eval on real data** (`backend/data/analytics_real.db`, mimo-v2.5-pro, threshold 0.6 diagnostic):
+  - **pass_rate = 60.7%** (17/28), tool_acc = 71.4%, avg_kw = 62.5%, avg_latency = 20.5s, **0% failure rate** (all pairs completed)
+  - All 3 clarification pairs PASS (regression OK): 氹仔漏水, 上周水损情况, 氹仔的 NRW
+  - `predictions_meter` (#7) PASSES on real data with meter 753832
+  - **Lower than mock 64.3%** because the real-data run is harder (real schema, real edge cases). The 6 "Type A" fails (2/5/11/12/17/18) all had `tool_match=True` but `kw_recall=0%` — the LLM used the right tool and got the data, but paraphrased the column names in the final answer (e.g. `anomalyScore` → `异常分数`). These are keyword-scoring limitations, not real routing failures.
+  - 2 vague pairs (8/25) failed because the question lacks a target — "Show predictions for a building" / "Generate a comprehensive report" with no building/period spec. These would benefit from a follow-up clarifying the question.
+- **Why this matters**: the mock-data eval was giving false confidence. The agent's prompt referenced a non-existent table, and the QA pairs used mock names. Without this calibration, shipping to production would surface these as user-facing errors, not as test failures.
+
 ### Agent Optimization — Ask-Back Clarification (IT-Support Style)
 - **CLARIFICATION block in system prompt** (`agent/agent_executor.py`) — encodes an "ask-back, IT-support style" behavior rule. When the question is materially ambiguous (different pick → different tool/answer), the LLM returns a brief Chinese clarification with 2-4 numbered options (most-likely marked as default) and does NOT call any tools. For minor uncertainty, falls back to GUESS+STATE: proceed and add a short parenthetical stating the assumption. Hard cap of 1 question per turn to avoid pestering. No new tool, no new SSE event, no frontend change — it's purely a prompt-engineering rule.
 - **ASK-BACK examples** added to the EXAMPLES block — 4 concrete examples (凼仔漏水 → ask, 上周水损情况 → ask, 凼仔的 NRW → guess+state, 上周 Zone-3 用水 → proceed) make the pattern explicit so the LLM has a template to follow. Without these, the LLM defaulted to answering both interpretations instead of asking.
