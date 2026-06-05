@@ -195,7 +195,7 @@ portfolio/
 ## MLOps Pipeline
 
 The `pipeline/` module turns raw JSON artifacts into a production-grade
-data flow. Six stages, each with structured logging, schema validation,
+data flow. Seven stages, each with structured logging, schema validation,
 and checkpoint support:
 
 ```bash
@@ -210,6 +210,7 @@ Stages:
 4. **predict** — validate the forecast rows
 5. **load_sql** — write to SQLite with indexes on `meterId`, `date`, `dma`
 6. **drift** — KS-test (numeric) and chi-square (categorical) drift detection
+7. **data_health** — pattern detection on the cleaned daily data (per-meter z-score outliers, value-ratio daily jumps, cancellation-style negative pairs). Writes `checkpoints/stage_data_health.json` with `summary` + `recent_*` (top 50 from last 30 days) + `*_all` (full lists). Consumed by `scripts/notebooks/02_health_check.ipynb` for human review and by `01_data_correction.ipynb` for the investigate → apply → rebuild → verify workflow that edits `backend/data/corrections.json`.
 
 ## AI Agent
 
@@ -230,7 +231,7 @@ in the chat UI).
 ## Evaluation
 
 ```bash
-pytest tests/ -v                 # 39 unit tests
+pytest tests/ -v                 # 52 unit tests
 python tests/evaluate.py         # 25 QA pairs, real LLM
 ```
 

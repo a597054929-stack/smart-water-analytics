@@ -14,6 +14,10 @@ Stages (in order):
     4. predict        (Re)run the building-level forecasting (mock for portfolio)
     5. load_sql       Build the analytics SQLite database
     6. drift          Compare current distributions to the saved baseline
+    7. data_health    Pattern detection: per-meter z-score outliers, day-over-day
+                     jumps, and cancellation pairs. Written to
+                     `checkpoints/stage_data_health.json` and consumed by
+                     `scripts/notebooks/02_health_check.ipynb`.
 
 Why a stage-based runner?
 - MLOps reality: every stage fails differently. Ingest can fail on a missing
@@ -304,6 +308,98 @@ def stage_drift(artifacts: dict[str, pd.DataFrame], log) -> dict[str, Any]:
         return out
 
 
+def stage_data_health(artifacts: dict[str, pd.DataFrame], log) -> dict[str, Any]:
+    """Pattern detection on the cleaned daily data.
+
+    Runs three checks on ``artifacts["meter_daily"]`` (the
+    ``[date, meterId, total]`` DataFrame that stage_ingest loads):
+
+    - ``detect_per_meter_outliers`` — per-meter z-score > 4.0.
+    - ``detect_daily_jumps`` — value at least 20× the meter's own
+      median (catches the 712720 / 4月16日 pattern, which is 100-500×).
+    - ``detect_negative_pairs`` — daily total < 1% of the meter's own
+      median (catches cancellation-style errors).
+
+    Output is split into:
+      - ``summary``: counts per check (cheap to scan)
+      - ``recent_*``: top-50 entries from the last 30 days, sorted by
+        score descending (the part humans actually look at)
+      - ``*_all``: full lists (for notebooks that want the whole picture)
+
+    The result is stored in ``artifacts["data_health"]`` and
+    checkpointed as ``checkpoints/stage_data_health.json``. The
+    notebook ``02_health_check.ipynb`` consumes it.
+    """
+    with plog.stage("data_health") as slog:
+        df = artifacts.get("meter_daily", pd.DataFrame())
+        if df.empty:
+            slog.warning("data_health: meter_daily is empty, skipping")
+            out = {
+                "summary": {"per_meter_outliers": 0, "daily_jumps": 0, "negative_pairs": 0},
+                "recent_per_meter_outliers": [],
+                "recent_daily_jumps": [],
+                "recent_negative_pairs": [],
+                "per_meter_outliers_all": [],
+                "daily_jumps_all": [],
+                "negative_pairs_all": [],
+            }
+            artifacts["data_health"] = out
+            return out
+
+        outliers = dq.detect_per_meter_outliers(df)
+        jumps = dq.detect_daily_jumps(df)
+        pairs = dq.detect_negative_pairs(df)
+
+        # Find the cutoff: last 30 days of data. Use the maximum date in
+        # the cleaned data so the "recent" window is meaningful even on
+        # partial-date datasets.
+        if "date" in df.columns and not df.empty:
+            try:
+                latest = pd.to_datetime(df["date"]).max()
+                cutoff = (latest - pd.Timedelta(days=30)).strftime("%Y-%m-%d")
+            except Exception:
+                cutoff = "1970-01-01"
+        else:
+            cutoff = "1970-01-01"
+
+        def _recent_top(entries: list[dict], top: int = 50) -> list[dict]:
+            r = [e for e in entries if e["date"] >= cutoff]
+            r.sort(key=lambda e: -e["score"])
+            return r[:top]
+
+        out = {
+            "summary": {
+                "per_meter_outliers": len(outliers),
+                "daily_jumps": len(jumps),
+                "negative_pairs": len(pairs),
+                "recent_window_days": 30,
+                "cutoff_date": cutoff,
+            },
+            "recent_per_meter_outliers": _recent_top(outliers),
+            "recent_daily_jumps": _recent_top(jumps),
+            "recent_negative_pairs": _recent_top(pairs),
+            "per_meter_outliers_all": outliers,
+            "daily_jumps_all": jumps,
+            "negative_pairs_all": pairs,
+        }
+        artifacts["data_health"] = out
+        slog.info(
+            "data_health complete",
+            extra={
+                "stage": "data_health",
+                "metrics": {
+                    "summary": out["summary"],
+                    "recent_counts": {
+                        "per_meter_outliers": len(out["recent_per_meter_outliers"]),
+                        "daily_jumps": len(out["recent_daily_jumps"]),
+                        "negative_pairs": len(out["recent_negative_pairs"]),
+                    },
+                },
+            },
+        )
+        return out
+
+
 # ── Checkpointing ────────────────────────────────────────────
 
 def _write_checkpoint(name: str, payload: dict, ckpt_dir: Path) -> None:
@@ -334,6 +430,7 @@ STAGES: list[tuple[str, Callable]] = [
     ("predict", stage_predict),
     ("load_sql", stage_load_sql),
     ("drift", stage_drift),
+    ("data_health", stage_data_health),
 ]
 
 

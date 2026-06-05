@@ -2,6 +2,47 @@
 
 All notable changes to the Smart Water Analytics project.
 
+## 2026-06-05
+
+### Data Quality
+- **`scripts/real_data_converter.py` now caps per-meter daily consumption at 40,000 m³ using `abs(consumption) > MAX_METER_DAILY`** — catches both positive typos (e.g. +42,940,982 m³) and negative meter rollovers. Largest legitimate consumer in Macau is ~5,000-15,000 m³/day; 40,000 leaves headroom for industrial / large resort users but still catches the 1月8日 incident.
+- Add `data_errors.json` sidecar (append-only cumulative) — powers the Data Integrity banner, anomaly type filter, and CSV export. New entries are appended on every converter run; old entries are preserved across runs.
+- Add `data_error` anomaly type — surfaces dropped values in the anomaly tab with `severity: 'high'`. Sort-by-score pushes data_error rows to the top of the list.
+
+### Frontend
+- Remove "住宅占比" KPI from home (`frontend/js/home.js` `renderKPI`)
+- Remove "住宅趨勢" view from trend (`frontend/js/trend.js` `drawResTrendChart` + button + switch case)
+- Remove "按建築物" tab from predict (`frontend/js/predict.js` `renderBuildingPrediction` + button + state)
+- Restrict "DIRECT供水" filter to home / trend / anomaly only — load `*Direct` variants of `dma`/`trend`/`top`/`top20dma`/`weekly` in `frontend/build.cjs` loader; other tabs keep all-meters data
+- Round consumption to 2 decimal places everywhere (`scripts/real_data_converter.py` `round(L/1000, 2)`, `scripts/migrate_liters_to_m3.py`, `scripts/fast_aggregate_daily.py`, `frontend/build.cjs` `round2` helper)
+- Add anomaly sort-by-score — data_error rows first, then `anomalyScore` desc
+- Add Data Integrity banner on home — KPI grid (排除筆數 / 排除總水量) + collapsible 最近 5 筆明細 table with link to 異常頁 "數據異常" 過濾
+- Add anomaly KPI title tooltip with type breakdown (暴增 / 暴跌 / 歸零 / 關注 / 數據異常)
+- Include data_errors in CSV export — separate section after main anomalies, marked with `# 以下為 data_errors 區塊` header
+
+### Bug Fix
+- **Fix negative readings bypassing the daily cap** — meter 713911 had +42,940,982 and -42,940,982 readings on 2026-01-08 that cancelled in the daily cache, masking the data error (1月8日 total showed as -42,923,056 m³, off by 5 orders of magnitude). The previous cap check `consumption > MAX_METER_DAILY` only caught the positive reading. Switched to `abs(consumption) > MAX_METER_DAILY`. Verified by single-day test: Jan 18 (clean day, 0 errors), Jan 8 (3 errors dropped including both signs of meter 713911).
+- **Fix cache containing unrounded floats (3.3299999999999996 instead of 3.33)** — caused by 24-hourly-row sums reintroducing float noise, plus the cache having been written by an earlier converter version with `round(..., 3)`. Cache values are now explicitly rounded to 2 decimals at the cache layer; downstream JSONs (`daily_dma`, `daily_top20`, `anomalies`, etc.) inherit the cleaned values. `daily_totals.json` shrank from 16.96 MB → 13.47 MB.
+
+### Data Quality
+- **Lower per-meter daily cap from 40,000 → 4,000 m³** (`MAX_METER_DAILY` in `scripts/real_data_converter.py`) — the 40,000 cap was too lenient; largest legitimate consumer in Macau is a hotel/casino at ~3,000-3,800 m³/day. The new cap reclassified 35 unrelated values (meter 712720's 4/29 + 34 others across 1月-5月) as `data_error`, surfacing them in the Data Integrity banner.
+- **Add external `backend/data/corrections.json` for per-meter data corrections** — JSON-driven, no converter code change needed. Format: `[{meterId, start, end, factor, reason}, ...]`. Loaded via new `--corrections PATH` CLI flag (default: `backend/data/corrections.json`). The first entry is meter 712720's ×10 correction (4/16-4/27, factor=0.1) — a known configuration error confirmed by the user. Corrections are applied at the row level BEFORE the cap check, so a corrected value passes the tighter cap.
+- **Round the daily-total sum inline to suppress IEEE-754 noise** — `daily[date][mid] = round(daily[date][mid] + consumption, 2)` in `_aggregate_dates`. The 2-dp round is safe because every input row is already 2-dp, and it stops 24-row sums from drifting to `557.0000000000001` instead of `557.0`.
+- `data_errors.json` grew from 16 → 51 entries (35 new); `anomalies.json` `data_error` type from 16 → 51.
+
+### Documentation
+- Update `docs/DEBUGGING_LOG.md` — add section "1月8日 4294 万吨误值事件" documenting the abs() bypass investigation, the cache patching approach, and lessons for future data-quality bugs.
+- Add sub-section "External corrections file (meter 712720)" to the same chapter, covering the new `corrections.json` pattern.
+- Update `docs/REAL_DATA_ARCHITECTURE.md` — add `corrections.json` to the 修正数据错误 subsection, update MAX_METER_DAILY reference (40,000 → 4,000), add `corrections.json` row to 限制 table.
+
+### Auto Health-Detection Stage + Interactive Correction Notebook
+- **New pipeline stage `stage_data_health`** in `pipeline/orchestrator.py` — runs on every pipeline execution, calls three pattern detectors on the cleaned daily DataFrame, writes `checkpoints/stage_data_health.json`. Output structure: `summary` (counts per check, cheap to scan) + `recent_*` (top 50 from last 30 days, sorted by score desc, the part humans actually look at) + `*_all` (full lists for notebooks that want the whole picture). Added as the 7th tuple in `STAGES` (after `drift`).
+- **Three new detection functions in `pipeline/data_quality.py`**: `detect_per_meter_outliers` (per-meter z-score, threshold_z=4.0, min_history=14, vectorized via merge), `detect_daily_jumps` (value-ratio max/min ≥ threshold_ratio=20.0, min_history=7, catches both directions including crashes to zero), `detect_negative_pairs` (heuristic: |value| < 1% × meter_median). Each returns `list[dict]` with `[date, meterId, type, value, score]`.
+- **13 new tests in `tests/test_data_health.py`** covering each detector's positive/negative cases, the min_history guard, and the stage's empty-input path. All 52 tests in `tests/` pass.
+- **New notebook `scripts/notebooks/01_data_correction.ipynb`** — 5-cell investigate → confirm → apply → rebuild → verify workflow. Uses `scripts/notebooks/_corrections_helper.py` (reuses converter's `_build_*` functions for safe rebuild, no converter code change). End-to-end verified on the 712720 historical incident: cell 5 correctly refuses duplicate correction (overlap check), cell 6 rebuilds 10 downstream JSONs, cell 7 confirms 0 z-outliers for 712720 in the cleaned cache.
+- **New notebook `scripts/notebooks/02_health_check.ipynb`** — read-only 8-cell summary view. Renders the `stage_data_health.json` summary with text-based WARN/OK markers (jinja2-free for terminal rendering), shows the 50 most extreme recent entries per check, plus a log-binned histogram of per-meter medians so a few large consumers don't squash the long tail.
+- **`_corrections_helper.py` find_* functions now delegate to `dq.detect_*`** — single source of truth. `find_per_meter_outliers` and `find_daily_jumps` reshapes the list output into the notebook-friendly DataFrame. `find_negative_pairs` keeps its SQLite-backed hourly check (sum_h < abs_h * 0.1) because the precise hourly version is more accurate than the daily heuristic when SQLite data is available. Re-run behavior on real data: 4,882 / 57,384 / 1,200 across the three checks.
+
 ## 2026-06-04
 
 ### Bug Fix
