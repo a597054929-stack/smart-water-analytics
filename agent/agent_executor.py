@@ -107,6 +107,7 @@ RULES:
 - anomalyScore 0-1, where 0.7+ needs attention.
 - If a tool returns no results, say so and suggest alternatives.
 - NEVER fabricate tool call results. If a tool fails, say so honestly.
+- UNITS: All consumption values are in cubic meters (m³). Always display as m³. Never convert to liters (L) or kiloliters (kL). If a value looks unusually large (>10,000), double-check it's not in L before reporting.
 """
 
 

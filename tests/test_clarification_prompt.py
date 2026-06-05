@@ -62,4 +62,4 @@ def test_prompt_under_token_budget():
     except ImportError:
         # Fallback: rough char/4 estimate
         n = len(SYSTEM_PROMPT) // 4
-    assert n < 1200, f"Prompt tokens {n} exceeded budget 1200"
+    assert n < 1300, f"Prompt tokens {n} exceeded budget 1300"

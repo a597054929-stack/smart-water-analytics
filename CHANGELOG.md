@@ -2,6 +2,30 @@
 
 All notable changes to the Smart Water Analytics project.
 
+## 2026-06-06 (evening)
+
+### Unit mismatch fix (L→m³) + Property type mapping correction
+
+#### 1. SQLite unit mismatch: JSON m³ vs SQLite L
+- **Bug**: `analytics_real.db` had consumption values in liters (L) while `output_real/*.json` had already been migrated to cubic meters (m³). The LLM saw L values in SQL tool output and displayed them without conversion (e.g., "87,152,800" instead of "87,152 m³").
+- **Root cause**: The `migrate_liters_to_m3.py` script migrated the JSON files but the SQL loader was never re-run afterward.
+- **Fix**: Re-loaded `analytics_real.db` from the m³ JSONs. Now `daily_dma.total` = 2339.07 (m³) matching JSON exactly.
+- **Regression test**: `tests/test_unit_consistency.py` — 2 tests assert JSON and SQLite values match for `daily_dma` and `predictions`.
+
+#### 2. Property type mapping: wrong code-to-label mapping
+- **Bug**: `REAL_PROPERTY_TYPE_MAPPING` in `pipeline/schema.py` mapped codes incorrectly because it assumed a generic code set, not the actual Macau billing codes. For example:
+  - `005:高爾夫球場` (Golf Course) → was `005:Office`, now `010:Recreation`
+  - `003:博彩` (Casino) → was `003:Hotel`, now `002:Entertainment`
+  - `009:酒店` (Hotel) → was `009:Healthcare`, now `003:Hotel`
+  - `004:建築工程` (Construction) → was `004:Restaurant`, now `006:Industrial`
+- **Fix**: Rewrote mapping based on actual xlsx codes (43 unique types). Updated meter_info.json, daily_top20.json, predictions.json, rank_changes.json.
+- **Impact**: 382 meters corrected in meter_info.json, 2845 corrections across all JSON files.
+- **Regression test**: `tests/test_unit_consistency.py` — 3 tests verify no mock codes remain and correct hotel/entertainment counts.
+
+#### 3. SYSTEM_PROMPT unit guidance
+- Added rule: "All consumption values are in cubic meters (m³). Always display as m³."
+- Token budget bumped 1200 → 1300 to accommodate.
+
 ## 2026-06-06
 
 ### Eval scoring fix + Data quality tool + Schema regression test
