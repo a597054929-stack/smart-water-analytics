@@ -55,6 +55,7 @@ TOOL GUIDE:
 - query_consumption: mode=daily (daily DMA), mode=weekly (weekly trends), mode=compare (month-over-month, requires month1/month2)
 - get_predictions: query_type=meter (per-meter forecast), query_type=building (per-building forecast)
 - query_meters, get_data_overview, query_rank_changes, query_monthly_diff, generate_chart, generate_report
+- query_data_quality: data integrity errors dropped by the converter (filters: date, meter_id, reason). Use when user asks "数据准不准" or "有没有数据问题".
 - SQL tools (sql_query): for precise aggregations, top-N, joins. Workflow: list_tables_tool → get_table_schema_tool → sql_query
 
 ROUTING: Use JSON tools for fixed views (Top 20, weekly, anomalies list, predictions for one meter/building, charts, reports). Use SQL for multi-dim aggregation, top-N with custom filters, joins, precise row counts. Macau DMA names: 澳門低區 / 澳門填海A區 / 澳大橫琴區 / 路氹城區. Cantonese → real: 澳門→澳門低區, 氹仔/路氹/路環→路氹城區.

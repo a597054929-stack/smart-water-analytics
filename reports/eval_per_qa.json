@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-06-05T15:49:30.750737Z",
-  "n_pairs": 28,
-  "pass_rate": 0.607,
-  "tool_accuracy": 0.714,
-  "avg_kw_recall": 0.625,
-  "avg_latency_s": 20.494,
+  "generated_at": "2026-06-05T16:19:00.947491Z",
+  "n_pairs": 30,
+  "pass_rate": 0.767,
+  "tool_accuracy": 0.7,
+  "avg_kw_recall": 0.867,
+  "avg_latency_s": 19.159,
   "failure_rate": 0.0,
   "threshold": 0.6,
   "verdict": "pass",
@@ -18,24 +18,14 @@
       ],
       "tool_calls": [
         "query_anomalies",
-        "query_anomalies",
-        "query_anomalies",
-        "query_anomalies",
-        "sql_query",
-        "sql_query",
-        "sql_query",
-        "sql_query",
-        "get_table_schema_tool",
-        "get_table_schema_tool",
-        "sql_query",
-        "sql_query"
+        "query_anomalies"
       ],
-      "tool_match": true,
+      "tool_match": false,
       "kw_recall": 1.0,
-      "elapsed_s": 36.453,
-      "answer_chars": 312,
+      "elapsed_s": 9.273,
+      "answer_chars": 145,
       "error": null,
-      "pass_": true
+      "pass_": false
     },
     {
       "question": "What are the top 5 highest-scoring anomalies?",
@@ -46,15 +36,13 @@
         "DESC"
       ],
       "tool_calls": [
-        "get_table_schema_tool",
-        "get_table_schema_tool",
-        "sql_query",
-        "sql_query"
+        "query_anomalies",
+        "query_anomalies"
       ],
-      "tool_match": true,
-      "kw_recall": 0.0,
-      "elapsed_s": 23.253,
-      "answer_chars": 839,
+      "tool_match": false,
+      "kw_recall": 0.5,
+      "elapsed_s": 12.018,
+      "answer_chars": 1245,
       "error": null,
       "pass_": false
     },
@@ -67,12 +55,14 @@
       ],
       "tool_calls": [
         "query_anomalies",
+        "query_anomalies",
+        "query_anomalies",
         "query_anomalies"
       ],
       "tool_match": true,
       "kw_recall": 1.0,
-      "elapsed_s": 8.518,
-      "answer_chars": 192,
+      "elapsed_s": 13.522,
+      "answer_chars": 310,
       "error": null,
       "pass_": true
     },
@@ -89,9 +79,9 @@
         "query_anomalies"
       ],
       "tool_match": false,
-      "kw_recall": 0.5,
-      "elapsed_s": 8.279,
-      "answer_chars": 299,
+      "kw_recall": 1.0,
+      "elapsed_s": 9.635,
+      "answer_chars": 307,
       "error": null,
       "pass_": false
     },
@@ -108,11 +98,11 @@
         "get_data_overview"
       ],
       "tool_match": true,
-      "kw_recall": 0.0,
-      "elapsed_s": 9.208,
-      "answer_chars": 452,
+      "kw_recall": 1.0,
+      "elapsed_s": 8.054,
+      "answer_chars": 847,
       "error": null,
-      "pass_": false
+      "pass_": true
     },
     {
       "question": "How many residential meters do we have?",
@@ -122,19 +112,17 @@
         "residential"
       ],
       "tool_calls": [
-        "list_tables_tool",
-        "list_tables_tool",
-        "get_table_schema_tool",
-        "get_table_schema_tool",
+        "query_meters",
+        "query_meters",
         "sql_query",
         "sql_query"
       ],
-      "tool_match": false,
-      "kw_recall": 0.0,
-      "elapsed_s": 15.004,
-      "answer_chars": 51,
+      "tool_match": true,
+      "kw_recall": 1.0,
+      "elapsed_s": 9.612,
+      "answer_chars": 104,
       "error": null,
-      "pass_": false
+      "pass_": true
     },
     {
       "question": "Predict next week consumption for meter 753832",
@@ -149,8 +137,8 @@
       ],
       "tool_match": true,
       "kw_recall": 1.0,
-      "elapsed_s": 7.14,
-      "answer_chars": 201,
+      "elapsed_s": 6.489,
+      "answer_chars": 155,
       "error": null,
       "pass_": true
     },
@@ -161,13 +149,16 @@
       "expected_keywords": [
         "building"
       ],
-      "tool_calls": [],
-      "tool_match": false,
-      "kw_recall": 0.0,
-      "elapsed_s": 6.662,
-      "answer_chars": 90,
+      "tool_calls": [
+        "get_predictions",
+        "get_predictions"
+      ],
+      "tool_match": true,
+      "kw_recall": 1.0,
+      "elapsed_s": 14.136,
+      "answer_chars": 620,
       "error": null,
-      "pass_": false
+      "pass_": true
     },
     {
       "question": "What is the weekly trend?",
@@ -182,8 +173,8 @@
       ],
       "tool_match": true,
       "kw_recall": 1.0,
-      "elapsed_s": 22.362,
-      "answer_chars": 996,
+      "elapsed_s": 23.038,
+      "answer_chars": 1375,
       "error": null,
       "pass_": true
     },
@@ -200,8 +191,8 @@
       ],
       "tool_match": true,
       "kw_recall": 1.0,
-      "elapsed_s": 18.563,
-      "answer_chars": 1781,
+      "elapsed_s": 16.847,
+      "answer_chars": 1253,
       "error": null,
       "pass_": true
     },
@@ -218,11 +209,11 @@
         "query_monthly_diff"
       ],
       "tool_match": true,
-      "kw_recall": 0.0,
-      "elapsed_s": 18.03,
-      "answer_chars": 646,
+      "kw_recall": 1.0,
+      "elapsed_s": 24.627,
+      "answer_chars": 730,
       "error": null,
-      "pass_": false
+      "pass_": true
     },
     {
       "question": "Compare January and February consumption",
@@ -242,8 +233,8 @@
       ],
       "tool_match": true,
       "kw_recall": 0.0,
-      "elapsed_s": 17.213,
-      "answer_chars": 466,
+      "elapsed_s": 20.003,
+      "answer_chars": 434,
       "error": null,
       "pass_": false
     },
@@ -260,8 +251,8 @@
       ],
       "tool_match": true,
       "kw_recall": 1.0,
-      "elapsed_s": 15.563,
-      "answer_chars": 975,
+      "elapsed_s": 22.178,
+      "answer_chars": 1123,
       "error": null,
       "pass_": true
     },
@@ -274,14 +265,34 @@
       ],
       "tool_calls": [
         "query_anomalies",
-        "get_predictions",
         "query_anomalies",
-        "get_predictions"
+        "query_meters",
+        "get_predictions",
+        "query_meters",
+        "get_predictions",
+        "sql_query",
+        "sql_query",
+        "sql_query",
+        "sql_query",
+        "list_tables_tool",
+        "list_tables_tool",
+        "sql_query",
+        "sql_query",
+        "get_table_schema_tool",
+        "get_table_schema_tool",
+        "sql_query",
+        "sql_query",
+        "sql_query",
+        "sql_query",
+        "sql_query",
+        "sql_query",
+        "query_data_quality",
+        "query_data_quality"
       ],
       "tool_match": false,
       "kw_recall": 1.0,
-      "elapsed_s": 9.407,
-      "answer_chars": 351,
+      "elapsed_s": 88.746,
+      "answer_chars": 889,
       "error": null,
       "pass_": false
     },
@@ -293,49 +304,15 @@
         "路氹城區"
       ],
       "tool_calls": [
-        "generate_report",
-        "generate_report",
         "get_data_overview",
-        "query_consumption",
-        "query_anomalies",
-        "get_data_overview",
-        "query_consumption",
-        "query_anomalies",
-        "list_tables_tool",
-        "list_tables_tool",
-        "sql_query",
-        "sql_query",
-        "sql_query",
-        "sql_query",
-        "sql_query",
-        "sql_query",
-        "sql_query",
-        "sql_query",
-        "sql_query",
-        "sql_query",
-        "get_table_schema_tool",
-        "sql_query",
-        "sql_query",
-        "get_table_schema_tool",
-        "sql_query",
-        "sql_query",
-        "get_table_schema_tool",
-        "get_table_schema_tool",
-        "get_table_schema_tool",
-        "get_table_schema_tool",
-        "sql_query",
-        "sql_query",
-        "sql_query",
-        "sql_query",
-        "sql_query",
-        "sql_query"
+        "get_data_overview"
       ],
-      "tool_match": true,
-      "kw_recall": 1.0,
-      "elapsed_s": 97.267,
-      "answer_chars": 1401,
+      "tool_match": false,
+      "kw_recall": 0.0,
+      "elapsed_s": 18.953,
+      "answer_chars": 99,
       "error": null,
-      "pass_": true
+      "pass_": false
     },
     {
       "question": "What is the total daily consumption by DMA?",
@@ -355,8 +332,8 @@
       ],
       "tool_match": true,
       "kw_recall": 1.0,
-      "elapsed_s": 20.273,
-      "answer_chars": 990,
+      "elapsed_s": 18.692,
+      "answer_chars": 873,
       "error": null,
       "pass_": true
     },
@@ -377,11 +354,11 @@
         "sql_query"
       ],
       "tool_match": true,
-      "kw_recall": 0.0,
-      "elapsed_s": 17.323,
-      "answer_chars": 804,
+      "kw_recall": 0.5,
+      "elapsed_s": 25.628,
+      "answer_chars": 780,
       "error": null,
-      "pass_": false
+      "pass_": true
     },
     {
       "question": "What is the average anomaly score by DMA?",
@@ -398,11 +375,11 @@
         "sql_query"
       ],
       "tool_match": true,
-      "kw_recall": 0.0,
-      "elapsed_s": 18.563,
-      "answer_chars": 575,
+      "kw_recall": 1.0,
+      "elapsed_s": 14.928,
+      "answer_chars": 947,
       "error": null,
-      "pass_": false
+      "pass_": true
     },
     {
       "question": "What tables are available?",
@@ -418,8 +395,8 @@
       ],
       "tool_match": true,
       "kw_recall": 1.0,
-      "elapsed_s": 8.164,
-      "answer_chars": 459,
+      "elapsed_s": 8.437,
+      "answer_chars": 902,
       "error": null,
       "pass_": true
     },
@@ -437,8 +414,8 @@
       ],
       "tool_match": true,
       "kw_recall": 1.0,
-      "elapsed_s": 9.49,
-      "answer_chars": 563,
+      "elapsed_s": 8.168,
+      "answer_chars": 800,
       "error": null,
       "pass_": true
     },
@@ -450,15 +427,13 @@
         "date"
       ],
       "tool_calls": [
-        "get_current_page_context",
-        "get_current_page_context",
         "query_consumption",
         "query_consumption"
       ],
       "tool_match": true,
       "kw_recall": 1.0,
-      "elapsed_s": 26.457,
-      "answer_chars": 1633,
+      "elapsed_s": 20.756,
+      "answer_chars": 1654,
       "error": null,
       "pass_": true
     },
@@ -472,15 +447,15 @@
       "tool_calls": [
         "query_meters",
         "query_meters",
-        "sql_query",
-        "sql_query",
-        "sql_query",
-        "sql_query"
+        "get_data_overview",
+        "query_meters",
+        "get_data_overview",
+        "query_meters"
       ],
       "tool_match": true,
       "kw_recall": 1.0,
-      "elapsed_s": 31.206,
-      "answer_chars": 662,
+      "elapsed_s": 14.31,
+      "answer_chars": 264,
       "error": null,
       "pass_": true
     },
@@ -497,8 +472,8 @@
       ],
       "tool_match": true,
       "kw_recall": 1.0,
-      "elapsed_s": 14.44,
-      "answer_chars": 1175,
+      "elapsed_s": 13.372,
+      "answer_chars": 1227,
       "error": null,
       "pass_": true
     },
@@ -522,16 +497,12 @@
         "sql_query",
         "sql_query",
         "sql_query",
-        "sql_query",
-        "sql_query",
-        "sql_query",
-        "sql_query",
         "sql_query"
       ],
       "tool_match": true,
       "kw_recall": 1.0,
-      "elapsed_s": 52.765,
-      "answer_chars": 712,
+      "elapsed_s": 40.652,
+      "answer_chars": 866,
       "error": null,
       "pass_": true
     },
@@ -546,8 +517,8 @@
       "tool_calls": [],
       "tool_match": false,
       "kw_recall": 0.0,
-      "elapsed_s": 11.34,
-      "answer_chars": 308,
+      "elapsed_s": 6.245,
+      "answer_chars": 403,
       "error": null,
       "pass_": false
     },
@@ -561,9 +532,9 @@
       ],
       "tool_calls": [],
       "tool_match": false,
-      "kw_recall": 0.5,
-      "elapsed_s": 10.774,
-      "answer_chars": 120,
+      "kw_recall": 1.0,
+      "elapsed_s": 8.568,
+      "answer_chars": 90,
       "error": null,
       "pass_": true
     },
@@ -577,9 +548,9 @@
       ],
       "tool_calls": [],
       "tool_match": false,
-      "kw_recall": 0.5,
-      "elapsed_s": 6.368,
-      "answer_chars": 86,
+      "kw_recall": 1.0,
+      "elapsed_s": 6.898,
+      "answer_chars": 104,
       "error": null,
       "pass_": true
     },
@@ -600,13 +571,59 @@
         "get_table_schema_tool",
         "sql_query",
         "sql_query",
+        "get_table_schema_tool",
+        "get_table_schema_tool",
+        "sql_query",
+        "sql_query",
+        "sql_query",
+        "sql_query",
+        "sql_query",
+        "sql_query",
         "sql_query",
         "sql_query"
       ],
       "tool_match": false,
       "kw_recall": 1.0,
-      "elapsed_s": 33.739,
-      "answer_chars": 322,
+      "elapsed_s": 62.385,
+      "answer_chars": 541,
+      "error": null,
+      "pass_": true
+    },
+    {
+      "question": "Is the data accurate? Any dropped records?",
+      "expected_tool": "query_data_quality",
+      "expected_behavior": "",
+      "expected_keywords": [
+        "errors",
+        "reason"
+      ],
+      "tool_calls": [
+        "query_data_quality",
+        "query_data_quality"
+      ],
+      "tool_match": true,
+      "kw_recall": 1.0,
+      "elapsed_s": 12.684,
+      "answer_chars": 636,
+      "error": null,
+      "pass_": true
+    },
+    {
+      "question": "数据准不准？有没有数据问题？",
+      "expected_tool": "query_data_quality",
+      "expected_behavior": "",
+      "expected_keywords": [
+        "errors",
+        "reason"
+      ],
+      "tool_calls": [
+        "query_data_quality",
+        "query_data_quality"
+      ],
+      "tool_match": true,
+      "kw_recall": 1.0,
+      "elapsed_s": 15.907,
+      "answer_chars": 628,
       "error": null,
       "pass_": true
     }

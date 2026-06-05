@@ -51,6 +51,25 @@ def _load(filename):
     return _data_cache[filename]
 
 
+def _load_errors():
+    """Load data_errors.json — try DATA_DIR first, then the sibling output_real/.
+
+    data_errors.json is a real-data-only artefact (the mock data is clean
+    by construction). If WATER_DATA_DIR is set to `output/`, we still want
+    the tool to find the real-data errors by looking in `output_real/`.
+    Returns [] if the file doesn't exist in either location.
+    """
+    candidates = [os.path.join(DATA_DIR, "data_errors.json")]
+    parent = os.path.dirname(DATA_DIR.rstrip("/").rstrip("\\"))
+    for sibling in ("output_real", "output"):
+        candidates.append(os.path.join(parent, sibling, "data_errors.json"))
+    for path in candidates:
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+    return []
+
+
 def _match_dma(query, dma_name):
     """Fuzzy match DMA name."""
     if not query:
@@ -498,6 +517,50 @@ def get_current_page_context() -> str:
     return json.dumps({"context": ctx}, ensure_ascii=False)
 
 
+# ── Tool 16: Data quality (added 2026-06-06) ─────────────────
+
+@tool
+def query_data_quality(date: str = "", meter_id: str = "", reason: str = "") -> str:
+    """Query data quality / integrity errors logged by the converter pipeline.
+    Returns the records that were dropped from analytics (e.g. negative readings,
+    daily totals exceeding 40,000 m³ that look like fire-test or typos).
+
+    Use when the user asks about data quality, data integrity, dropped records,
+    "数据准不准" (is the data accurate), "数据有没有问题" (is there a data issue),
+    or wants to know why a specific meter/date is missing from a report.
+
+    Parameters:
+        date: optional YYYY-MM-DD filter (matches errors on that exact day)
+        meter_id: optional 6-digit meter ID filter
+        reason: optional substring match on the reason (e.g. 'fire-test', 'typo', '>40000')
+    """
+    errors = _load_errors()
+
+    if date:
+        errors = [e for e in errors if e.get("date", "") == date]
+    if meter_id:
+        errors = [e for e in errors if str(e.get("meterId", "")) == str(meter_id)]
+    if reason:
+        rl = reason.lower()
+        errors = [e for e in errors if rl in str(e.get("reason", "")).lower()]
+
+    by_reason: dict[str, int] = {}
+    by_date: dict[str, int] = {}
+    for e in errors:
+        r = e.get("reason", "Unknown")
+        by_reason[r] = by_reason.get(r, 0) + 1
+        d = e.get("date", "Unknown")
+        by_date[d] = by_date.get(d, 0) + 1
+
+    return json.dumps({
+        "total_errors": len(errors),
+        "filters": {"date": date or "all", "meter_id": meter_id or "all", "reason": reason or "all"},
+        "by_reason": dict(sorted(by_reason.items(), key=lambda x: -x[1])),
+        "by_date_top5": dict(sorted(by_date.items(), key=lambda x: -x[1])[:5]),
+        "recent": errors[-5:] if errors else [],
+    }, ensure_ascii=False, indent=2)
+
+
 # ── Export all tools ──────────────────────────────────────────
 
 ALL_TOOLS = [
@@ -511,6 +574,7 @@ ALL_TOOLS = [
     generate_chart,
     generate_report,
     get_current_page_context,
+    query_data_quality,   # data integrity errors (added 2026-06-06)
 ]
 
 # Text-to-SQL tools (always available; agent picks the right one per question).

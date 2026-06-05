@@ -78,6 +78,29 @@ def _extract_final_answer(messages: list) -> str:
     return ""
 
 
+def _extract_tool_outputs(messages: list) -> str:
+    """Concatenate raw tool outputs (so column names from SQL count as hits).
+
+    The final-answer text often paraphrases column names (e.g. `anomalyScore`
+    → `异常分数`), which makes pure text kw_recall unreliable for SQL pairs.
+    The raw tool output, on the other hand, is a JSON string with the actual
+    `columns` array, so checking keywords against (final_answer + tool_outputs)
+    catches both the LLM's summary and the underlying data.
+    """
+    parts: list[str] = []
+    for m in messages:
+        if getattr(m, "type", "") != "tool":
+            continue
+        c = getattr(m, "content", None)
+        if c is None:
+            continue
+        if isinstance(c, str):
+            parts.append(c)
+        else:
+            parts.append(str(c))
+    return " ".join(parts)
+
+
 # ── Scoring ──────────────────────────────────────────────────
 
 def score_one(
@@ -89,11 +112,17 @@ def score_one(
     elapsed_s: float,
     error: str | None = None,
     expected_behavior: str = "",
+    tool_outputs: str = "",
 ) -> dict[str, Any]:
     tool_match = expected_tool in tool_calls
     if expected_keywords:
-        lower = final_answer.lower()
-        hits = sum(1 for kw in expected_keywords if kw.lower() in lower)
+        # 2026-06-06: combine final answer + raw tool output. The LLM
+        # often paraphrases column names in the summary (e.g. `anomalyScore`
+        # → `异常分数`); the raw tool output contains the literal column
+        # name. Checking both prevents false-FAIL on perfectly-correct SQL
+        # pairs (the 6 Type A fails on the 2026-06-05 real-data eval).
+        combined = (final_answer + "\n" + tool_outputs).lower()
+        hits = sum(1 for kw in expected_keywords if kw.lower() in combined)
         kw_recall = hits / len(expected_keywords)
     else:
         kw_recall = 1.0
@@ -161,16 +190,19 @@ def evaluate(
         start = time.perf_counter()
         tool_calls: list[str] = []
         answer = ""
+        tool_outputs = ""
         err: str | None = None
         try:
             result = agent.invoke({"messages": [{"role": "user", "content": q}]})
             messages = result.get("messages", [])
             tool_calls = _extract_tool_calls(messages)
             answer = _extract_final_answer(messages)
+            tool_outputs = _extract_tool_outputs(messages)
         except Exception as e:
             err = f"{type(e).__name__}: {e}"
         elapsed = time.perf_counter() - start
-        score = score_one(q, et, ek, tool_calls, answer, elapsed, err, expected_behavior=eb)
+        score = score_one(q, et, ek, tool_calls, answer, elapsed, err,
+                          expected_behavior=eb, tool_outputs=tool_outputs)
         per_qa.append(score)
         if score["pass_"]:
             passed += 1

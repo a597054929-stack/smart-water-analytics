@@ -1,6 +1,6 @@
 {
-  "version": "2.0.0",
-  "description": "Test QA pairs for evaluating the Smart Water Analytics agent. Calibrated against REAL Macau water data (4 DMAs: 澳門低區 / 澳門填海A區 / 澳大橫琴區 / 路氹城區, 6,630 active meters, 711328 etc.). 25+3 pairs, scored by tool accuracy + keyword recall + (for clarification pairs) behavior.",
+  "version": "2.1.0",
+  "description": "Test QA pairs for evaluating the Smart Water Analytics agent. Calibrated against REAL Macau water data (4 DMAs: 澳門低區 / 澳門填海A區 / 澳大橫琴區 / 路氹城區, 6,630 active meters, 753832 etc.). 25+3 clarification+2 data_quality=30 pairs, scored by tool accuracy + keyword recall + (for clarification pairs) behavior. 2026-06-06: added data_quality pairs after introducing the query_data_quality tool.",
   "real_dma_names": ["澳門低區", "澳門填海A區", "澳大橫琴區", "路氹城區"],
   "pairs": [
     {
@@ -198,6 +198,20 @@
       "expected_keywords": ["路氹城區", "NRW"],
       "difficulty": "easy",
       "expected_behavior": "guess_with_state"
+    },
+    {
+      "id": "data_quality_overview",
+      "question": "Is the data accurate? Any dropped records?",
+      "expected_tool": "query_data_quality",
+      "expected_keywords": ["errors", "reason"],
+      "difficulty": "easy"
+    },
+    {
+      "id": "data_quality_chinese",
+      "question": "数据准不准？有没有数据问题？",
+      "expected_tool": "query_data_quality",
+      "expected_keywords": ["errors", "reason"],
+      "difficulty": "easy"
     }
   ]
 }
