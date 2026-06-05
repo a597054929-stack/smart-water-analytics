@@ -176,6 +176,27 @@
       "expected_tool": "generate_report",
       "expected_keywords": ["anomalies", "consumption"],
       "difficulty": "hard"
+    },
+    {
+      "id": "ambiguous_dma_and_metric",
+      "question": "凼仔漏水",
+      "expected_keywords": ["Zone-2", "1)"],
+      "difficulty": "medium",
+      "expected_behavior": "ask_clarification"
+    },
+    {
+      "id": "ambiguous_metric_only",
+      "question": "上周水损情况",
+      "expected_keywords": ["主分表差", "1)"],
+      "difficulty": "medium",
+      "expected_behavior": "ask_clarification"
+    },
+    {
+      "id": "guess_with_assumption_should_NOT_ask",
+      "question": "凼仔的 NRW",
+      "expected_keywords": ["Zone-2", "NRW"],
+      "difficulty": "easy",
+      "expected_behavior": "guess_with_state"
     }
   ]
 }

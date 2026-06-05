@@ -88,6 +88,7 @@ def score_one(
     final_answer: str,
     elapsed_s: float,
     error: str | None = None,
+    expected_behavior: str = "",
 ) -> dict[str, Any]:
     tool_match = expected_tool in tool_calls
     if expected_keywords:
@@ -96,9 +97,25 @@ def score_one(
         kw_recall = hits / len(expected_keywords)
     else:
         kw_recall = 1.0
+
+    # Behavior-aware scoring (2026-06-05: ask-back clarifications don't
+    # call tools, so the default `tool_match and kw_recall` rule would
+    # always FAIL them). Switch the success criterion per behavior:
+    if expected_behavior == "ask_clarification":
+        # pass if: no tool calls (LLM asked back, didn't act) AND
+        #           the clarification contains the expected keywords
+        behavior_ok = len(tool_calls) == 0
+    elif expected_behavior == "guess_with_state":
+        # pass if: LLM acted (some tool call) AND keywords present
+        behavior_ok = len(tool_calls) > 0
+    else:
+        # default: tool must match the expected one
+        behavior_ok = tool_match
+
     return {
         "question": question,
         "expected_tool": expected_tool,
+        "expected_behavior": expected_behavior,
         "expected_keywords": expected_keywords,
         "tool_calls": tool_calls,
         "tool_match": tool_match,
@@ -106,7 +123,7 @@ def score_one(
         "elapsed_s": round(elapsed_s, 3),
         "answer_chars": len(final_answer),
         "error": error,
-        "pass_": tool_match and kw_recall >= 0.5 and not error,
+        "pass_": behavior_ok and kw_recall >= 0.5 and not error,
     }
 
 
@@ -139,6 +156,7 @@ def evaluate(
         q = p["question"]
         et = p.get("expected_tool", "")
         ek = p.get("expected_keywords", [])
+        eb = p.get("expected_behavior", "")
         print(f"[{i:2d}/{len(pairs)}] {q}")
         start = time.perf_counter()
         tool_calls: list[str] = []
@@ -152,7 +170,7 @@ def evaluate(
         except Exception as e:
             err = f"{type(e).__name__}: {e}"
         elapsed = time.perf_counter() - start
-        score = score_one(q, et, ek, tool_calls, answer, elapsed, err)
+        score = score_one(q, et, ek, tool_calls, answer, elapsed, err, expected_behavior=eb)
         per_qa.append(score)
         if score["pass_"]:
             passed += 1
