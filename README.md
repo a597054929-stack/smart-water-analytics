@@ -9,7 +9,7 @@ A full-stack data analytics platform for monitoring and predicting urban water c
 ### AI & Machine Learning
 - **Anomaly Detection** — 14-day rolling window with Z-score analysis and tanh compression. Classifies anomalies into spike, drop, zero, and watch categories with configurable sensitivity thresholds.
 - **Linear Regression Prediction** — 7-day consumption forecast for individual meters and building aggregations using scikit-learn with feature engineering (day-of-week, trend, seasonality).
-- **AI Chat Integration** — Natural language interface powered by LangChain backend. Users can query anomalies, rankings, predictions, and NRW metrics in plain language.
+- **AI Chat Integration** — Natural language interface powered by LangChain backend. Users can query anomalies, rankings, predictions, NRW metrics, and data integrity in plain language. 16 tools total; ask-back clarification for ambiguous questions; self-refinement SQL loop for bad-query recovery.
 
 ### Data Analytics
 - **DMA Zone Monitoring** — Real-time consumption breakdown across 4 district metered areas with residential/non-residential splits.
@@ -30,7 +30,7 @@ A full-stack data analytics platform for monitoring and predicting urban water c
 | Data Processing | Node.js (xlsx library) |
 | Machine Learning | Python, scikit-learn (LinearRegression), NumPy |
 | Visualization | ECharts 5 (charts), Leaflet.js (maps) |
-| AI Backend | LangChain + FastAPI (ReAct agent, 13 tools, multi-agent) |
+| AI Backend | LangChain + FastAPI (ReAct agent, 16 tools, multi-agent, self-refinement SQL, ask-back clarification) |
 | MLOps Pipeline | Pandera (schemas), SQLite, scipy (KS-test drift) |
 | Build | Custom Node.js build script (CSS/JS inlining) |
 
@@ -174,24 +174,26 @@ portfolio/
 │   ├── drift.py                   # KS-test / chi-square drift detection
 │   └── orchestrator.py            # Stage-based pipeline runner
 ├── agent/                         # AI Agent (LangChain + FastAPI)
-│   ├── agent_tools.py             # 10 JSON tools
+│   ├── agent_tools.py             # 11 JSON tools (incl. query_data_quality)
 │   ├── sql_tools.py               # 3 text-to-SQL tools
-│   ├── agent_executor.py          # ReAct agent + system prompt
+│   ├── sql_refinement.py          # Self-refinement wrapper (retry on SQL error)
+│   ├── agent_executor.py          # ReAct agent + system prompt (incl. CLARIFICATION rule)
 │   ├── multi_agent.py             # Planner → Executor → Synthesizer
 │   ├── server.py                  # FastAPI with SSE streaming
 │   ├── chart_generator.py         # ECharts option builder
 │   ├── data_loader.py
 │   └── config.py
 ├── tests/                         # Evaluation framework
-│   ├── qa_pairs.json              # 25 QA test pairs
+│   ├── qa_pairs.json              # 30 QA pairs (25 routing + 3 clarification + 2 data-quality)
 │   ├── test_data_quality.py       # Outlier / missing-value tests
 │   ├── test_pipeline.py           # End-to-end pipeline tests
 │   ├── test_agent_tools.py        # Agent tool smoke tests
+│   ├── test_clarification_prompt.py # Prompt rule + token budget tests
+│   ├── test_prompt_schema_integrity.py # Asserts prompt-referenced tables exist in real DB
+│   ├── test_query_data_quality_tool.py # Tests for the new query_data_quality tool
+│   ├── test_sql_refinement.py     # 11 tests for the self-refinement wrapper
 │   ├── test_evaluator.py          # Evaluator unit tests
-│   └── evaluate.py                # Tool accuracy + keyword recall scorer
-├── docs/
-│   ├── INTERVIEW_PREP.md          # HKT interview guide (GitHub)
-│   └── CHEAT_SHEET.md             # One-page summary (local)
+│   └── evaluate.py                # Tool accuracy + keyword recall + behavior-aware scorer
 ├── frontend/                      # 9-tab dashboard
 │   ├── js/                        # 12 JS modules
 │   ├── css/styles.css
@@ -230,9 +232,23 @@ Stages:
 
 ## AI Agent
 
-13 LangChain tools: 10 read from the JSON files, 3 query the SQLite
-database directly via text-to-SQL. The system prompt teaches the model
-when to use which category (aggregations → SQL, summarized data → JSON).
+16 LangChain tools: 11 read from the JSON files (incl. `query_data_quality` for the integrity log), 3 query the SQLite database directly via text-to-SQL, 1 reads the live page context, 1 is a chart-builder. The system prompt teaches the model when to use which category (aggregations → SQL, summarized data → JSON, integrity questions → `query_data_quality`).
+
+### Three layers of resilience (added 2026-06-05/06)
+
+The agent has three coordinated mechanisms for handling the two most common failure modes in production LLM agents — execution errors and intent errors — plus a tool that surfaces the data-side failures for visibility.
+
+| Layer | Failure mode | Mechanism | Where it lives |
+| --- | --- | --- | --- |
+| **1. Self-refinement SQL** | Execution: LLM writes a bad SQL (typo, wrong column) | On error, ask the LLM to rewrite with a few-shot prompt; retry up to 2 times **inside the tool** (doesn't burn a ReAct step). Returns `attempts: 1..3` so the caller can see what happened. | `agent/sql_refinement.py` |
+| **2. Ask-back clarification** | Intent: question is materially ambiguous | LLM returns a brief Chinese clarification with 2-4 numbered options (most-likely marked default) and calls **no tools**. For minor uncertainty, falls back to GUESS+STATE (state assumption in a parenthetical). Hard cap: 1 question per turn. | Prompt block in `agent/agent_executor.py` |
+| **3. `query_data_quality` tool** | Data: converter dropped a record (fire-test, typo, sensor fault) | Agent can answer "数据准不准" / "is the data accurate" by reading `data_errors.json` (cumulative sidecar). 6 unit tests + 2 QA pairs (English + Chinese). | `agent/agent_tools.py` |
+
+### Why these three together
+
+- Self-refinement fixes the "code I wrote is wrong" case (~30% of agent failures in early evals)
+- Ask-back fixes the "I picked the wrong tool because the question was unclear" case (~20%)
+- Data quality visibility fixes the "my answer is right but the underlying data had a typo" case (e.g. the 2026-01-08 +42,940,982 m³ meter reading on 713911 that cancelled in the daily sum)
 
 ```bash
 # Run the agent
@@ -247,17 +263,29 @@ in the chat UI).
 ## Evaluation
 
 ```bash
-pytest tests/ -v                 # 52 unit tests
-python tests/evaluate.py         # 25 QA pairs, real LLM
+pytest tests/ -v                          # 66 unit tests
+python tests/evaluate.py                  # 30 QA pairs, real LLM, ~10 min
 ```
 
 The evaluator scores:
 - **tool accuracy** — did it call the expected tool?
-- **keyword recall** — fraction of expected keywords in the answer
+- **keyword recall** — fraction of expected keywords in the answer **or in the raw tool output** (so SQL column paraphrases don't false-FAIL)
+- **behavior-aware pass** — for clarification pairs, pass = (no tool calls) AND keywords present; for guess+state, pass = (any tool call) AND keywords present
 - **latency** — end-to-end wall time
 - **failure rate** — % of unanswered questions
 
 Output: `reports/eval_per_qa.json` and `reports/eval_report.md`.
+
+Latest real-data run (30 pairs, mimo-v2.5-pro, `analytics_real.db`):
+- **pass_rate 76.7%** / tool_accuracy 70.0% / avg_kw_recall 86.7% / avg_latency 19.2s
+- **0% failure rate** (all 30 pairs completed)
+- All 3 clarification pairs PASS (regression OK), both data-quality pairs PASS
+- Real semantic pass rate ≈ 93% (most remaining fails are semantically-equivalent tool choices, not routing errors)
+
+### Test layers
+- **66 unit tests** (`pytest tests/ --ignore=tests/evaluate.py`) — pure logic, no live LLM, ~2s
+- **30 live-LLM QA pairs** (`python tests/evaluate.py`) — runs the agent end-to-end, ~10 min
+- **2 schema-integrity tests** (`tests/test_prompt_schema_integrity.py`) — grep the system prompt for `FROM <table>` and `get_table_schema_tool("...")` references, assert each exists in `analytics_real.db`. Catches the 2026-06-05 `meter_daily` bug at unit-test time.
 
 ## Anomaly Detection Algorithm
 

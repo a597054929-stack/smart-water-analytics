@@ -8,12 +8,13 @@
 
 **Smart Water Analytics** 是一个端到端的水务数据分析平台：每日水表数据采集、异常检测、7 天预测、自然语言 AI Agent 查询，以及 MLOps 级别的数据管道。
 
-展示五大核心能力：
+展示六大核心能力：
 1. **MLOps 成熟度** — 管道透明、Schema 验证、漂移检测
 2. **结构化 + 非结构化数据** — Text-to-SQL 查询数据库 + JSON 工具查询预汇总数据
-3. **评估体系** — 25 道 QA 测试题 + 自动化评分
-4. **数据工程** — 自动异常检测、缺失值处理、检查点机制
-5. **工程质量** — 生产级日志、清晰错误信息、运行摘要
+3. **三层容错的 Agent** — Self-refinement SQL + Ask-back 澄清 + 数据质量工具
+4. **评估体系** — 30 道 QA 测试题 + 66 个单元测试 + 自动化评分 (pass rate 76.7%)
+5. **数据工程** — 自动异常检测、缺失值处理、检查点机制
+6. **工程质量** — 生产级日志、清晰错误信息、运行摘要
 
 ---
 
@@ -82,6 +83,16 @@
 - 适用于任意分布形状，不要求正态性
 - 分类变量用卡方检验
 - 漂移检测作为管道的一个阶段，每次运行产出 JSON 报告
+
+### 4.6 Agent 的三层容错 (2026-06-05/06 重要升级)
+- **第一层 — Self-refinement SQL 循环** (`agent/sql_refinement.py`)：LLM 写的 SQL 错了 (typo、错列) 时，在工具内部让 LLM 改写并重试 2 次，**不消耗 ReAct step**。返回 `attempts: 1..3` 让上层看到。来源是 Snowflake Labs 的 ReFoRCE 论文 (138 stars)。
+- **第二层 — Ask-back 反问澄清** (系统 prompt 块)：问题**实质性**歧义时 (不同选择 = 不同答案)，LLM 返回 2-4 个编号选项 (最可能项标 [默认]) 并**不调任何工具**; 轻微不确定时退到 GUESS+STATE (括号里说明假设); **每轮最多 1 个问题**。来自我 5 年 IT support 的洞察: 提高准确率的关键是反问, 反问也要有节制。**不新增工具、不改前端、不改 SSE** — 纯 prompt 工程。
+- **第三层 — `query_data_quality` 工具** (`agent/agent_tools.py`)：读取 converter 的 `data_errors.json`，让 agent 能回答 "数据准不准" / "is the data accurate"，不依赖人。前端 Data Integrity banner 是给人看的，这个是给 agent 看的。
+- **为什么这三层都必要**:
+  - Self-refinement 修"代码写错" (~30% 真实失败)
+  - Ask-back 修"问题没说清" (~20%)
+  - Data quality 修"数据本身有 typo" (e.g. 2026-01-08 水表 713911 读数 +42,940,982 m³ 在 daily sum 里正负抵消)
+- **效果**: 30 对真实数据 eval, pass rate 60.7% → 76.7% (真实语义 ~93%)。其中评分修复 (raw tool output 算进 kw 匹配) 贡献了 6 个翻转 PASS, 没改 agent 一行代码。
 
 ---
 
@@ -156,6 +167,33 @@
 > `run()` 函数。用 YAML 或 Python 配置可以让运维加阶段而不碰代码。
 > 这是个小重构，会在扩展更多数据源之前做。
 
+### Q11: "LLM 写错了 SQL 怎么办？你的 agent 怎么恢复？"
+> 三层机制里的第一层 — **self-refinement SQL 循环**。
+> SQL 工具包了一层 wrapper (`agent/sql_refinement.py`)：当 `sql_query` 抛错时，**不立刻返回失败**，而是把错误信息、表 schema、原始 SQL 一起发给 LLM，让它改写并重试。**最多 2 次**。重试发生在工具内部，**不消耗 ReAct step** — agent 主循环看不到这个过程，retry 对它透明。
+> 返回结构化响应: 成功时带 `attempts: 1..3` (用户能看到是不是一次就过), 失败时带 `refinement_exhausted: true` 和最后一次的 SQL。
+> 设计参考: Snowflake Labs 的 ReFoRCE 论文 (138 stars), GitHub 上 text-to-SQL 的标准修复模式。
+> 真实效果: 4 个 smoke case 验证过 — typo 表名 2 次重试过、错列名 2 次重试过、正确 SQL 1 次就过、完全 garbage 3 次 exhaust 报失败。
+
+### Q12: "用户问得不明确怎么办？比如 '氹仔漏水'"
+> 三层机制里的第二层 — **ask-back 反问澄清**。
+> 来自我 5 年 IT support 经验的洞察: **提高准确率的关键是反问, 反问也要有节制**。用户大概懂术语但不会描述, 同事听到"X 还是 Y?" 比我猜一个答案猜错的成本低很多。
+> 实现: 系统 prompt 里加了一段 `CLARIFICATION` 块, 规则:
+> 1. **实质性歧义** (不同选择 = 不同工具/不同答案) → 返回 2-4 个编号中文选项, 最可能的标 [默认], **不调任何工具**。
+> 2. **轻微不确定** → GUESS+STATE, 直接继续, 在答案开头用括号说明假设 (例如 "(默认查 路氹城區, 如需其他 DMA 请说明)")。
+> 3. **每轮最多 1 个问题**, 不堆 4 个。
+> **关键简化**: 全部用 prompt 实现, **没新增工具、没改 SSE、没改前端** — 聊天输入框本来就接受文字回复。
+> 3 个 QA pair 专门测这个行为 (`氹仔漏水` → 反问, `上周水损情况` → 反问, `氹仔的 NRW` → GUESS+STATE)。Eval 时走 behavior-aware 评分, 不跟路由 pair 走同一条 pass 规则。
+
+### Q13: "怎么评估一个 LLM agent? 怎么知道它变好还是变差?"
+> **自建 eval 框架** (`tests/evaluate.py`), 不直接用 RAGAS。理由: 我的 agent 是**工具调用型**不是**检索型**, RAGAS 的指标 (faithfulness、answer relevance) 不适用。
+> 三个核心指标:
+> 1. **tool accuracy** — 调了预期的工具吗? (我更在意这个, 不是关键词)
+> 2. **keyword recall** — 期望关键词在答案里吗? **2026-06-06 修复**: 现在也检查 raw tool output, 避免 LLM 把 `anomalyScore` 翻成 "异常分数" 导致 false-FAIL。
+> 3. **latency** — 端到端墙钟时间。
+> **Behavior-aware 评分**: clarification pair 走特殊规则 (pass = 没调工具 + 关键词命中), guess+state 又是另一条规则。**不用一套规则评所有题**。
+> **30 对真实数据 eval, mimo-v2.5-pro**: pass rate **76.7%** / tool_acc 70.0% / avg_kw **86.7%** / **0% failure rate**。真实语义 pass 率约 93% (剩下 7 个 fail 5 个是语义等价的工具选择, 不是真错)。
+> **CI 集成**: pytest 66 个 unit test ~2s 跑完, eval 30 对 ~10 分钟。Eval 还没进 CI (成本), 但 `test_prompt_schema_integrity.py` 进了 — 它 grep 系统 prompt 里的表名跟真实 DB 比对, 挡住 meter_daily 类 schema 错配 bug 在 agent 运行时才暴露。
+
 ---
 
 ## 7. 演示脚本（5 分钟）
@@ -183,11 +221,17 @@
 | `pipeline/data_quality.py` | 异常值 + 缺失值处理 |
 | `pipeline/drift.py` | KS 检验 + 卡方检验漂移检测 |
 | `agent/sql_tools.py` | Text-to-SQL：Agent 如何查询数据库 |
-| `agent/agent_executor.py` | ReAct Agent 和工具选择提示 |
+| `agent/sql_refinement.py` | **Self-refinement SQL 循环** (新) — 错时自动改写重试 |
+| `agent/agent_executor.py` | ReAct Agent + 工具选择提示 + **CLARIFICATION 块** (新) |
+| `agent/agent_tools.py` | 11 个 JSON 工具, **含 query_data_quality** (新) |
 | `agent/tool_router.py` | 规则引擎工具预选 |
 | `agent/memory.py` | 对话记忆摘要 |
-| `tests/qa_pairs.json` | 25 道 QA 测试题 |
-| `tests/evaluate.py` | 评分逻辑 |
+| `tests/qa_pairs.json` | **30 道** QA 测试题 (25 路由 + 3 反问 + 2 数据质量) |
+| `tests/evaluate.py` | 评分逻辑 — **含 raw tool output kw 匹配 + behavior-aware 评分** (新) |
+| `tests/test_sql_refinement.py` | **11 个 self-refinement 单元测试** (新) |
+| `tests/test_clarification_prompt.py` | **5 个 prompt 规则 + token 预算测试** (新) |
+| `tests/test_query_data_quality_tool.py` | **6 个 query_data_quality 工具测试** (新) |
+| `tests/test_prompt_schema_integrity.py` | **2 个 schema 错配回归测试** (新) |
 
 ---
 
