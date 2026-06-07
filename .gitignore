@@ -15,6 +15,7 @@ reports/latest_run.json
 __pycache__/
 agent/chat_history.json
 *.bak*
+*.bak.*
 daily_totals.json
 
 # Real-data assets — 9963 Macau water meters + converter cache.

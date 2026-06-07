@@ -1,4 +1,4 @@
-name: CI
+﻿name: CI
 
 on:
   push:
@@ -21,14 +21,61 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements.lock.txt
+          pip install ruff
+
+      - name: Lint
+        run: |
+          ruff check . --output-format=github
+      - name: Format check (warning only)
+        run: ruff format . --check || echo "::warning::Run 'ruff format .' to fix"
 
       - name: Generate mock data
-        # Tests read from backend/data/output/, which is gitignored.
-        # Must run before pytest.
         run: python scripts/mock_data_generator.py
 
       - name: Run tests
-        # No LLM key required: the test suite calls agent tools directly,
-        # never through the LLM. Safe to run on public CI runners.
         run: pytest tests/ -v --tb=short
+
+      - name: Model comparison
+        run: python backend/scripts/model_compare.py --top-n 20
+
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          npm ci --no-audit --no-fund
+          pip install -r requirements.lock.txt
+
+      - name: Generate mock data
+        run: python scripts/mock_data_generator.py
+
+      - name: Build dashboard
+        run: node frontend/build.cjs
+
+      - name: Verify output
+        run: |
+          test -f frontend/dist/dashboard.html
+          size=$(stat -c%s frontend/dist/dashboard.html)
+          echo "dashboard.html: ${size} bytes"
+          test "$size" -gt 100000
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard
+          path: frontend/dist/dashboard.html

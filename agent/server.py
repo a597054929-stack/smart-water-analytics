@@ -5,17 +5,24 @@ Features:
 - Streaming SSE output (real-time token delivery)
 - Tool call visualization (shows which tools are being used)
 - Conversation persistence (saves to JSON file)
+- In-memory metrics counters (chat requests, tool calls, failures)
 """
 
-import sys, json, os, asyncio
+import json
+import os
+import sys
+from collections import Counter
+
 sys.stdout.reconfigure(encoding="utf-8")
 
+
+from datetime import UTC
+
+import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import Optional
-import uvicorn
 
 app = FastAPI(title="Smart Water AI Assistant")
 
@@ -30,15 +37,50 @@ app.add_middleware(
 class ChatRequest(BaseModel):
     question: str
     mode: str = "agent"  # "agent" (single) or "multi" (planner+executor+synthesizer)
-    context: Optional[dict] = None  # page state from the frontend
+    context: dict | None = None  # page state from the frontend
     #   { active_tab, selected_date, selected_dma, sensitive_unlocked, likely_intent }
 
 class ChatResponse(BaseModel):
     answer: str
-    chart: Optional[dict] = None
-    plan: Optional[list] = None
-    tools_called: Optional[list] = None
-    context_used: Optional[dict] = None  # echoes back what the agent saw
+    chart: dict | None = None
+    plan: list | None = None
+    tools_called: list | None = None
+    context_used: dict | None = None  # echoes back what the agent saw
+
+
+# ── Utility Endpoints (typed for Swagger UI) ────────────────
+
+class HealthResponse(BaseModel):
+    status: str
+    history_turns: int
+
+
+class ResetResponse(BaseModel):
+    status: str
+    message: str
+
+
+class HistoryResponse(BaseModel):
+    history: list
+
+
+class QuestionsResponse(BaseModel):
+    questions: list
+
+
+class QuestionEntry(BaseModel):
+    ts: str
+    question: str
+    mode: str
+    tab: str | None = None
+    intent: str | None = None
+
+
+class MetricsResponse(BaseModel):
+    chat_requests_total: dict[str, int]   # {"agent": 12, "multi": 3}
+    tool_calls_total: dict[str, int]      # {"query_anomalies": 7, "sql_db_query": 5}
+    chat_failures_total: int
+    questions_logged_total: int
 
 
 # ── Agent ─────────────────────────────────────────────────────
@@ -56,10 +98,11 @@ def get_agent():
 # ── Conversation Persistence ──────────────────────────────────
 
 CHAT_HISTORY_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "chat_history.json")
+QUESTION_LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "question_log.json")
 
 def load_history():
     if os.path.exists(CHAT_HISTORY_FILE):
-        with open(CHAT_HISTORY_FILE, "r", encoding="utf-8") as f:
+        with open(CHAT_HISTORY_FILE, encoding="utf-8") as f:
             return json.load(f)
     return []
 
@@ -68,6 +111,56 @@ def save_history(history):
         json.dump(history, f, ensure_ascii=False, indent=2)
 
 chat_history = load_history()
+
+
+# ── Question Log (累積所有使用者問題，供分析) ────────────────
+
+def log_question(question: str, mode: str, context: dict | None = None):
+    """Append a user question to the persistent log."""
+    from datetime import datetime
+    entry = {
+        "ts": datetime.now(UTC).isoformat(),
+        "question": question,
+        "mode": mode,
+        "tab": (context or {}).get("active_tab"),
+        "intent": (context or {}).get("likely_intent"),
+    }
+    log = []
+    if os.path.exists(QUESTION_LOG_FILE):
+        try:
+            with open(QUESTION_LOG_FILE, encoding="utf-8") as f:
+                log = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            log = []
+    log.append(entry)
+    with open(QUESTION_LOG_FILE, "w", encoding="utf-8") as f:
+        json.dump(log, f, ensure_ascii=False, indent=2)
+    _METRICS["questions_logged_total"] += 1
+
+
+# ── Metrics (in-memory counters; reset on process restart) ─────
+
+_METRICS: dict[str, object] = {
+    "chat_requests_total": Counter(),   # mode -> count
+    "tool_calls_total": Counter(),      # tool name -> count
+    "chat_failures_total": 0,
+    "questions_logged_total": 0,
+}
+
+
+def record_chat_request(mode: str) -> None:
+    """Bump the chat request counter for the given mode."""
+    _METRICS["chat_requests_total"][mode] += 1  # type: ignore[index]
+
+
+def record_tool_call(name: str) -> None:
+    """Bump the per-tool counter."""
+    _METRICS["tool_calls_total"][name] += 1  # type: ignore[index]
+
+
+def record_chat_failure() -> None:
+    """Bump the failure counter (any unhandled exception in /api/chat)."""
+    _METRICS["chat_failures_total"] += 1  # type: ignore[operator]
 
 
 # ── Streaming Chat ────────────────────────────────────────────
@@ -115,7 +208,7 @@ def _extract_chart(messages):
     return None
 
 
-@app.post("/api/chat")
+@app.post("/api/chat", tags=["chat"], summary="Streaming chat with SSE (tool events + final answer)")
 async def chat(req: ChatRequest):
     """Streaming chat — SSE events for tool calls and final answer."""
     question = req.question.strip()
@@ -123,6 +216,9 @@ async def chat(req: ChatRequest):
         async def empty():
             yield f"data: {json.dumps({'type': 'answer', 'content': 'Please enter a question.'})}\n\n"
         return StreamingResponse(empty(), media_type="text/event-stream")
+
+    log_question(question, req.mode, req.context)
+    record_chat_request(req.mode)
 
     async def stream():
         try:
@@ -202,7 +298,7 @@ async def chat(req: ChatRequest):
                         system_msgs.append(memory_msg)
 
                 # Tool pre-selection: inject hint for likely tools
-                from tool_router import route_question, format_tool_hint
+                from tool_router import format_tool_hint, route_question
                 tool_recs = route_question(question)
                 if tool_recs:
                     hint = format_tool_hint(tool_recs)
@@ -233,6 +329,7 @@ async def chat(req: ChatRequest):
                                         file=sys.stderr, flush=True,
                                     )
                                     yield f"data: {json.dumps({'type': 'tool', 'name': msg.name})}\n\n"
+                                    record_tool_call(msg.name)
 
                         if node_name == "agent" and "messages" in node_output:
                             for msg in node_output["messages"]:
@@ -276,6 +373,7 @@ async def chat(req: ChatRequest):
             save_history(chat_history)
 
         except Exception as e:
+            record_chat_failure()
             yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"
 
     return StreamingResponse(stream(), media_type="text/event-stream")
@@ -289,6 +387,9 @@ async def chat_sync(req: ChatRequest):
     question = req.question.strip()
     if not question:
         return ChatResponse(answer="Please enter a question.")
+
+    log_question(question, req.mode, req.context)
+    record_chat_request(req.mode)
 
     try:
         import sys
@@ -310,7 +411,7 @@ async def chat_sync(req: ChatRequest):
             memory_msg = build_memory_message(old_messages)
             if memory_msg:
                 system_msgs.append(memory_msg)
-        from tool_router import route_question, format_tool_hint
+        from tool_router import format_tool_hint, route_question
         tool_recs = route_question(question)
         if tool_recs:
             system_msgs.append({"role": "system", "content": format_tool_hint(tool_recs)})
@@ -341,21 +442,46 @@ async def chat_sync(req: ChatRequest):
 
 # ── API Endpoints ─────────────────────────────────────────────
 
-@app.get("/api/health")
+@app.get("/api/health", response_model=HealthResponse, tags=["utility"], summary="Liveness + conversation turn count")
 async def health():
     return {"status": "ok", "history_turns": len(chat_history) // 2}
 
 
-@app.post("/api/reset")
+@app.post("/api/reset", response_model=ResetResponse, tags=["utility"], summary="Clear in-memory conversation history")
 async def reset():
     chat_history.clear()
     save_history(chat_history)
     return {"status": "ok", "message": "Conversation reset"}
 
 
-@app.get("/api/history")
+@app.get("/api/history", response_model=HistoryResponse, tags=["utility"], summary="Last 6 conversation turns (user + assistant pairs)")
 async def get_history():
     return {"history": chat_history}
+
+
+@app.get("/api/questions", response_model=QuestionsResponse, tags=["analytics"], summary="Full question log for usage analysis")
+async def get_questions():
+    """Return the full question log for analysis."""
+    if os.path.exists(QUESTION_LOG_FILE):
+        with open(QUESTION_LOG_FILE, encoding="utf-8") as f:
+            return {"questions": json.load(f)}
+    return {"questions": []}
+
+
+@app.get("/api/metrics", response_model=MetricsResponse, tags=["analytics"], summary="In-process counters for chat/tool/failure rates")
+async def get_metrics():
+    """Return current process metrics counters.
+
+    Lightweight Prometheus-style snapshot — no external dependency.
+    Counters reset on process restart, so use for rate computation
+    (rate over time) rather than lifetime totals.
+    """
+    return {
+        "chat_requests_total": dict(_METRICS["chat_requests_total"]),  # type: ignore[arg-type]
+        "tool_calls_total": dict(_METRICS["tool_calls_total"]),         # type: ignore[arg-type]
+        "chat_failures_total": _METRICS["chat_failures_total"],         # type: ignore[arg-type]
+        "questions_logged_total": _METRICS["questions_logged_total"],   # type: ignore[arg-type]
+    }
 
 
 if __name__ == "__main__":
