@@ -271,7 +271,7 @@ in the chat UI).
 ## Evaluation
 
 ```bash
-pytest tests/ -v                          # 153 unit tests
+pytest tests/ -v                          # 170 unit tests
 python tests/evaluate.py                  # 30 QA pairs, real LLM, ~10 min
 npm run model:compare                     # LightGBM vs LinearRegression comparison
 python scripts/health_check.py            # Data freshness + SQLite integrity check

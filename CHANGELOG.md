@@ -46,8 +46,24 @@ All notable changes to the Smart Water Analytics project.
 ### Docker
 - **`HEALTHCHECK` added to Dockerfile** — `curl -fsS http://localhost:8000/api/health || exit 1` (30s interval, 15s grace).
 
+### Agent Ask-Back (Clarification)
+- **Ask-back behavior** — `agent/multi_agent.py` now detects materially ambiguous questions (e.g. "查异常" with no DMA, no time) and returns `{"action": "clarify", ...}` instead of guessing. PLANNER_PROMPT gained a CLARIFICATION block (when to ask / how to ask / when NOT to ask). `plan()` returns `{"action": "plan"|"clarify", ...}` dict. `run_multi_agent()` short-circuits the clarify path — no executor, no synthesizer — saving 2 LLM calls per clarify turn.
+- **Full pipeline wiring** — `agent/server.py` multi-agent SSE payload now includes `clarify` field. `ChatResponse` model gains `clarify: dict | None`. Both streaming and sync paths covered.
+- **Frontend clarify buttons** — `frontend/js/chat.js` `chatClarify()` renders clarify question + 2-4 option buttons with accent border + hover effect. `chatClarifyClick()` sends chosen option as new user message.
+- **Default mode switched to multi** — `_chatMode = 'multi'` so ask-back path is active by default.
+- **Real DMA names** — PLANNER_PROMPT uses real Macau DMA names (澳門低區/澳門填海A區/澳大橫琴區/路氹城區) instead of Zone-1/2/3/4. Added mapping rules (氹仔→路氹城區, 澳門→澳門低區).
+- **Natural language clarify** — question uses natural language ("你想查哪个区域、哪个时段的异常？") instead of form-like "请选择要查询的 DMA 区域". Always includes default time period (e.g. "最近 30 天").
+- **Single-agent ask-back** — `agent/server.py` `_detect_clarify()` parses ReAct agent's numbered-option plain text into structured clarify dict. Both SSE and sync paths detect and pass clarify to frontend.
+- **9 ask-back tests** — `tests/test_ask_back.py`: clarify for vague queries, no clarify when DMA specified, option bounds, single LLM call, plan function format handling.
+
+### Alternating Meter Pairs
+- **`scripts/find_alternating_pairs.py`** — Finds negatively correlated meter pairs within the same building in 路氹城區. Uses Pearson correlation + greedy matching (each meter belongs to at most one pair). Filters by minimum alternating ratio (20%) and overlapping days (30+).
+- **Results: 29 pairs in 17 buildings** — Strongest: corr=-0.88 (第一地段第二期: 711755 ↔ 711756). 0 high-confidence (mainCode all null in 路氹城區 data).
+- **Output** — `backend/data/output_real/cotai_alternating_pairs.json` (structured) + `reports/cotai_alternating_pairs_report.md` (human-readable).
+- **8 unit tests** — `tests/test_alternating_pairs.py`: correlation, greedy matching, building boundaries, constant series, insufficient days, shared mainCode confidence.
+
 ### Test Suite
-- **153 tests all pass** (was 104). New: memory_compressor 8, tool_audit 11, agent_harness 30.
+- **170 tests all pass** (was 104). New: memory_compressor 8, tool_audit 11, agent_harness 30, ask_back 9, alternating_pairs 8.
 
 ## 2026-06-07
 

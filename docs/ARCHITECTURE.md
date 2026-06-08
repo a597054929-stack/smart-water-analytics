@@ -784,6 +784,7 @@ agent 仪表盘照样跑。
 | `agent/dangerous_paths.py` | 路径黑名单（`.env`/`/etc`/`C:/Windows`） |
 | `agent/tool_audit.py` | JSONL 工具调用审计日志 |
 | `agent/safe_tool_call.py` | 装饰器：超时 + 路径检查 + 审计 |
+| `scripts/find_alternating_pairs.py` | 交替用水表对检测（Pearson + 贪心匹配） |
 | `frontend/build.cjs` | 静态站构建（`USE_REAL_DATA` 感知 + 敏感资料保护注入） |
 | `bat/real/*.bat` | Windows 一键入口脚本 |
 
@@ -835,6 +836,8 @@ agent 仪表盘照样跑。
 | 2026-06-08 | **Stage 4 Pandera 校验**（`schema.py` + `orchestrator.py`） | 新增 `PredictionsBuildingRowSchema`，`PredictionRowSchema` lower/upper 改 nullable |
 | 2026-06-08 | **敏感资料保护修复**（`build.cjs`） | `USE_REAL_DATA=1` 注入密码解锁逻辑，mock 模式保持开放 |
 | 2026-06-08 | **清除真实 meter ID**（`corrections.json` + `qa_pairs.json`） | 712720→MOCK0001, 753832→MOCK7538 |
+| 2026-06-08 | **Agent ask-back 全链路**（`multi_agent.py` + `server.py` + `chat.js`） | 模糊输入触发反问 + 选项按钮 + real DMA 名 + 自然语言问题 |
+| 2026-06-08 | **交替用水表对检测**（`scripts/find_alternating_pairs.py`） | 路氹城區 29 对负相关表，贪心匹配保证唯一性 |
 | 待加 | `patches.json` 单点更新 | 修单水表单小时数据 |
 | 待加 | mock 数据补 `meter_daily.json` | 让 Stage 3 残差分析两边都能跑 |
 
