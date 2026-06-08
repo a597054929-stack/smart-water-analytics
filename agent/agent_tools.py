@@ -405,26 +405,19 @@ def sql_chart(sql: str, chart_type: str = "bar", title: str = "",
     (e.g. "路氹城區前10用水柱状图", "物业类型用水饼图").
     """
     from chart_generator import generic_chart
-    from sql_tools import _query as run_sql
 
-    rows = run_sql(sql)
-    if not rows:
+    # Run SQL via the pipeline sql_loader (returns cols + rows as tuples)
+    try:
+        from sql_loader import run_query
+        cols, raw_rows = run_query(sql, limit=1000)
+    except Exception as e:
+        return json.dumps({"error": f"SQL execution failed: {e}"})
+
+    if not raw_rows:
         return json.dumps({"error": "Query returned no data"})
 
-    # Parse column headers from first row (pandas DataFrame or list of dicts)
-    if hasattr(rows, 'columns'):
-        # pandas DataFrame
-        columns = list(rows.columns)
-        data = rows.to_dict(orient='records')
-    elif isinstance(rows, list) and len(rows) > 0 and isinstance(rows[0], dict):
-        columns = list(rows[0].keys())
-        data = rows
-    elif isinstance(rows, list) and len(rows) > 0 and isinstance(rows[0], (list, tuple)):
-        # list of tuples — no headers
-        columns = [f"col{i}" for i in range(len(rows[0]))]
-        data = [dict(zip(columns, row)) for row in rows]
-    else:
-        return json.dumps({"error": f"Unexpected result type: {type(rows).__name__}"})
+    # Build list-of-dicts from (cols, rows)
+    data = [dict(zip(cols, row)) for row in raw_rows]
 
     # Pick x and y columns
     x_col = x_column if x_column and x_column in columns else columns[0]
