@@ -45,6 +45,7 @@ class ChatResponse(BaseModel):
     chart: dict | None = None
     plan: list | None = None
     tools_called: list | None = None
+    clarify: dict | None = None  # ask-back options for ambiguous queries
     context_used: dict | None = None  # echoes back what the agent saw
 
 
@@ -195,6 +196,57 @@ def _extract_text(content):
     return str(content)
 
 
+def _detect_clarify(text: str) -> dict | None:
+    """Detect if the single-agent answer is a clarify response.
+
+    The ReAct agent's CLARIFICATION rule instructs it to return numbered
+    options with '请选择' or '请回'. This function parses that pattern
+    into a structured clarify dict that the frontend can render as buttons.
+
+    Returns:
+      {"question": "...", "options": ["opt1", ...], "default": "opt1"}
+      or None if no clarify pattern found.
+    """
+    import re as _re
+    # Match patterns like:
+    #   "1) xxx  2) yyy  3) zzz. 请选择"
+    #   "1) xxx  2) yyy 请选择(回数字即可)"
+    # Also handle Chinese parens: "1）xxx 2）yyy"
+    has_clarify_signal = any(kw in text for kw in ["请选择", "请回", "回数字", "请选择("])
+    if not has_clarify_signal:
+        return None
+    # Extract numbered options: "1) xxx" or "1）xxx" or "1. xxx"
+    # Stop at the next numbered option or at 请选择/请回 signals
+    option_matches = _re.findall(
+        r'[1-4][)）.]\s*(.+?)(?=[1-4][)）.]|请选择|请回|\Z)',
+        text,
+    )
+    if not option_matches:
+        return None
+    options = [opt.strip().rstrip("，。、. \t") for opt in option_matches if opt.strip()]
+    if len(options) < 2:
+        return None
+    default_opt = None
+    for i, opt in enumerate(options):
+        if "[默认]" in opt or "[default]" in opt.lower():
+            default_opt = opt.replace("[默认]", "").replace("[default]", "").strip()
+            options[i] = default_opt
+    if not default_opt:
+        default_opt = options[0]
+    # The question is the text before the first numbered option
+    first_option_pos = text.find("1)")
+    if first_option_pos < 0:
+        first_option_pos = text.find("1）")
+    if first_option_pos < 0:
+        first_option_pos = text.find("1.")
+    question = text[:first_option_pos].strip() if first_option_pos > 0 else text
+    return {
+        "question": question,
+        "options": options,
+        "default": default_opt,
+    }
+
+
 def _extract_chart(messages):
     """Extract ECharts config from tool outputs."""
     for msg in messages:
@@ -252,6 +304,7 @@ async def chat(req: ChatRequest):
                 if req.context:
                     payload["context_used"] = req.context
                 yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+                final_answer = result["answer"]
 
             # Single-agent mode (default)
             else:
@@ -363,6 +416,11 @@ async def chat(req: ChatRequest):
                 payload = {"type": "answer", "content": final_answer}
                 if chart:
                     payload["chart"] = chart
+                # Detect if the ReAct agent returned a clarify response
+                # (plain text with numbered options + "请选择").
+                clarify = _detect_clarify(final_answer)
+                if clarify:
+                    payload["clarify"] = clarify
                 if req.context:
                     payload["context_used"] = req.context
                 yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
@@ -437,7 +495,8 @@ async def chat_sync(req: ChatRequest):
             chat_history[:] = chat_history[-6:]
         save_history(chat_history)
 
-        return ChatResponse(answer=answer, chart=chart, context_used=req.context)
+        clarify = _detect_clarify(answer)
+        return ChatResponse(answer=answer, chart=chart, clarify=clarify, context_used=req.context)
     except Exception as e:
         return ChatResponse(answer=f"Error: {str(e)}")
 
