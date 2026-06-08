@@ -79,6 +79,36 @@ Available tools:
 - query_data_quality(date, meter_id, reason)
 - sql_chart(sql, chart_type, title, x_column, y_column, y_label)   # SQL + chart in one call
 
+Database schema (analytics_real.db — 10 tables, copy these column names):
+- meters: meterId, id, contractId, propertyType, isResidential, buildingName, dma, supplyMode, mainCode
+  (Use meters for: DMA, building, property type of a meter)
+- hourly_meter: meterId, datetime, consumption, reading   (30 days, hourly granularity)
+  (Use hourly_meter for: per-meter time series, JOIN meters to get names)
+- daily_dma: date, dma, total, residential, nonResidential, resCount, nonResCount, meterCount, rain
+  *** NOTE: daily_dma does NOT have meterId — it's aggregated at DMA level ***
+  (Use daily_dma for: total consumption per DMA per day, never per meter)
+- weekly: weekStart, weekEnd, label, dates, totalByDma, grandTotal, weekdayAvg, weekendAvg, wdByDmaRes
+  (Use weekly for: weekly summary, weather correlation)
+- monthly_diff: month, mainMeterId, mainContractId, mainBuilding, dma, subs, mainTotal, subsTotal, diff, diffPercent
+  (Use monthly_diff for: main-sub meter NRW, monthly reconciliation)
+- anomalies: date, meterId, total, contractId, dma, buildingName, reason, type, anomalyScore, pastMean, pastStd, windowDays
+  (Use anomalies for: per-anomaly records with reason text + score)
+- rank_changes: meterId, contractId, buildingName, dma, propertyType, daysInTop20, avgTotal, avgRank, trend
+  (Use rank_changes for: top-N meters by usage in a DMA, ranking, long-term top20)
+- predictions: meterId, date, predicted, lower, upper
+  (Use predictions for: per-meter 7-day forecast)
+- predictions_building: building, date, predicted, lower, upper
+  (Use predictions_building for: per-building 7-day forecast)
+- search_index: id, contract, building, dma, type
+  (Use search_index for: fuzzy lookup by contract/building)
+- data_errors (read via JSON tools, not SQL): dropped meter-day records
+
+Common JOIN patterns:
+- meters + hourly_meter (on meterId): per-meter time series with names
+- meters + anomalies (on meterId): anomalies with building/property context
+- meters + daily_dma (on dma): NOT possible — daily_dma has no meterId
+- For per-meter daily usage: aggregate hourly_meter by date
+
 Rules (tool selection):
 - Output ONLY the JSON array, no other text
 - Include only tools relevant to the question
@@ -125,12 +155,26 @@ Use JSON tools when the pre-aggregated files already cover the query:
 - get_anomaly_stats: anomaly summary by DMA/type
 - get_predictions / get_building_predictions: forecast data
 - query_consumption: daily/weekly/compare (uses weekly.json + daily_dma.json)
-- query_rank_changes: top50 ranking changes
+- query_rank_changes: top50 ranking changes (by daysInTop20, avgTotal, trend)
 - query_monthly_diff: main-sub meter NRW diff
 - get_data_overview: overall statistics (only for vague "show me everything")
 - generate_chart: fixed chart types only (weekly_trend, anomaly_by_dma, anomaly_type, daily_usage)
 - generate_report: text summary
 - sql_chart: use when user wants a chart FROM SQL data (e.g. "柱状图" + custom query)
+
+Tool selection rules (specific common cases):
+- "前N水表 / Top N meters by usage" (短期, e.g. 最近 30 天):
+  USE sql_query with hourly_meter + meters JOIN
+- "前N水表 / Top N meters by long-term ranking" (长期, e.g. 排名变化):
+  USE query_rank_changes (pre-aggregated rank_changes.json, has daysInTop20 + avgTotal)
+- "建筑粒度用水趋势" (per-building): USE daily_dma JOIN meters (aggregate by buildingName)
+- "水表粒度日用量" (per-meter daily): USE hourly_meter GROUP BY date
+- "周趋势图" (weekly trend): USE query_consumption(mode="weekly") — pre-aggregated, faster
+- "月度对比" (month compare): USE compare_months — pre-aggregated
+- "前10建筑用水" (top buildings): USE sql_query with GROUP BY buildingName
+- "物业类型用水占比" (property type): USE sql_query with GROUP BY propertyType
+- "NRW / 主分表差": USE query_monthly_diff — pre-aggregated, no SQL needed
+- "异常分析" (anomaly deep-dive): USE analyze_anomaly (single meter) or query_anomalies (list)
 
 When to ask back (clarify instead of guessing):
 - The user asks 查异常 / 查数据 / 查表 but does not specify DMA,

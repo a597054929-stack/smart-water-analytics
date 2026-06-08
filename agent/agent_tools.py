@@ -382,7 +382,11 @@ def generate_chart(chart_type: str, dma: str = "Zone-3", days: int = 30) -> str:
     """Generate an ECharts visualization. chart_type options: weekly_trend, anomaly_by_dma, anomaly_type, daily_usage.
     Use when the user asks to see a chart, graph, or visualization."""
     from chart_generator import generate_chart as gen
-    return gen(chart_type, dma=dma, days=days)
+    import json as _json
+    result = gen(chart_type, dma=dma, days=days)
+    if isinstance(result, dict):
+        return _json.dumps({"chart_type": chart_type, "echarts_option": result}, ensure_ascii=False)
+    return result
 
 
 # ── Tool 10b: SQL + Chart ──────────────────────────────────────
@@ -419,9 +423,19 @@ def sql_chart(sql: str, chart_type: str = "bar", title: str = "",
     # Build list-of-dicts from (cols, rows)
     data = [dict(zip(cols, row)) for row in raw_rows]
 
-    # Pick x and y columns
-    x_col = x_column if x_column and x_column in columns else columns[0]
-    y_col = y_column if y_column and y_column in columns else (columns[1] if len(columns) > 1 else columns[0])
+    # Pick x and y columns. y defaults to the FIRST NUMERIC column
+    # (so SELECT meterId, buildingName, total picks "total" not
+    # the text "buildingName"). x defaults to the first column.
+    x_col = x_column if (x_column and x_column in cols) else cols[0]
+    if y_column and y_column in cols:
+        y_col = y_column
+    else:
+        y_col = cols[0]
+        for c in cols:
+            sample = data[0].get(c) if data else None
+            if isinstance(sample, (int, float)) and not isinstance(sample, bool):
+                y_col = c
+                break
 
     labels = [str(row.get(x_col, "")) for row in data]
     values = []
