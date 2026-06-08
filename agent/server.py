@@ -247,6 +247,8 @@ async def chat(req: ChatRequest):
                     payload["chart"] = result["chart"]
                 if result.get("plan"):
                     payload["plan"] = result["plan"]
+                if result.get("clarify"):
+                    payload["clarify"] = result["clarify"]
                 if req.context:
                     payload["context_used"] = req.context
                 yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"

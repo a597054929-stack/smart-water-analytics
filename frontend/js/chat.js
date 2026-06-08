@@ -3,7 +3,7 @@
 const AI_API_URL = "http://localhost:8000/api/chat";
 let _chatInited = false;
 let _chatStreaming = false;
-let _chatMode = 'agent'; // 'agent' or 'multi'
+let _chatMode = 'multi'; // 'agent' or 'multi'
 
 const TOOL_NAMES = {
   'query_anomalies': 'Querying anomalies',
@@ -27,6 +27,7 @@ function toggleChat() {
   fab.classList.toggle('active', open);
   if (!_chatInited) {
     _chatInited = true;
+    _initModeBtn();
     chatAppend('ai', 'Hello! I am the Smart Water AI Assistant.\n\nYou can ask me:\n- Anomaly statistics for Zone-3\n- Which meters are long-term Top20?\n- Draw an anomaly type distribution chart\n- Main/sub meter diff and NRW rate\n- Predict next week consumption\n\nTip: Toggle between Agent and Multi-Agent mode below.\nTip: I can see which page you are on, so you can ask things like "this week" or "current DMA".');
   }
   if (open) {
@@ -68,6 +69,15 @@ function getPageContext() {
 
 function toggleChatMode() {
   _chatMode = _chatMode === 'agent' ? 'multi' : 'agent';
+  var btn = document.getElementById('chatModeBtn');
+  if (btn) {
+    btn.textContent = _chatMode === 'agent' ? 'Agent' : 'Multi-Agent';
+    btn.title = _chatMode === 'agent' ? 'Single agent mode' : 'Planner + Executor + Synthesizer';
+  }
+}
+
+// Set initial button text to match default mode
+function _initModeBtn() {
   var btn = document.getElementById('chatModeBtn');
   if (btn) {
     btn.textContent = _chatMode === 'agent' ? 'Agent' : 'Multi-Agent';
@@ -130,7 +140,12 @@ async function sendChat() {
 
           if (evt.type === 'answer') {
             fullAnswer = evt.content;
-            chatUpdate(loadId, fullAnswer);
+            if (evt.clarify) {
+              // Ask-back: render clarify question + option buttons
+              chatClarify(loadId, evt.content, evt.clarify);
+            } else {
+              chatUpdate(loadId, fullAnswer);
+            }
             if (evt.chart) {
               setTimeout(function() { chatRenderChart(evt.chart); }, 200);
             }
@@ -160,6 +175,28 @@ function chatAppend(role, html) {
   c.appendChild(d);
   c.scrollTop = c.scrollHeight;
   return id;
+}
+
+function chatClarify(msgId, question, clarify) {
+  var d = document.getElementById(msgId);
+  if (!d) return;
+  var options = clarify.options || [];
+  var defaultOpt = clarify.default || options[0] || '';
+  var btnsHtml = options.map(function(opt, i) {
+    return '<button class="chat-clarify-btn" onclick="chatClarifyClick(this)" data-value="' + esc(opt) + '">' + esc(opt) + '</button>';
+  }).join('');
+  var hintHtml = defaultOpt ? '<div class="hint" style="margin-top:6px">默认: ' + esc(defaultOpt) + '</div>' : '';
+  d.innerHTML = '<div class="chat-bubble">' + chatFmt(question) + '<div class="chat-clarify-options">' + btnsHtml + hintHtml + '</div></div>';
+  var c = document.getElementById('chatMsgs');
+  c.scrollTop = c.scrollHeight;
+}
+
+function chatClarifyClick(btn) {
+  var value = btn.getAttribute('data-value');
+  // Send the chosen option as a new user message
+  var input = document.getElementById('chatInput');
+  if (input) input.value = value;
+  chatSend();
 }
 
 function chatUpdate(id, text) {
