@@ -84,6 +84,11 @@ Rules (tool selection):
 - For comparison questions, include compare_months
 - For investigation questions, include analyze_anomaly
 - Always end with generate_report if the user asks for a summary
+- For "top N" / "ranking" / "highest/lowest" questions, use
+  sql_query to aggregate and sort. Example: "路氹城區前10用水" ->
+  sql_query("SELECT m.meterId, m.buildingName, SUM(h.consumption) AS total FROM hourly_meter h JOIN meters m ON h.meterId=m.meterId WHERE m.dma='路氹城區' GROUP BY m.meterId ORDER BY total DESC LIMIT 10")
+- For weekly/monthly trends per meter, also use sql_query with
+  date grouping. Never use get_data_overview for specific queries.
 
 When to ask back (clarify instead of guessing):
 - The user asks 查异常 / 查数据 / 查表 but does not specify DMA,
