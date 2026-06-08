@@ -5,7 +5,8 @@ The Agent calls these functions to produce chart options,
 which the frontend renders directly with ECharts.
 """
 
-import json, os
+import json
+import os
 
 _DEFAULT_DATA_DIR = os.path.abspath(
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "backend", "data", "output")
@@ -15,7 +16,7 @@ DATA_DIR = _env_dir if (_env_dir and os.path.isabs(_env_dir)) else _DEFAULT_DATA
 
 
 def _load(filename):
-    with open(os.path.join(DATA_DIR, filename), "r", encoding="utf-8") as f:
+    with open(os.path.join(DATA_DIR, filename), encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -128,3 +129,63 @@ def generate_chart(chart_type: str, dma: str = "Zone-3", days: int = 30) -> str:
         config = CHART_GENERATORS[chart_type]()
 
     return json.dumps({"chart_type": chart_type, "echarts_option": config}, ensure_ascii=False)
+
+
+def generic_chart(
+    title: str,
+    chart_type: str,
+    labels: list[str],
+    series: list[dict],
+    x_label: str = "",
+    y_label: str = "",
+) -> str:
+    """Build an ECharts config from arbitrary label + series data.
+
+    This is the generic version that sql_query results can use.  The
+    agent calls sql_query, gets rows back, extracts two columns
+    (labels + values), and passes them here.
+
+    Args:
+        title: chart title
+        chart_type: "line" | "bar" | "pie"
+        labels: x-axis categories (or pie names)
+        series: [{"name": "series1", "values": [1,2,3]}, ...]
+        x_label: optional x-axis label
+        y_label: optional y-axis label
+
+    Returns:
+        JSON string with echarts_option for the frontend to render.
+    """
+    config: dict = {
+        "title": {"text": title, "left": "center"},
+        "tooltip": {"trigger": "axis" if chart_type != "pie" else "item"},
+        "grid": {"left": "10%", "right": "5%", "bottom": "15%"},
+    }
+
+    if chart_type == "pie":
+        pie_data = [{"name": labels[i], "value": s["values"][i]}
+                     for s in series for i in range(len(labels))]
+        # For pie, flatten all series into one data array
+        if len(series) == 1:
+            pie_data = [{"name": labels[i], "value": series[0]["values"][i]}
+                         for i in range(len(labels))]
+        config["series"] = [{"type": "pie", "radius": ["40%", "70%"],
+                             "data": pie_data,
+                             "label": {"formatter": "{b}\n{c}"}}]
+    else:
+        if x_label:
+            config["xAxis"] = {"type": "category", "data": labels,
+                               "name": x_label,
+                               "axisLabel": {"rotate": 45 if len(labels) > 8 else 0}}
+        else:
+            config["xAxis"] = {"type": "category", "data": labels,
+                               "axisLabel": {"rotate": 45 if len(labels) > 8 else 0}}
+        config["yAxis"] = {"type": "value", "name": y_label or ""}
+        config["series"] = [
+            {"name": s.get("name", ""), "type": chart_type, "data": s["values"],
+             "smooth": chart_type == "line",
+             "areaStyle": {"opacity": 0.3} if chart_type == "line" else None}
+            for s in series
+        ]
+
+    return json.dumps({"chart_type": "generic", "echarts_option": config}, ensure_ascii=False)

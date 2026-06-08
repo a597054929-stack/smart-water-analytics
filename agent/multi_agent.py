@@ -76,6 +76,7 @@ Available tools:
 - analyze_anomaly(meter_id)
 - generate_report(dma, month)
 - query_data_quality(date, meter_id, reason)
+- sql_chart(sql, chart_type, title, x_column, y_column, y_label)   # SQL + chart in one call
 
 Rules (tool selection):
 - Output ONLY the JSON array, no other text
@@ -126,7 +127,9 @@ Use JSON tools when the pre-aggregated files already cover the query:
 - query_rank_changes: top50 ranking changes
 - query_monthly_diff: main-sub meter NRW diff
 - get_data_overview: overall statistics (only for vague "show me everything")
-- generate_chart / generate_report: visualization/summary
+- generate_chart: fixed chart types only (weekly_trend, anomaly_by_dma, anomaly_type, daily_usage)
+- generate_report: text summary
+- sql_chart: use when user wants a chart FROM SQL data (e.g. "柱状图" + custom query)
 
 When to ask back (clarify instead of guessing):
 - The user asks 查异常 / 查数据 / 查表 but does not specify DMA,

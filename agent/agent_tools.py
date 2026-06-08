@@ -385,7 +385,73 @@ def generate_chart(chart_type: str, dma: str = "Zone-3", days: int = 30) -> str:
     return gen(chart_type, dma=dma, days=days)
 
 
-# ── Tool 10: Anomaly deep analysis ───────────────────────────
+# ── Tool 10b: SQL + Chart ──────────────────────────────────────
+
+@tool
+@safe_tool_call("sql_chart", timeout_seconds=30)
+def sql_chart(sql: str, chart_type: str = "bar", title: str = "",
+              x_column: str = "", y_column: str = "", y_label: str = "") -> str:
+    """Execute a SQL query and generate an ECharts chart from the results.
+
+    Args:
+        sql: the SELECT query (must return at least 2 columns)
+        chart_type: "bar" | "line" | "pie"
+        title: chart title (auto-generated if empty)
+        x_column: column name for x-axis labels (first column if empty)
+        y_column: column name for y-axis values (second column if empty)
+        y_label: y-axis unit label (e.g. "m³", "count")
+
+    Use this when the user asks for a chart AND the data needs SQL
+    (e.g. "路氹城區前10用水柱状图", "物业类型用水饼图").
+    """
+    from chart_generator import generic_chart
+    from sql_tools import _query as run_sql
+
+    rows = run_sql(sql)
+    if not rows:
+        return json.dumps({"error": "Query returned no data"})
+
+    # Parse column headers from first row (pandas DataFrame or list of dicts)
+    if hasattr(rows, 'columns'):
+        # pandas DataFrame
+        columns = list(rows.columns)
+        data = rows.to_dict(orient='records')
+    elif isinstance(rows, list) and len(rows) > 0 and isinstance(rows[0], dict):
+        columns = list(rows[0].keys())
+        data = rows
+    elif isinstance(rows, list) and len(rows) > 0 and isinstance(rows[0], (list, tuple)):
+        # list of tuples — no headers
+        columns = [f"col{i}" for i in range(len(rows[0]))]
+        data = [dict(zip(columns, row)) for row in rows]
+    else:
+        return json.dumps({"error": f"Unexpected result type: {type(rows).__name__}"})
+
+    # Pick x and y columns
+    x_col = x_column if x_column and x_column in columns else columns[0]
+    y_col = y_column if y_column and y_column in columns else (columns[1] if len(columns) > 1 else columns[0])
+
+    labels = [str(row.get(x_col, "")) for row in data]
+    values = []
+    for row in data:
+        v = row.get(y_col, 0)
+        try:
+            values.append(round(float(v), 2))
+        except (TypeError, ValueError):
+            values.append(0)
+
+    chart_title = title or f"{y_col} by {x_col}"
+
+    result = generic_chart(
+        title=chart_title,
+        chart_type=chart_type,
+        labels=labels,
+        series=[{"name": y_col, "values": values}],
+        y_label=y_label,
+    )
+    return result
+
+
+# ── Tool 11: Anomaly deep analysis ───────────────────────────
 
 @tool
 @safe_tool_call("analyze_anomaly", timeout_seconds=15)
@@ -617,7 +683,7 @@ try:
         import sys as _sys
         print(f"[agent_tools] self-refinement unavailable, using raw sql_query: {_ref_err}", file=_sys.stderr)
         from sql_tools import sql_query as _sql_query  # type: ignore
-    ALL_TOOLS = list(ALL_TOOLS) + [list_tables_tool, get_table_schema_tool, _sql_query]
+    ALL_TOOLS = list(ALL_TOOLS) + [list_tables_tool, get_table_schema_tool, _sql_query, sql_chart]
 except (ImportError, Exception) as _sql_err:
     # Don't silently swallow this — it means SQL tools are missing and the
     # agent will tell the user "no SQL tools available". Surface it to the
