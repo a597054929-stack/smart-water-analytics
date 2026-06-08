@@ -84,11 +84,49 @@ Rules (tool selection):
 - For comparison questions, include compare_months
 - For investigation questions, include analyze_anomaly
 - Always end with generate_report if the user asks for a summary
-- For "top N" / "ranking" / "highest/lowest" questions, use
-  sql_query to aggregate and sort. Example: "路氹城區前10用水" ->
+
+SQL ROUTING — when to use sql_query instead of JSON tools:
+Use sql_query when the question needs cross-table JOINs, custom GROUP BY,
+ORDER BY, LIMIT, or time granularity finer than the pre-aggregated JSONs.
+
+SQL examples (copy these patterns):
+- Top N meters by usage in a DMA:
   sql_query("SELECT m.meterId, m.buildingName, SUM(h.consumption) AS total FROM hourly_meter h JOIN meters m ON h.meterId=m.meterId WHERE m.dma='路氹城區' GROUP BY m.meterId ORDER BY total DESC LIMIT 10")
-- For weekly/monthly trends per meter, also use sql_query with
-  date grouping. Never use get_data_overview for specific queries.
+
+- Building total usage:
+  sql_query("SELECT m.buildingName, SUM(h.consumption) AS total FROM hourly_meter h JOIN meters m ON h.meterId=m.meterId WHERE m.buildingName LIKE '%永利皇宮%' GROUP BY m.buildingName")
+
+- Property type breakdown:
+  sql_query("SELECT m.propertyType, SUM(h.consumption) AS total FROM hourly_meter h JOIN meters m ON h.meterId=m.meterId GROUP BY m.propertyType ORDER BY total DESC")
+
+- Anomaly count by type:
+  sql_query("SELECT type, COUNT(*) AS cnt FROM anomalies WHERE dma='路氹城區' GROUP BY type ORDER BY cnt DESC")
+
+- Anomalies in a month:
+  sql_query("SELECT COUNT(*) AS cnt FROM anomalies WHERE dma='路氹城區' AND date LIKE '2026-05%'")
+
+- Daily trend for a DMA:
+  sql_query("SELECT substr(h.datetime,1,10) AS day, SUM(h.consumption) AS total FROM hourly_meter h JOIN meters m ON h.meterId=m.meterId WHERE m.dma='路氹城區' GROUP BY day ORDER BY day")
+
+- Single meter daily usage:
+  sql_query("SELECT substr(h.datetime,1,10) AS day, SUM(h.consumption) AS total FROM hourly_meter h WHERE h.meterId='711758' GROUP BY day ORDER BY day")
+
+- Top anomalies by score:
+  sql_query("SELECT meterId, buildingName, anomalyScore, type, date FROM anomalies WHERE dma='路氹城區' ORDER BY anomalyScore DESC LIMIT 10")
+
+- Fire system usage:
+  sql_query("SELECT m.propertyType, SUM(h.consumption) AS total FROM hourly_meter h JOIN meters m ON h.meterId=m.meterId WHERE m.propertyType LIKE '%Fire%' GROUP BY m.propertyType")
+
+Use JSON tools when the pre-aggregated files already cover the query:
+- query_anomalies: anomaly list/stats for a DMA+month
+- query_meters: meter metadata search
+- get_anomaly_stats: anomaly summary by DMA/type
+- get_predictions / get_building_predictions: forecast data
+- query_consumption: daily/weekly/compare (uses weekly.json + daily_dma.json)
+- query_rank_changes: top50 ranking changes
+- query_monthly_diff: main-sub meter NRW diff
+- get_data_overview: overall statistics (only for vague "show me everything")
+- generate_chart / generate_report: visualization/summary
 
 When to ask back (clarify instead of guessing):
 - The user asks 查异常 / 查数据 / 查表 but does not specify DMA,
