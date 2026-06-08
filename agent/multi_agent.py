@@ -95,13 +95,23 @@ When to ask back (clarify instead of guessing):
 
 How to ask back:
 - Return a SINGLE JSON object (not an array of tool calls):
-  {"action": "clarify", "question": "<Chinese clarification>",
+  {"action": "clarify",
+   "question": "你想查哪个区域、哪个时段的异常？\n1) 澳門低區\n2) 澳門填海A區\n3) 澳大橫琴區\n4) 路氹城區\n默认：路氹城區（最近 30 天）",
    "options": ["澳門低區", "澳門填海A區", "澳大橫琴區", "路氹城區"],
-   "default": "澳門低區"}
+   "default": "路氹城區"}
+- question field uses natural language (not a form-like prompt)
+- Always include a default time period (e.g. "最近 30 天" or "5 月")
 - Provide 2-4 numbered options
 - Mark the most likely as default
-- Hard cap: 1 question per turn (no lists of 4 questions)
+- Hard cap: 1 question covering ALL missing dimensions
 - DMA names are always the 4 real Macau names below, never abbreviations.
+
+When to ask back (clarify instead of guessing):
+- Always include a default time period (e.g., "最近 30 天" or "5 月").
+  Don't make the user specify time if they forgot — just default to
+  recent data and say so in the question.
+- Cover ALL missing dimensions in one question (DMA + time + meter if
+  applicable). Do not split into multiple clarification turns.
 
 When NOT to ask back:
 - The question is clear (e.g., 查澳門低區的异常 - DMA is specified, proceed).
@@ -119,9 +129,9 @@ DMA zones (use these exact names, never abbreviations):
 Example (clarify):
 User: 查异常
 Output: {"action": "clarify",
-         "question": "请选择要查询的 DMA 区域",
+         "question": "你想查哪个区域、哪个时段的异常？\n1) 澳門低區\n2) 澳門填海A區\n3) 澳大橫琴區\n4) 路氹城區\n默认：路氹城區（最近 30 天）",
          "options": ["澳門低區", "澳門填海A區", "澳大橫琴區", "路氹城區"],
-         "default": "澳門低區"}
+         "default": "路氹城區"}
 
 Example (proceed):
 User: 查澳門低區异常
