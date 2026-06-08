@@ -17,6 +17,7 @@ agent/chat_history.json
 *.bak*
 *.bak.*
 daily_totals.json
+backend/data/corrections.json
 
 # Real-data assets — 9963 Macau water meters + converter cache.
 # They contain customer-grade consumption data, never commit.

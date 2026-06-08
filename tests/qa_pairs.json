@@ -1,201 +1,277 @@
 {
   "version": "2.1.0",
   "description": "Test QA pairs for evaluating the Smart Water Analytics agent. Calibrated against REAL Macau water data (4 DMAs: 澳門低區 / 澳門填海A區 / 澳大橫琴區 / 路氹城區, 6,630 active meters, 753832 etc.). 25+3 clarification+2 data_quality=30 pairs, scored by tool accuracy + keyword recall + (for clarification pairs) behavior. 2026-06-06: added data_quality pairs after introducing the query_data_quality tool.",
-  "real_dma_names": ["澳門低區", "澳門填海A區", "澳大橫琴區", "路氹城區"],
+  "real_dma_names": [
+    "澳門低區",
+    "澳門填海A區",
+    "澳大橫琴區",
+    "路氹城區"
+  ],
   "pairs": [
     {
       "id": "anomaly_cotai_count_sql",
       "question": "How many anomalies are in 路氹城區?",
       "expected_tool": "sql_query",
-      "expected_keywords": ["路氹城區"],
+      "expected_keywords": [
+        "路氹城區"
+      ],
       "difficulty": "easy"
     },
     {
       "id": "anomaly_top5_score",
       "question": "What are the top 5 highest-scoring anomalies?",
       "expected_tool": "sql_query",
-      "expected_keywords": ["anomalyScore", "DESC"],
+      "expected_keywords": [
+        "anomalyScore",
+        "DESC"
+      ],
       "difficulty": "easy"
     },
     {
       "id": "anomaly_cotai_list",
       "question": "Show me anomalies in 路氹城區",
       "expected_tool": "query_anomalies",
-      "expected_keywords": ["路氹城區"],
+      "expected_keywords": [
+        "路氹城區"
+      ],
       "difficulty": "easy"
     },
     {
       "id": "anomaly_stats_macau_low",
       "question": "What are the anomaly statistics for 澳門低區?",
       "expected_tool": "get_anomaly_stats",
-      "expected_keywords": ["澳門低區", "total"],
+      "expected_keywords": [
+        "澳門低區",
+        "total"
+      ],
       "difficulty": "easy"
     },
     {
       "id": "data_overview",
       "question": "Give me an overview of the data",
       "expected_tool": "get_data_overview",
-      "expected_keywords": ["meters", "anomalies"],
+      "expected_keywords": [
+        "meters",
+        "anomalies"
+      ],
       "difficulty": "easy"
     },
     {
       "id": "meters_residential",
       "question": "How many residential meters do we have?",
       "expected_tool": "query_meters",
-      "expected_keywords": ["residential"],
+      "expected_keywords": [
+        "residential"
+      ],
       "difficulty": "easy"
     },
     {
       "id": "predictions_meter",
-      "question": "Predict next week consumption for meter 753832",
+      "question": "Predict next week consumption for meter MOCK7538",
       "expected_tool": "get_predictions",
-      "expected_keywords": ["753832"],
+      "expected_keywords": [
+        "753832"
+      ],
       "difficulty": "medium"
     },
     {
       "id": "building_predictions",
       "question": "Show predictions for a building",
       "expected_tool": "get_predictions",
-      "expected_keywords": ["building"],
+      "expected_keywords": [
+        "building"
+      ],
       "difficulty": "medium"
     },
     {
       "id": "weekly_trend",
       "question": "What is the weekly trend?",
       "expected_tool": "query_consumption",
-      "expected_keywords": ["week"],
+      "expected_keywords": [
+        "week"
+      ],
       "difficulty": "easy"
     },
     {
       "id": "rank_changes",
       "question": "Which meters have been in the top 20 the longest?",
       "expected_tool": "query_rank_changes",
-      "expected_keywords": ["top"],
+      "expected_keywords": [
+        "top"
+      ],
       "difficulty": "medium"
     },
     {
       "id": "monthly_diff_nrw",
       "question": "Show me the non-revenue water situation",
       "expected_tool": "query_monthly_diff",
-      "expected_keywords": ["diff", "main"],
+      "expected_keywords": [
+        "diff",
+        "main"
+      ],
       "difficulty": "medium"
     },
     {
       "id": "compare_two_months",
       "question": "Compare January and February consumption",
       "expected_tool": "query_consumption",
-      "expected_keywords": ["January", "February"],
+      "expected_keywords": [
+        "January",
+        "February"
+      ],
       "difficulty": "medium"
     },
     {
       "id": "chart_trend_cotai",
       "question": "Draw a trend chart for 路氹城區",
       "expected_tool": "generate_chart",
-      "expected_keywords": ["路氹城區"],
+      "expected_keywords": [
+        "路氹城區"
+      ],
       "difficulty": "medium"
     },
     {
       "id": "anomaly_investigate",
-      "question": "Investigate meter 753832 anomalies",
+      "question": "Investigate meter MOCK7538 anomalies",
       "expected_tool": "analyze_anomaly",
-      "expected_keywords": ["753832"],
+      "expected_keywords": [
+        "753832"
+      ],
       "difficulty": "hard"
     },
     {
       "id": "report_cotai",
       "question": "Generate a 路氹城區 monthly report",
       "expected_tool": "generate_report",
-      "expected_keywords": ["路氹城區"],
+      "expected_keywords": [
+        "路氹城區"
+      ],
       "difficulty": "hard"
     },
     {
       "id": "sql_total_by_dma",
       "question": "What is the total daily consumption by DMA?",
       "expected_tool": "sql_query",
-      "expected_keywords": ["dma", "total"],
+      "expected_keywords": [
+        "dma",
+        "total"
+      ],
       "difficulty": "medium"
     },
     {
       "id": "sql_top_meters",
       "question": "Top 5 meters by total consumption",
       "expected_tool": "sql_query",
-      "expected_keywords": ["meterId", "DESC"],
+      "expected_keywords": [
+        "meterId",
+        "DESC"
+      ],
       "difficulty": "medium"
     },
     {
       "id": "sql_avg_by_dma",
       "question": "What is the average anomaly score by DMA?",
       "expected_tool": "sql_query",
-      "expected_keywords": ["anomalyScore", "AVG"],
+      "expected_keywords": [
+        "anomalyScore",
+        "AVG"
+      ],
       "difficulty": "medium"
     },
     {
       "id": "list_tables",
       "question": "What tables are available?",
       "expected_tool": "list_tables_tool",
-      "expected_keywords": ["anomalies", "meters"],
+      "expected_keywords": [
+        "anomalies",
+        "meters"
+      ],
       "difficulty": "easy"
     },
     {
       "id": "schema_anomalies",
       "question": "What columns does the anomalies table have?",
       "expected_tool": "get_table_schema_tool",
-      "expected_keywords": ["dma", "anomalyScore"],
+      "expected_keywords": [
+        "dma",
+        "anomalyScore"
+      ],
       "difficulty": "easy"
     },
     {
       "id": "daily_dma_rainy",
       "question": "Show me daily consumption data",
       "expected_tool": "query_consumption",
-      "expected_keywords": ["date"],
+      "expected_keywords": [
+        "date"
+      ],
       "difficulty": "easy"
     },
     {
       "id": "meters_by_cotai",
       "question": "List all meters in 路氹城區",
       "expected_tool": "query_meters",
-      "expected_keywords": ["路氹城區"],
+      "expected_keywords": [
+        "路氹城區"
+      ],
       "difficulty": "easy"
     },
     {
       "id": "anomaly_watch_list",
       "question": "Show me watch anomalies",
       "expected_tool": "query_anomalies",
-      "expected_keywords": ["watch"],
+      "expected_keywords": [
+        "watch"
+      ],
       "difficulty": "medium"
     },
     {
       "id": "compare_two_dmas_real",
       "question": "Compare 澳門低區 and 路氹城區 consumption",
       "expected_tool": "query_consumption",
-      "expected_keywords": ["澳門低區", "路氹城區"],
+      "expected_keywords": [
+        "澳門低區",
+        "路氹城區"
+      ],
       "difficulty": "medium"
     },
     {
       "id": "report_all",
       "question": "Generate a comprehensive report",
       "expected_tool": "generate_report",
-      "expected_keywords": ["anomalies", "consumption"],
+      "expected_keywords": [
+        "anomalies",
+        "consumption"
+      ],
       "difficulty": "hard"
     },
     {
       "id": "ambiguous_dma_and_metric",
       "question": "氹仔漏水",
-      "expected_keywords": ["路氹城區", "1)"],
+      "expected_keywords": [
+        "路氹城區",
+        "1)"
+      ],
       "difficulty": "medium",
       "expected_behavior": "ask_clarification"
     },
     {
       "id": "ambiguous_metric_only",
       "question": "上周水损情况",
-      "expected_keywords": ["主分表差", "1)"],
+      "expected_keywords": [
+        "主分表差",
+        "1)"
+      ],
       "difficulty": "medium",
       "expected_behavior": "ask_clarification"
     },
     {
       "id": "guess_with_assumption_should_NOT_ask",
       "question": "氹仔的 NRW",
-      "expected_keywords": ["路氹城區", "NRW"],
+      "expected_keywords": [
+        "路氹城區",
+        "NRW"
+      ],
       "difficulty": "easy",
       "expected_behavior": "guess_with_state"
     },
@@ -203,14 +279,20 @@
       "id": "data_quality_overview",
       "question": "Is the data accurate? Any dropped records?",
       "expected_tool": "query_data_quality",
-      "expected_keywords": ["errors", "reason"],
+      "expected_keywords": [
+        "errors",
+        "reason"
+      ],
       "difficulty": "easy"
     },
     {
       "id": "data_quality_chinese",
       "question": "数据准不准？有没有数据问题？",
       "expected_tool": "query_data_quality",
-      "expected_keywords": ["errors", "reason"],
+      "expected_keywords": [
+        "errors",
+        "reason"
+      ],
       "difficulty": "easy"
     }
   ]
