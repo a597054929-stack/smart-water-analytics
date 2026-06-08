@@ -46,11 +46,19 @@ TOOL_REGISTRY = {tool.name: tool for tool in ALL_TOOLS}
 
 # ── Planner ───────────────────────────────────────────────────
 
-PLANNER_PROMPT = """You are a planning agent. Your job is to analyze the user's question
+PLANNER_PROMPT = """You are a planning agent. Your job is to analyze the user question
 and create a structured execution plan.
 
-Given the user question, output a JSON array of tool calls to execute.
-Each tool call should be: {"tool": "tool_name", "params": {"param": "value"}}
+Given the user question, you may either output a JSON array of tool
+calls to execute, OR a single clarify object to ask the user for
+missing information.
+
+If proceeding with tools, each tool call is:
+    {"tool": "tool_name", "params": {"param": "value"}}
+
+If asking back, return a single JSON object:
+    {"action": "clarify", "question": "<Chinese question>",
+     "options": ["opt1", "opt2", ...], "default": "opt1"}
 
 Available tools:
 - query_anomalies(dma, month, anomaly_type, limit)
@@ -59,7 +67,7 @@ Available tools:
 - get_predictions(meter_id, limit)
 - get_building_predictions(building, limit)
 - get_data_overview()
-- query_daily_dma(date, dma, limit)
+- query_consumption(mode, date, dma, month1, month2, limit)   # daily/weekly/compare
 - query_weekly()
 - query_rank_changes(limit)
 - query_monthly_diff(month)
@@ -67,8 +75,9 @@ Available tools:
 - compare_months(month1, month2, dma)
 - analyze_anomaly(meter_id)
 - generate_report(dma, month)
+- query_data_quality(date, meter_id, reason)
 
-Rules:
+Rules (tool selection):
 - Output ONLY the JSON array, no other text
 - Include only tools relevant to the question
 - Set reasonable parameter defaults if not specified
@@ -76,9 +85,38 @@ Rules:
 - For investigation questions, include analyze_anomaly
 - Always end with generate_report if the user asks for a summary
 
-Example:
-User: "Show me Zone-3 anomalies for March"
-Output: [{"tool": "get_anomaly_stats", "params": {"month": "2026-03", "dma": "Zone-3"}}, {"tool": "query_anomalies", "params": {"month": "2026-03", "dma": "Zone-3", "limit": 10}}]
+When to ask back (clarify instead of guessing):
+- The user asks 查异常 / 查数据 / 查表 but does not specify DMA,
+  time period, or meter ID.
+- The user question is materially ambiguous: different choices lead
+  to different tools or different answers.
+- The user references this week / current zone / the meter we discussed
+  without context being available in PAGE CONTEXT.
+
+How to ask back:
+- Return a SINGLE JSON object (not an array of tool calls):
+  {"action": "clarify", "question": "<Chinese clarification>",
+   "options": ["Zone-1", "Zone-2", "Zone-3", "Zone-4"], "default": "Zone-1"}
+- Provide 2-4 numbered options
+- Mark the most likely as default
+- Hard cap: 1 question per turn (no lists of 4 questions)
+
+When NOT to ask back:
+- The question is clear (e.g., 查 Zone-3 的异常 - DMA is specified, proceed).
+- The ambiguity is minor (e.g., 上周 - assume previous 7 days,
+  proceed with parenthetical assuming last 7 days).
+
+Example (clarify):
+User: 查异常
+Output: {"action": "clarify",
+         "question": "请选择要查询的 DMA 区域",
+         "options": ["Zone-1", "Zone-2", "Zone-3", "Zone-4"],
+         "default": "Zone-1"}
+
+Example (proceed):
+User: 查 Zone-3 异常
+Output: [{"tool": "get_anomaly_stats", "params": {"dma": "Zone-3"}},
+         {"tool": "query_anomalies", "params": {"dma": "Zone-3", "limit": 10}}]
 """
 
 
@@ -94,8 +132,14 @@ def create_planner():
     return llm
 
 
-def plan(question: str, llm) -> list:
-    """Generate an execution plan for the question."""
+def plan(question: str, llm) -> dict:
+    """Generate an execution plan OR a clarify request.
+
+    Returns a dict in one of two shapes:
+      - {"action": "plan", "steps": [...]}             (normal case)
+      - {"action": "clarify", "question": "...",
+        "options": [...], "default": "..."}            (ask back)
+    """
     messages = [
         SystemMessage(content=PLANNER_PROMPT),
         HumanMessage(content=question),
@@ -103,21 +147,45 @@ def plan(question: str, llm) -> list:
     response = llm.invoke(messages)
     content = response.content
 
-    # Extract JSON from response
+    # Extract text from content (handles list-type content blocks)
     if isinstance(content, list):
-        content = " ".join(block.get("text", "") for block in content if isinstance(block, dict))
+        content = " ".join(
+            block.get("text", "") for block in content if isinstance(block, dict)
+        )
 
-    # Find JSON array in response
+    # Try to parse as a JSON object first (might be a clarify response
+    # or an explicit {"action": "plan", "steps": [...]} envelope).
+    try:
+        obj = json.loads(content.strip())
+        if isinstance(obj, dict):
+            if obj.get("action") == "clarify":
+                return {
+                    "action": "clarify",
+                    "question": obj.get("question", ""),
+                    "options": obj.get("options", []),
+                    "default": obj.get("default"),
+                }
+            if obj.get("action") == "plan":
+                return {"action": "plan", "steps": obj.get("steps", [])}
+            # Bare dict without action - treat as a single tool call
+            if "tool" in obj and "params" in obj:
+                return {"action": "plan", "steps": [obj]}
+    except (json.JSONDecodeError, AttributeError, TypeError):
+        pass
+
+    # Fall back to parsing as a JSON array (legacy format)
     start = content.find("[")
     end = content.rfind("]") + 1
     if start >= 0 and end > start:
         try:
-            return json.loads(content[start:end])
+            steps = json.loads(content[start:end])
+            if isinstance(steps, list):
+                return {"action": "plan", "steps": steps}
         except json.JSONDecodeError:
             pass
 
-    # Fallback: single query
-    return [{"tool": "get_data_overview", "params": {}}]
+    # Final fallback: single overview query
+    return {"action": "plan", "steps": [{"tool": "get_data_overview", "params": {}}]}
 
 
 # ── Executor ──────────────────────────────────────────────────
@@ -224,8 +292,25 @@ def run_multi_agent(question: str, context: dict | None = None) -> dict:
         )
         augmented_question = "\n".join(ctx_lines) + "\n\nUser question: " + question
 
-    # Step 1: Plan
-    plan_steps = plan(augmented_question, llm)
+    # Step 1: Plan (may return a clarify request instead of tool steps)
+    plan_result = plan(augmented_question, llm)
+
+    # Ask-back path: return immediately, no executor, no synthesizer.
+    # This saves 2 LLM calls per clarify turn and avoids hallucinated
+    # answers when the user question is materially ambiguous.
+    if plan_result.get("action") == "clarify":
+        return {
+            "answer": plan_result.get("question", ""),
+            "chart": None,
+            "plan": [],
+            "tools_called": [],
+            "clarify": {
+                "options": plan_result.get("options", []),
+                "default": plan_result.get("default"),
+            },
+        }
+
+    plan_steps = plan_result.get("steps", [])
 
     # Step 2: Execute
     results = execute(plan_steps)
@@ -262,9 +347,14 @@ def main():
 
     if args.question:
         result = run_multi_agent(args.question)
-        print(f"\nPlan: {json.dumps(result['plan'], indent=2)}")
-        print(f"Tools called: {result['tools_called']}")
-        print(f"\nAnswer:\n{result['answer']}")
+        if result.get("clarify"):
+            print(f"\nClarify: {result['answer']}")
+            print(f"Options: {result['clarify']['options']}")
+            print(f"Default: {result['clarify'].get('default')}")
+        else:
+            print(f"\nPlan: {json.dumps(result['plan'], indent=2)}")
+            print(f"Tools called: {result['tools_called']}")
+            print(f"\nAnswer:\n{result['answer']}")
         return
 
     print("Multi-Agent Smart Water Assistant")
