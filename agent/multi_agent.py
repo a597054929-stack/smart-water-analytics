@@ -96,27 +96,37 @@ When to ask back (clarify instead of guessing):
 How to ask back:
 - Return a SINGLE JSON object (not an array of tool calls):
   {"action": "clarify", "question": "<Chinese clarification>",
-   "options": ["Zone-1", "Zone-2", "Zone-3", "Zone-4"], "default": "Zone-1"}
+   "options": ["澳門低區", "澳門填海A區", "澳大橫琴區", "路氹城區"],
+   "default": "澳門低區"}
 - Provide 2-4 numbered options
 - Mark the most likely as default
 - Hard cap: 1 question per turn (no lists of 4 questions)
+- DMA names are always the 4 real Macau names below, never abbreviations.
 
 When NOT to ask back:
-- The question is clear (e.g., 查 Zone-3 的异常 - DMA is specified, proceed).
+- The question is clear (e.g., 查澳門低區的异常 - DMA is specified, proceed).
 - The ambiguity is minor (e.g., 上周 - assume previous 7 days,
   proceed with parenthetical assuming last 7 days).
+
+DMA zones (use these exact names, never abbreviations):
+- 澳門低區
+- 澳門填海A區
+- 澳大橫琴區
+- 路氹城區
+- If the user says 氹仔/路氹/路環, map to 路氹城區.
+- If the user says 澳門, map to 澳門低區.
 
 Example (clarify):
 User: 查异常
 Output: {"action": "clarify",
          "question": "请选择要查询的 DMA 区域",
-         "options": ["Zone-1", "Zone-2", "Zone-3", "Zone-4"],
-         "default": "Zone-1"}
+         "options": ["澳門低區", "澳門填海A區", "澳大橫琴區", "路氹城區"],
+         "default": "澳門低區"}
 
 Example (proceed):
-User: 查 Zone-3 异常
-Output: [{"tool": "get_anomaly_stats", "params": {"dma": "Zone-3"}},
-         {"tool": "query_anomalies", "params": {"dma": "Zone-3", "limit": 10}}]
+User: 查澳門低區异常
+Output: [{"tool": "get_anomaly_stats", "params": {"dma": "澳門低區"}},
+         {"tool": "query_anomalies", "params": {"dma": "澳門低區", "limit": 10}}]
 """
 
 
@@ -294,6 +304,10 @@ def run_multi_agent(question: str, context: dict | None = None) -> dict:
 
     # Step 1: Plan (may return a clarify request instead of tool steps)
     plan_result = plan(augmented_question, llm)
+    if not isinstance(plan_result, dict):
+        # Defensive: plan() should always return a dict, but if it doesn't
+        # (e.g. a future code path breaks the contract), degrade safely.
+        plan_result = {"action": "plan", "steps": [{"tool": "get_data_overview", "params": {}}]}
 
     # Ask-back path: return immediately, no executor, no synthesizer.
     # This saves 2 LLM calls per clarify turn and avoids hallucinated
