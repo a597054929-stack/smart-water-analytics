@@ -67,6 +67,7 @@ Available tools:
 - get_predictions(meter_id, limit)
 - get_building_predictions(building, limit)
 - get_data_overview()
+- sql_chart(sql, chart_type, title, x_column, y_column, y_label)   # SQL + chart in one call (bar/line/pie)
 - query_consumption(mode, date, dma, month1, month2, limit)   # daily/weekly/compare
 - query_weekly()
 - query_rank_changes(limit)
@@ -269,7 +270,11 @@ def execute(plan_steps: list) -> list:
 
         try:
             tool = TOOL_REGISTRY[tool_name]
-            output = tool.invoke(params)
+            # LangChain @tool-decorated functions: invoke() accepts either
+            # positional input (str) or a dict unpacked as kwargs. Pass via
+            # `input=` so the dict is always treated as kwargs, never a
+            # raw string. (Fixes 'str' object has no attribute 'get'.)
+            output = tool.invoke(input=params)
             results.append({"tool": tool_name, "result": output})
         except Exception as e:
             results.append({"tool": tool_name, "error": str(e)})

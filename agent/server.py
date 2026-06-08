@@ -21,7 +21,7 @@ from datetime import UTC
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel
 
 app = FastAPI(title="Smart Water AI Assistant")
@@ -499,6 +499,30 @@ async def chat_sync(req: ChatRequest):
         return ChatResponse(answer=answer, chart=chart, clarify=clarify, context_used=req.context)
     except Exception as e:
         return ChatResponse(answer=f"Error: {str(e)}")
+
+
+# ── Frontend Dashboard ────────────────────────────────────────
+# The dashboard is built by `frontend/build.cjs` into a self-contained
+# single HTML file (CSS + JS + data all inlined). Serving it from
+# the agent server means a single port serves both the API and the UI.
+# In dev: http://localhost:8000/ opens the chat; /docs opens Swagger.
+
+_DASHBOARD_HTML = os.path.normpath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "frontend", "dist", "dashboard.html")
+)
+
+
+@app.get("/", tags=["frontend"], summary="Serve the dashboard HTML (chat + tabs)")
+async def index():
+    if not os.path.exists(_DASHBOARD_HTML):
+        return HTMLResponse(
+            "<h1>Dashboard not built</h1>"
+            "<p>Run <code>cd frontend && node build.cjs</code> to build "
+            "frontend/dist/dashboard.html</p>",
+            status_code=503,
+        )
+    with open(_DASHBOARD_HTML, encoding="utf-8") as f:
+        return HTMLResponse(f.read())
 
 
 # ── API Endpoints ─────────────────────────────────────────────
