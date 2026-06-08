@@ -36,35 +36,37 @@ A full-stack data analytics platform for monitoring and predicting urban water c
 
 ## Architecture
 
-```mermaid
-flowchart TB
-    subgraph Data["Data Pipeline"]
-        Excel["Excel Files<br/>(9,963 meters, 151 days)"]
-        NodeProc["Node.js Processor<br/>xlsx + conversion"]
-        JSON["JSON Output<br/>daily_dma, anomalies, predictions..."]
-        Excel --> NodeProc --> JSON
-    end
-
-    subgraph ML["ML Layer"]
-        PythonML["Python ML<br/>LightGBM + Pandera"]
-        Pred["Predictions +<br/>Anomaly Scores"]
-        PythonML --> Pred
-    end
-
-    subgraph Dashboard["Frontend"]
-        Build["build.cjs<br/>(CSS/JS inline)"]
-        HTML["Single-File Dashboard<br/>HTML + CSS + JS + Data"]
-        JSON --> Build --> HTML
-    end
-
-    subgraph Chat["AI Layer (optional)"]
-        User["User Question<br/>(floating chat widget)"]
-        Agent["LangChain Backend<br/>(16 tools, FastAPI)"]
-        User <--> Agent
-    end
-
-    Pred -.feeds.-> Build
 ```
+                  ┌──────────────────────────────────────┐
+                  │  Excel 原始文件                       │
+                  │  真实数据：9,963 表 / 151 天          │
+                  │  Mock 数据：500 表 / 125 天           │
+                  └─────────────────┬────────────────────┘
+                                    ▼
+                  ┌──────────────────────────────────────┐
+                  │  数据处理层                           │
+                  │  real_data_converter.py              │
+                  │  pipeline/orchestrator.py (7 stage)  │
+                  │  (含 LightGBM + Pandera 校验)        │
+                  └─────────────────┬────────────────────┘
+                                    ▼
+                  ┌──────────────────────────────────────┐
+                  │  产物（文件系统）                     │
+                  │  13 个 daily JSON                    │
+                  │  + hourly_meter.db (~4.6M 行)        │
+                  └─────────────────┬────────────────────┘
+                                    ▼
+                  ┌──────────────────────┐  ┌──────────────────────┐
+                  │  前端仪表盘           │  │  AI 代理（可选）      │
+                  │  dashboard.html      │  │  LangChain           │
+                  │  (~5MB 单文件)       │◄►│  FastAPI :8000       │
+                  │  ECharts + Leaflet   │  │  16 工具 + SQL       │
+                  │  完全离线可跑        │  │  Planner-Executor-   │
+                  │                      │  │  Synthesizer         │
+                  └──────────────────────┘  └──────────────────────┘
+```
+
+> 注：本 README 是项目门面。**完整架构说明见 `docs/ARCHITECTURE.md`**。
 
 ## Quick Start
 
@@ -269,7 +271,7 @@ in the chat UI).
 ## Evaluation
 
 ```bash
-pytest tests/ -v                          # 104 unit tests
+pytest tests/ -v                          # 153 unit tests
 python tests/evaluate.py                  # 30 QA pairs, real LLM, ~10 min
 npm run model:compare                     # LightGBM vs LinearRegression comparison
 python scripts/health_check.py            # Data freshness + SQLite integrity check
@@ -327,12 +329,17 @@ Beyond the business logic, this project ships with a serious engineering baselin
 - **Reproducible builds** — `requirements.lock.txt` pins 135 packages; `pyproject.toml` declares project metadata and dev tools.
 - **Linted + type-checked** — ruff (`E/F/W/I/UP/B` rule sets) runs in CI on every push; per-file ignores for `tests/` / `agent/` / `scripts/`.
 - **Structured logging** — `pipeline/logger.py` uses `structlog` (JSON output, `run_id` propagated through context vars, stage-aware loggers).
-- **Schema contracts** — 10 Pandera `DataFrameSchema` validated at every stage boundary; bad data fails fast.
+- **Schema contracts** — 11 Pandera `DataFrameSchema` validated at every stage boundary; bad data fails fast.
 - **Typed API** — All 8 FastAPI endpoints declare `response_model` + `tags` + `summary`; Swagger UI at `http://localhost:8000/docs`.
 - **Healthcheck** — `Dockerfile` has a real `HEALTHCHECK` hitting `/api/health`; works with `docker inspect` and K8s liveness probes.
-- **Architecture Decision Records** — see [`docs/adr/`](docs/adr/README.md) for the "why" behind SQLite, Pandera, and the monorepo layout.
-- **Shared test fixtures** — `tests/conftest.py` exposes `tmp_ckpt` / `db_path` / `pipeline_output` for any new test file.
+- **Architecture Decision Records** — see [`docs/adr/`](docs/adr/README.md) for the "why" behind SQLite, Pandera, monorepo, and Claude Code design philosophy.
+- **Shared test fixtures** — `tests/conftest.py` exposes `tmp_ckpt` / `db_path` / `pipeline_output` / `mock_llm` for any new test file.
 - **In-process metrics** — `GET /api/metrics` returns Prometheus-style counters for chat requests, tool calls, failures, and questions logged.
+- **Sensitive data protection** — Password-gated masking for building names, contract IDs, and meter IDs in real-data mode (`USE_REAL_DATA=1`). Mock mode stays fully open.
+- **Tool sandbox** — `@safe_tool_call` decorator adds timeout (threading-based, Windows compatible), path blacklist (`.env`, `/etc`, `C:/Windows`), and JSONL audit log (`logs/tool_audit.log`) to all 18 agent tools.
+- **Memory compression** — Two-tier conversation memory: recent 6 turns verbatim + older turns summarized via LLM. Three-layer fallback on LLM failure.
+- **30-case agent harness** — Offline mock-LLM tests covering tool selection (10), ambiguous input (8), privilege escalation rejection (7), and edge cases (5). Runs in ~3 seconds.
+- **153 tests** — pipeline, agent tools, memory, sandbox, harness, regression, adversarial, evaluator.
 
 Full architecture map: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 

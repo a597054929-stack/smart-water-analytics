@@ -1,5 +1,10 @@
 # 架构总览
 
+> **最后更新**：2026-06-08
+> **维护者**：李志泉
+> **本文档是项目权威架构说明**。如其他文档（如 `README.md`、
+> `GLOSSARY.md`）与本文档冲突，**以本文档为准**。
+
 ## 30 秒速览
 
 | 指标 | 数值 |
@@ -19,6 +24,40 @@
 **澳门智慧水务分析平台**——监控各 DMA 区域的用水量、检测异常、预测下
 周需求、用自然语言（中/英）回答运维人员的问题。
 
+## 怎么读这份文档
+
+| 你的需求 | 看哪一节 |
+|---------|---------|
+| 30 秒了解项目 | 速览表 + 图 1 |
+| 讲给面试官 | 图 1 + 3NF 分析 + 12.1 Agent 工具清单 |
+| 加一个新工具 | Cookbook 第 1 条 + 第 17 节代码入口 |
+| 修数据 bug | 第 14.4 节 corrections.json |
+| 部署到新机器 | 第 16 节 + bat 脚本 |
+| 面试被追问 deep dive | 3NF + 图 6 ER + 预测故事 |
+| 想知道"为什么这么设计" | 演进记录 + 3NF 分析 |
+
+## 目录
+
+1. [图 1：五层整体架构](#图-1五层整体架构)
+2. [图 2：Pipeline 7 个 Stage](#图-2pipeline-7-个-stage-详细流)
+3. [图 3：Mock vs 真实数据分支](#图-3mock-数据-vs-真实数据分支)
+4. [图 4：转换器 3 种运行模式](#图-4转换器-3-种运行模式)
+5. [图 5：Agent PES 流程](#图-5agent-planner-executor-synthesizer-流程)
+6. [图 6：数据库 ER 关系](#图-6数据库-er-关系)
+7. [图 7：典型日更时序](#图-7典型日更时序)
+8. [图 8：部署拓扑](#图-8部署拓扑)
+9. [数据存储详解](#9-数据存储详解)
+10. [Pipeline 7 Stage 详解](#10-pipeline-7-stage-详解)
+11. [3NF 分析](#11-3nf-分析)
+12. [应用层](#12-应用层)
+13. [测试与评估](#13-测试与评估)
+14. [典型工作流](#14-典型工作流)
+15. [Trade-off 与限制](#15-trade-off-与限制)
+16. [部署](#16-部署)
+17. [代码入口速查](#17-代码入口速查)
+18. [Cookbook：常见任务](#18-cookbook常见任务)
+19. [演进记录](#19-演进记录)
+
 ---
 
 # 图 1：五层整体架构
@@ -35,7 +74,8 @@
                                   ▼
                 ┌──────────────────────────────────────┐
                 │  1. 转换器产物（文件系统）            │
-                │  • 21 个 JSON 产物 (~60MB)           │
+                │  • 13 个 daily JSON (~60MB)          │
+                │  • 4 个 hourly JSON                  │
                 │  • hourly_meter.db (~4.6M 行)        │
                 │  • 3 种运行模式                      │
                 └─────────────────┬────────────────────┘
@@ -141,12 +181,13 @@
    │  ┌──────────────────┐           │    │           ▼                     │
    │  │ analytics.db     │           │    │  ┌──────────────────┐           │
    │  │ 500 表 / 125 天  │           │    │  │ output_real/     │           │
-   │  └────────┬─────────┘           │    │  │ 21 JSON +        │           │
-   │           ▼                     │    │  │ hourly_meter.db  │           │
-   │  ┌──────────────────┐           │    │  │ 9963 表 / 151 天 │           │
-   │  │ 本地单 HTML      │           │    │  └────────┬─────────┘           │
-   │  │ bundle           │           │    │           ▼                     │
-   │  └──────────────────┘           │    │  ┌──────────────────┐           │
+   │  └────────┬─────────┘           │    │  │ 13 JSON +        │           │
+   │           ▼                     │    │  │ 4 hourly JSON +  │           │
+   │  ┌──────────────────┐           │    │  │ hourly_meter.db  │           │
+   │  │ 本地单 HTML      │           │    │  │ 9963 表 / 151 天 │           │
+   │  │ bundle           │           │    │  └────────┬─────────┘           │
+   │  └──────────────────┘           │    │           ▼                     │
+   │                                 │    │  ┌──────────────────┐           │
    │                                 │    │  │ analytics.db     │           │
    │                                 │    │  │ 9.9K 表 / 151 天 │           │
    │                                 │    │  └────────┬─────────┘           │
@@ -466,67 +507,103 @@ bat 脚本。切换 = `USE_REAL_DATA=1`，零共享状态。
 
 ---
 
-# 详细说明（文字部分）
+# 9. 数据存储详解
 
-## 1. 数据源
-
-- **每日文件**：一天一个 Excel，每行一个水表，列是 24 个小时读数
-  （openpyxl 读取）
-- **参考文件**：水表元数据——DMA、建筑、物业类型、合同号、供应方式
-- 源文件位于 `backend/data/MACAU-reference/`
-- 两个生成器：`scripts/real_data_converter.py`（生产）+ 
-  `scripts/mock_data_generator.py`（CI / 离线 demo）
-
-## 2. 转换器产物
-
-### 2.1 为什么是 JSON 而不是直接写 DB？
+## 9.1 为什么是 JSON 而不是直接写 DB？
 
 **仪表盘是静态 HTML，运行时无数据库连接**。仪表盘想显示什么，必须
 在 build 时**预聚合进 JSON**。这是核心架构决策。
 
-### 2.2 产物清单（真实数据分支）
+## 9.2 产物清单（真实数据分支 `output_real/`）
 
-| 类别 | 文件 | 消费者 |
-|------|------|--------|
-| **日级聚合** | `daily_dma.json`, `daily_top20.json`, `weekly.json`, `rank_changes.json`, `monthly_main_sub_diff.json`, `cotai_calendar.json`, `anomalies.json`, `predictions.json`, `predictions_fitted.json`, `meter_info.json`, `search_index.json`, `available_dates.json`, `data_errors.json` | 仪表盘所有 tab |
-| **小时级聚合** | `hourly_dma.json`, `hourly_calendar.json`, `hourly_top_meters.json`, `peak_hours.json` | 未来 hourly 视图 |
-| **小时级明细** | `hourly_meter.db`（~4.6M 行 / 30 天） | Agent 文本转 SQL |
-| **内部缓存** | `daily_totals.json`（~100 KB/天） | 仅 converter 用 |
+### 9.2.1 Daily aggregates（13 个 JSON，仪表盘主用）
+
+| 文件 | 形态 | 大小 | 备注 |
+|------|------|------|------|
+| `daily_dma.json` | `[{date, dmas: {dma: {...}}}]` | ~3 KB/天 | 4 个 DMA × res/nonRes 拆分 |
+| `daily_top20.json` | `[{date, top20: [{meterId, total, ...}]}]` | ~5 KB/天 | 每日 Top-20 |
+| `weekly.json` | `[{weekStart, ..., dailyTotals}]` | ~3 KB/周 | 7 天滚动聚合 |
+| `rank_changes.json` | `[{meterId, daysInTop20, avgRank, ...}]` | ~8 KB | 全期累计 |
+| `monthly_main_sub_diff.json` | `[{month, diffs: [...]}]` | ~10-30 KB/月 | 主-分表差（NRW） |
+| `cotai_calendar.json` | `[{date, items: [...]}]` | 视路氹城區活动量 | 非住宅 Top-15 |
+| `anomalies.json` | `[{date, meterId, type, score, ...}]` | 视异常数量 | 14 天滚动窗口 |
+| `predictions.json` | `{predictions: [...]}` | ~46 KB | Top-50 预测 |
+| `predictions_fitted.json` | `{fitted: [...]}` | ~16 KB | 历史拟合值 |
+| `meter_info.json` | `{meterId: {dma, propertyType, ...}}` | ~2.5 MB | 水表元数据 |
+| `search_index.json` | `[{id, contract, building, dma, type}]` | ~1.5 MB | 模糊搜索索引 |
+| `available_dates.json` | `["2026-01-01", ...]` | <1 KB | 排序日期列表 |
+| `data_errors.json` | `[{date, meterId, rawValue, reason}]` | ~8 KB | 误值累计（>4000 m³/日） |
 
 **2026-06-05 移除**：`predictions_by_building.json`——被按 meter 视图
-取代，省 ~13KB + 1 次 IPC。
+取代，节省 ~13KB + 1 次 IPC。
 
-## 3. Pipeline 7 个 Stage
+### 9.2.2 Hourly aggregates（4 个 JSON，仪表盘未来用）
 
-| Stage | 做什么 | 为什么存在 |
-|-------|--------|-----------|
-| **1. ingest** | 把每个 `output_real/*.json` 读成 `dict[str, DataFrame]` | 解耦 Excel 解析（慢、脆）和 schema 校验（快、确定） |
-| **2. clean** | `data_quality.py` 规则作用于 `meter_daily`（real data 跳过） | 数字进 DB 前的信任边界 |
-| **3. detect_anomalies** | 重新打分异常（当前 no-op） | 标记真检测器该插入的位置 |
-| **4. predict** | 建筑级预测（LightGBM，R² 0.84 vs 线性 0.05） | 预测烤进 DB，仪表盘秒开 |
-| **5. load_sql** | 从 DataFrame 写 `analytics.db`（10 张表） | 幂等——重跑同结果；崩溃恢复 = 重跑 |
-| **6. drift** | KS（数值）/ 卡方（分类）vs 已存 baseline | 在 schema 漂移毁仪表盘前抓住 |
-| **7. data_health** | 单表 z-score、日环比跳变、销户对 | 监控——喂给 `02_health_check.ipynb` |
+| 文件 | 形态 | 大小 | 用途 |
+|------|------|------|------|
+| `hourly_dma.json` | `[{date, hour, dmas: {dma: total}}]` | ~6 KB/天 | 24h × DMA 折线图 |
+| `hourly_calendar.json` | `[{date, hours: [v0..v23]}]` | <1 KB/天 | 24h 热力图 |
+| `hourly_top_meters.json` | `[{date, top: [...]}]` | ~7 KB/天 | 高耗水户 24h 画像 |
+| `peak_hours.json` | `[{date, dma, peakHour, ...}]` | ~2 KB/天 | 峰谷分析（18:00-22:00） |
 
-### 3.1 为什么有 Checkpoint？
+### 9.2.3 Hourly detail（嵌套 SQLite）
 
-每个 stage 写 `stage_<name>.json` 到 `checkpoints/`。如果 stage 4 崩
-了，可以 `--resume-from stage_4` 而不用重读所有 Excel。Pipeline 本身
-**幂等全量重跑**；增量在 converter 层做，pipeline 不感知。
+| 文件 | 行数（30 天） | 用途 |
+|------|--------------|------|
+| `hourly_meter.db` | ~4.6M | agent 的 sql_query 工具的 ad-hoc 查询 |
 
-### 3.2 运行命令
+### 9.2.4 Internal cache（仅 converter 自用）
 
+| 文件 | 形态 | 大小 | 用途 |
+|------|------|------|------|
+| `daily_totals.json` | `{date_str: {meterId: total}}` | ~100 KB/天 | 跳过历史 Excel 重读 |
+
+**Converter 保护**：
+> "The cache is safe to delete: the next run will fall back to processing every available Excel file (effectively --full)."
+
+## 9.3 真实数据 vs Mock 数据文件差异
+
+| 类别 | Mock 有 | Real 有 |
+|------|---------|---------|
+| meter_daily.json | ✅ | ❌ **缺**（影响 Stage 3 残差分析） |
+| daily_top20_by_dma.json | ✅ | ❌ |
+| daily_total_by_dma.json | ✅ | ❌ |
+| model_comparison.json | ✅ | ❌ |
+| data_errors.json | ❌ | ✅ |
+| 4 个 hourly JSON | ❌ | ✅ |
+| hourly_meter.db | ❌ | ✅ |
+| daily_totals.json (cache) | ❌ | ✅ |
+
+---
+
+# 10. Pipeline 7 Stage 详解
+
+| Stage | 中文 | 做什么 | 真数据时是否干活 |
+|-------|------|-----------|---------------|
+| 1 `ingest` | 数据摄取 | 读 13 个 JSON → 13 个 DataFrame | ✅ 干 |
+| 2 `clean` | 数据清洗 | 质量规则作用于 `meter_daily` | ⚠️ No-op（已清洗） |
+| 3 `detect_anomalies` | 异常校验 | Pandera 校验 + 统计 by_type/by_dma | ⚠️ 只校验不算 |
+| 4 `predict` | 预测校验 | 行数检查 | ⚠️ 只校验不算 |
+| 5 `load_sql` | 写 SQLite | DROP+CREATE 10 张表 + ATTACH hourly_meter.db | ✅ 干 |
+| 6 `drift` | 漂移检测 | KS（数值）+ 卡方（分类）vs baseline | ✅ 干（首次存 baseline） |
+| 7 `data_health` | 健康检查 | 单表 z-score + 跳变 + 销户对 | ✅ 干（监控） |
+
+每个 stage 详细说明见 `GLOSSARY.md` 和 pipeline 代码注释。
+
+**运行命令**：
 ```bash
 python pipeline/orchestrator.py \
   --src backend/data/output_real \
   --db  backend/data/analytics_real.db
 ```
 
-## 4. 服务层（SQLite）
+---
+
+# 11. 3NF 分析
 
 10 张表的 schema 是 **OLAP 风格**（读密集型仪表盘），所以有取舍。
 
-### 4.1 1NF——原子值
+## 11.1 1NF——原子值
 
 | 规则 | 状态 | 备注 |
 |------|------|------|
@@ -535,11 +612,11 @@ python pipeline/orchestrator.py \
 
 JSON 列是**有意的反范式**——为了仪表盘读取速度（一次读、无 join）。
 
-### 4.2 2NF——无部分依赖
+## 11.2 2NF——无部分依赖
 
 ✅ 干净。每张表都是自然单/复合键，无代理键。
 
-### 4.3 3NF——无传递依赖
+## 11.3 3NF——无传递依赖
 
 **故意违反 3NF**。这是 OLAP，不是 OLTP。
 
@@ -554,9 +631,11 @@ JSON 列是**有意的反范式**——为了仪表盘读取速度（一次读�
 >（仪表盘）故意反范式——把 join 成本从读路径移到 pipeline 路径。对
 > 于 5MB 静态 dashboard 部署是正确取舍。"
 
-## 5. 应用层
+---
 
-### 5.1 Agent（FastAPI :8000）
+# 12. 应用层
+
+## 12.1 Agent（FastAPI :8000）
 
 Planner-Executor-Synthesizer 管线（同一个 LLM，3 个专门 prompt）。
 这是生产路径；老的单 ReAct agent 留作 fallback。
@@ -583,7 +662,7 @@ Planner-Executor-Synthesizer 管线（同一个 LLM，3 个专门 prompt）。
 `/api/reset`、`/api/history`。对话历史持久化到 `chat_history.json`
 （保留最近 6 轮）。
 
-### 5.2 Frontend（Node :5173）
+## 12.2 Frontend（Node :5173）
 
 12 个 JS 模块按依赖顺序加载：`home.js`, `trend.js`, `rank.js`,
 `diff.js`, `anomaly.js`, `search.js`, `predict.js`, `map.js`,
@@ -595,7 +674,9 @@ Planner-Executor-Synthesizer 管线（同一个 LLM，3 个专门 prompt）。
 - Real 模式：14 个独立 JSON 并行加载，再按 `DIRECT/INDIRECT` 分流
   避免子表重复计量
 
-## 6. 测试与评估
+---
+
+# 13. 测试与评估
 
 | 测试层 | 数量 | 耗时 | 测什么 |
 |--------|------|------|--------|
@@ -608,9 +689,11 @@ Planner-Executor-Synthesizer 管线（同一个 LLM，3 个专门 prompt）。
 断言在真实 SQLite DB 里存在——抓住"工具改名了但 prompt 没改"的情
 况。
 
-## 7. 典型工作流
+---
 
-### 7.1 首次接入（真实数据）
+# 14. 典型工作流
+
+## 14.1 首次接入（真实数据）
 
 ```bat
 REM 1. 转换所有 Excel（首次 ~2 小时 / 151 天）
@@ -626,7 +709,7 @@ REM 4. 启动 agent
 bat\real\start_agent_real.bat
 ```
 
-### 7.2 每日增量
+## 14.2 每日增量
 
 ```bat
 bat\real\convert_real_data.bat              REM ~55s
@@ -635,7 +718,7 @@ bat\real\start_dashboard_real.bat           REM ~5s
 REM agent 保持运行
 ```
 
-### 7.3 倒填（旧数据补录）
+## 14.3 倒填（旧数据补录）
 
 ```bat
 bat\real\convert_real_data.bat --since 2026-04-01
@@ -644,7 +727,7 @@ bat\real\convert_real_data.bat --since 2026-04-01
 ⚠️ Hourly JSONs 是 append-only——倒填会打乱时间序。要么 `--full` 重
 置，要么让仪表盘按 `date` 字段排序。
 
-### 7.4 单表数据修正（不改代码）
+## 14.4 单表数据修正（不改代码）
 
 编辑 `backend/data/corrections.json` 加 `{meterId, start, end, factor,
 reason}`。下次 converter 跑时自动应用。用于：
@@ -652,7 +735,9 @@ reason}`。下次 converter 跑时自动应用。用于：
 - 水表某天停用
 - 整栋建筑集体修正
 
-## 8. Trade-off 与已知限制
+---
+
+# 15. Trade-off 与限制
 
 | 限制 | 影响 | 缓解 |
 |------|------|------|
@@ -662,26 +747,13 @@ reason}`。下次 converter 跑时自动应用。用于：
 | `daily_totals.json` 是隐式状态 | 删了触发下次 `--full` | 有 fallback 到首次运行行为 |
 | Hourly JSONs append-only | 倒填会乱序 | `--full` 重置 |
 | 单表日 cap 4000 m³ | 超过视为误值丢弃 | 记到 `data_errors.json`，异常页可查 |
+| Mock 缺 `meter_daily.json` | Stage 3 残差分析无法跑 | 加 `meter_daily.json` 到 mock generator |
 | 单表数据修正 | 默认要改 converter 代码 | `corrections.json` 外部文件——不改代码 |
+| 单小时单表更新 | 当前架构不支持局部重派生 | 待加 `patches.json` 机制 |
 
-## 9. 代码入口速查
+---
 
-| 文件 | 作用 |
-|------|------|
-| `scripts/real_data_converter.py` | Excel → JSON + SQLite（3 种运行模式） |
-| `scripts/mock_data_generator.py` | 合成数据生成器 |
-| `pipeline/orchestrator.py` | 7 stage MLOps 管线 + checkpoint |
-| `pipeline/sql_loader.py` | JSON → SQLite 加载器（ATTACH `hourly_meter.db`） |
-| `pipeline/schema.py` | 10 个 Pandera schema（数据契约） |
-| `pipeline/data_quality.py` | `meter_daily` 清洗规则 |
-| `agent/server.py` | FastAPI 入口（`/api/chat` SSE） |
-| `agent/multi_agent.py` | Planner-Executor-Synthesizer 管线 |
-| `agent/agent_tools.py` | 16 个工具实现 |
-| `agent/sql_refinement.py` | SQL 自我修正（重试坏查询） |
-| `frontend/build.cjs` | 静态站构建（`USE_REAL_DATA` 感知） |
-| `bat/real/*.bat` | Windows 一键入口脚本 |
-
-## 10. 部署
+# 16. 部署
 
 | 模式 | 运行什么 | 何时 |
 |------|----------|------|
@@ -694,92 +766,80 @@ agent 仪表盘照样跑。
 
 ---
 
-# 11. 工程基座（Engineering Foundation）
+# 17. 代码入口速查
 
-不是业务功能，而是支撑业务功能的基础设施层。
-
-## 11.1 依赖与打包
-
-| 文件 | 角色 |
+| 文件 | 作用 |
 |------|------|
-| `requirements.txt` | 最低版本声明（`>=`），给人用 |
-| `requirements.lock.txt` | 当前环境的精确锁版本，给 CI 用 |
-| `pyproject.toml` | 项目元数据、dev 依赖、工具配置（ruff/pytest/mypy） |
-| `.github/workflows/ci.yml` | CI：lint (ruff) + test (pytest) 用 lock 文件 |
+| `scripts/real_data_converter.py` | Excel → JSON + SQLite（3 种运行模式） |
+| `scripts/mock_data_generator.py` | 合成数据生成器 |
+| `pipeline/orchestrator.py` | 7 stage MLOps 管线 + checkpoint |
+| `pipeline/sql_loader.py` | JSON → SQLite 加载器（ATTACH `hourly_meter.db`） |
+| `pipeline/schema.py` | 11 个 Pandera schema（数据契约） |
+| `pipeline/data_quality.py` | `meter_daily` 清洗规则 |
+| `agent/server.py` | FastAPI 入口（`/api/chat` SSE + `/api/metrics`） |
+| `agent/multi_agent.py` | Planner-Executor-Synthesizer 管线 |
+| `agent/agent_tools.py` | 16 个工具实现（全部 `@safe_tool_call` 装饰） |
+| `agent/sql_refinement.py` | SQL 自我修正（重试坏查询） |
+| `agent/memory_compressor.py` | 两段式记忆：近期原文 + 旧摘要 |
+| `agent/dangerous_paths.py` | 路径黑名单（`.env`/`/etc`/`C:/Windows`） |
+| `agent/tool_audit.py` | JSONL 工具调用审计日志 |
+| `agent/safe_tool_call.py` | 装饰器：超时 + 路径检查 + 审计 |
+| `frontend/build.cjs` | 静态站构建（`USE_REAL_DATA` 感知 + 敏感资料保护注入） |
+| `bat/real/*.bat` | Windows 一键入口脚本 |
 
-CI 流程：`pip install -r requirements.lock.txt` → `ruff check .` →
-`pytest tests/`。
+---
 
-## 11.2 日志（`pipeline/logger.py`）
+# 18. Cookbook：常见任务
 
-基于 `structlog`：
-- 每行一个 JSON 对象（`ts`/`level`/`logger`/`message`/`run_id`）
-- `run_id` 通过 `structlog.contextvars.bind_contextvars` 在整条管道
-  传播，同一 run 的所有日志行带同一 `run_id`
-- `stage(name)` 上下文管理器自动记录 `stage_start` / `stage_done` /
-  `stage_failed` + `elapsed_s`
-- 输出双写：stdout（`tail -f` 看实时） + `logs/pipeline.log`（事后回放）
+### 加一个 Agent 工具
+1. `agent/agent_tools.py` 加新函数 + 注册到 `ALL_TOOLS`
+2. `agent/multi_agent.py` 的 `PLANNER_PROMPT` 工具列表加一行
+3. `tests/test_agent_tools.py` 加单测
+4. 重启 agent
 
-公共 API：`new_run_id` / `get_run_id` / `set_run_id` / `get_logger` /
-`stage`。5 个调用方（`orchestrator.py` / `sql_loader.py` / `validators.py`
-/ `data_quality.py` / `drift.py`）无需修改。
+### 加一张 SQL 表
+1. `pipeline/schema.py` 加新 Pandera schema + 注册到 `SCHEMA_REGISTRY`
+2. `pipeline/sql_loader.py` 加写入函数
+3. `agent/sql_tools.py` 的 `get_table_schema_tool` 会自动看到
+4. 跑 pipeline 验证
 
-## 11.3 数据契约（`pipeline/schema.py`）
+### 改预测模型
+1. 改 `scripts/real_data_converter.py` 的预测调用
+2. 跑 `--full` 重派生
+3. 跑 `evaluate.py` 看 R²
 
-10 个 Pandera `DataFrameSchema`，在 stage 边界验证：
-`MetersSchema` / `DailyDmaSchema` / `HourlyMeterSchema` / `AnomaliesSchema`
-/ `PredictionsSchema` / `RankChangesSchema` / `SearchIndexSchema` /
-`CotaiCalendarSchema` / `WeeklySchema` / `MonthlyDiffSchema`。
+### 修一个水表某天数据错了
+1. 编辑 `backend/data/corrections.json` 加 `{meterId, start, end, factor, reason}`
+2. 跑 `convert_real_data.bat`（任何模式都行）
+3. 跑 pipeline + 重建 dashboard
 
-`tests/test_pipeline.py::TestSchemaValidation` 故意构造坏 DataFrame
-验证 schema 会拒绝它。详见 [ADR-0002](adr/0002-pandera-做-schema-校驗.md)。
+### 加一个新 DMA
+1. 在 `pipeline/schema.py` 的 `VALID_DMAS` 加 DMA 名
+2. converter + pipeline 会自动识别
 
-## 11.4 FastAPI 端点契约
+---
 
-`agent/server.py` 8 个端点全都有 `response_model` + `tags` + `summary`：
+# 19. 演进记录
 
-| 端点 | Tags | 说明 |
+| 日期 | 改动 | 原因 |
 |------|------|------|
-| `POST /api/chat` | chat | 流式 SSE，含 tool 事件和最终答案 |
-| `POST /api/chat/sync` | chat | 非流式 fallback |
-| `GET /api/health` | utility | liveness + 会话轮数 |
-| `POST /api/reset` | utility | 清空对话历史 |
-| `GET /api/history` | utility | 最近 6 轮 |
-| `GET /api/questions` | analytics | 完整问题日志（供分析） |
-| `GET /api/metrics` | analytics | Prometheus 风格 Counter |
-| `GET /docs` | (auto) | Swagger UI |
+| 2026-06-04 | 接入真实数据分支 | demo 数据展示不出真实模式 |
+| 2026-06-05 | 移除 `predictions_by_building.json` | 被 per-meter 视图取代 |
+| 2026-06-05 | 加 `corrections.json` 外部修正机制 | 不改代码修单表数据 |
+| 2026-06-08 | 合并 `REAL_DATA_ARCHITECTURE.md` 进本文件 | 消除权威混淆 |
+| 2026-06-08 | **加两段式记忆**（`agent/memory_compressor.py`） | 长对话 token 爆掉 → 摘要压缩 + 滑动窗口 |
+| 2026-06-08 | **加工具沙盒**（`safe_tool_call` 装饰器 + `tool_audit.py` + `dangerous_paths.py`） | 16 个工具裸跑 → 加超时 + 路径黑名单 + JSONL 审计 |
+| 2026-06-08 | **加 harness 回归**（`tests/harness/agent_behaviors.json`，30 case） | prompt 改动无 fail-fast 保护 → mock-LLM 离线回归 |
+| 2026-06-08 | **加 ADR-0004**（`docs/adr/0004-claude-code-design.md`） | 业界标杆参考 + 后续改进有 ADR 兜底 |
+| 2026-06-08 | **Stage 3 残差分析**（`orchestrator.py`） | detect_anomalies 加 RMSE/MAE/bias，JOIN predictions vs meter_daily |
+| 2026-06-08 | **Stage 4 Pandera 校验**（`schema.py` + `orchestrator.py`） | 新增 `PredictionsBuildingRowSchema`，`PredictionRowSchema` lower/upper 改 nullable |
+| 2026-06-08 | **敏感资料保护修复**（`build.cjs`） | `USE_REAL_DATA=1` 注入密码解锁逻辑，mock 模式保持开放 |
+| 2026-06-08 | **清除真实 meter ID**（`corrections.json` + `qa_pairs.json`） | 712720→MOCK0001, 753832→MOCK7538 |
+| 待加 | `patches.json` 单点更新 | 修单水表单小时数据 |
+| 待加 | mock 数据补 `meter_daily.json` | 让 Stage 3 残差分析两边都能跑 |
 
-Swagger UI 自动生成在 `/docs`，可浏览可测试。`/api/metrics` 提供
-4 个 counter：`chat_requests_total{mode}` / `tool_calls_total{tool_name}`
-/ `chat_failures_total` / `questions_logged_total`，全部在内存中
-（process 重启清零，适合速率计算）。
+---
 
-## 11.5 共享测试 fixture（`tests/conftest.py`）
-
-`tmp_ckpt` / `db_path` / `pipeline_output` 三个 fixture 提到共享文件，
-新增测试文件直接 `import pytest` 即可用，不必重复样板。
-
-## 11.6 Docker HEALTHCHECK
-
-`Dockerfile` 末尾有：
-
-```dockerfile
-HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD curl -fsS http://localhost:8000/api/health || exit 1
-```
-
-`docker inspect` 看 `State.Health.Status` 即可；K8s 的 `livenessProbe`
-可以直接复用 `api/health`。
-
-## 11.7 Architecture Decision Records（`docs/adr/`）
-
-3 篇 ADR 用 MADR 格式记录「为什么这么选」：
-
-| # | 主题 | 结论 |
-|---|------|------|
-| [0001](adr/0001-使用-sqlite-不-postgres.md) | SQLite vs PostgreSQL | SQLite — 零运维、單檔案、測試友善 |
-| [0002](adr/0002-pandera-做-schema-校驗.md) | Pandera vs Pydantic | Pandera — 為 DataFrame 設計，運行時校驗 |
-| [0003](adr/0003-monorepo-單倉多組件.md) | monorepo vs polyrepo | 單倉 — 跨組件 refactor 容易、CI 統一 |
-
-新决策 → 复制 `template.md` → 顺序编号 → 更新 `docs/adr/README.md` 索引。
-
+> **再次强调**：本文档是**架构权威**。如其他文件（`README.md`、
+> `GLOSSARY.md`、代码注释、CHANGELOG）信息与本文档冲突，**以本文档为准**。
+> 改动架构时，**先改本文档，再改代码**。

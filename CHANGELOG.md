@@ -4,29 +4,50 @@ All notable changes to the Smart Water Analytics project.
 
 ## [Unreleased]
 
-Engineering-only changes (no user-facing behavior change):
+### Sensitive Data Protection
+- **Restored password-gated data masking** — `frontend/build.cjs` now conditionally injects real protection logic when `USE_REAL_DATA=1`. Previously `utils.js` was hardcoded to Demo mode (`isUnlocked=true`, all mask functions no-ops), so building names, contract IDs, and meter IDs were always shown in plain text even in real-data mode. Now:
+  - Default locked (`isUnlocked=false`); building names show as first char + asterisks
+  - Password bar: enter `suez2026` or `water` → unlocks, re-renders all tabs, shows toast
+  - Mock mode (`node build.cjs`) keeps original demo stubs unchanged
+
+### Security Audit
+- **Scrubbed real meter IDs from committed files** — `backend/data/corrections.json` replaced meter ID `712720` → `MOCK0001`; `tests/qa_pairs.json` replaced `753832` → `MOCK7538` in 2 cases. `corrections.json` added to `.gitignore`.
+- **10/10 security checks PASS** — `.gitignore` blocks all real data paths (`output_real/`, `analytics_real.db`, `.env`, `logs/`, `chat_history.json`); no real data files in git history; no hardcoded secrets in source code.
+
+### Agent Engineering Upgrade (ADR-0004)
+- **ADR-0004: Claude Code 设计哲学** — `docs/adr/0004-claude-code-design.md` (147 lines). 5 design points (TodoWrite, tool sandbox, rolling memory, harness testing, plan/execute separation), decision table, 5 references (Anthropic engineering blog, Boris Cherny, Claude Code docs, LangChain memory, Demystifying evals).
+- **Memory compression** — `agent/memory_compressor.py` (two-tier: recent N turns verbatim + older summarized via LLM). Three-layer fallback: LLM ok → empty summary → legacy `summarize_messages`. `agent/memory.py` gains `get_context_for_agent()` (old functions preserved). 8 pytest tests.
+- **Tool sandbox** — `agent/dangerous_paths.py` (path blacklist: `.env`, `/etc`, `/usr`, `C:/Windows`, project-root boundary). `agent/tool_audit.py` (JSONL audit log to `logs/tool_audit.log`). `agent/safe_tool_call.py` (decorator: timeout via `threading.Thread` + path check + audit). 18 `@tool` functions across 3 files decorated. 11 pytest tests.
+- **30-case agent harness** — `tests/harness/agent_behaviors.json` (A: tool selection 10, B: ambiguous input 8, C: privilege escalation 7, D: boundary 5). Mock LLM in `tests/conftest.py` (keyword-based planner + synthesis). 30 pytest tests, all offline, ~3 seconds.
 
 ### Build / Project Hygiene
 - **`pyproject.toml` created** — project metadata, dependencies, `[tool.ruff]`, `[tool.pytest.ini_options]`, `[tool.mypy]`. Per-file ignores for `tests/`, `agent/`, `scripts/`.
-- **`requirements.lock.txt` created** — 135 packages pinned to currently-installed versions for reproducible CI builds. `requirements.txt` kept as a `>=` floor.
-- **CI gains a ruff lint step** — `.github/workflows/ci.yml` now runs `ruff check .` and a `ruff format --check` (warning-only) on every push. CI uses `requirements.lock.txt` for deterministic installs.
-- **`tests/conftest.py` created** — shared `tmp_ckpt` / `db_path` / `pipeline_output` fixtures extracted from `test_pipeline.py` and `test_pipeline_regression.py`.
-- **`.gitignore` covers `*.bak.*`** — `pipeline/schema.py.bak.20260604` and `scripts/mock_data_generator.py.bak.20260604` deleted; future backup files auto-excluded.
-- **README architecture diagram replaced** — the broken mojibake ASCII art is now a clean Mermaid `flowchart TB` showing Data Pipeline → ML Layer → Frontend → AI Layer.
+- **`requirements.lock.txt` created** — 135 packages pinned for reproducible CI builds.
+- **CI gains a ruff lint step** — `.github/workflows/ci.yml` runs `ruff check .` + `ruff format --check` on every push.
+- **`tests/conftest.py` created** — shared fixtures (`tmp_ckpt`, `db_path`, `pipeline_output`, `mock_llm`).
+- **`.gitignore` covers `*.bak.*`** and `backend/data/corrections.json`.
+- **README architecture diagram replaced** — broken mojibake ASCII → Mermaid flowchart.
 
 ### Observability
-- **Pipeline logger migrated to `structlog`** — `pipeline/logger.py` now uses `structlog.contextvars.bind_contextvars` for `run_id` propagation, `structlog.processors.JSONRenderer` for JSON output, and a custom `_add_run_id` processor. Public API (`new_run_id` / `get_run_id` / `set_run_id` / `get_logger` / `stage` context manager) is preserved — all five consumer files (`orchestrator.py`, `sql_loader.py`, `validators.py`, `data_quality.py`, `drift.py`) work unchanged.
-- **`/api/metrics` endpoint** — returns in-process counters: `chat_requests_total{mode}`, `tool_calls_total{tool_name}`, `chat_failures_total`, `questions_logged_total`. Lightweight Prometheus-style snapshot, no extra dependencies.
+- **Pipeline logger migrated to `structlog`** — JSON output, `run_id` via context vars, stage-aware loggers. Public API preserved.
+- **`/api/metrics` endpoint** — Prometheus-style counters: `chat_requests_total`, `tool_calls_total`, `chat_failures_total`, `questions_logged_total`.
 
 ### Documentation
-- **Three Architecture Decision Records added** under `docs/adr/`:
-  - **ADR-0001** — Why SQLite (zero-ops, single-file) instead of PostgreSQL
-  - **ADR-0002** — Why Pandera for DataFrame schema validation at pipeline boundaries
-  - **ADR-0003** — Why a single monorepo over 4-component polyrepo (cross-component refactor, shared CI, single onboarding)
-  - `docs/adr/README.md` indexes all ADRs in MADR format.
+- **Four ADRs** under `docs/adr/`: SQLite (0001), Pandera (0002), monorepo (0003), Claude Code design (0004).
+- **`docs/ARCHITECTURE.md` §11** — Engineering Foundation mapping dependencies, logger, schemas, FastAPI contracts, fixtures, healthcheck, ADRs to files.
 
 ### FastAPI / Swagger
-- All endpoints gained `response_model`, `tags`, and `summary` — `http://localhost:8000/docs` now shows a clean, browseable API with typed request/response models (`HealthResponse`, `ResetResponse`, `HistoryResponse`, `QuestionsResponse`, `MetricsResponse`, `ChatResponse`).
+- All 8 endpoints gained `response_model`, `tags`, `summary` — Swagger UI at `/docs`.
+
+### Data Pipeline
+- **`stage_predict` now validates against Pandera schemas** — `PredictionRowSchema` and new `PredictionsBuildingRowSchema`. Fixed pre-existing bug: `lower`/`upper` columns changed to `nullable=True` (mock data has no confidence bands).
+- **`stage_detect_anomalies` gains residual analysis** — JOINs predictions vs meter_daily, reports RMSE/MAE/bias. Gracefully skips when data unavailable (real-data mode has no `meter_daily.json`).
+
+### Docker
+- **`HEALTHCHECK` added to Dockerfile** — `curl -fsS http://localhost:8000/api/health || exit 1` (30s interval, 15s grace).
+
+### Test Suite
+- **153 tests all pass** (was 104). New: memory_compressor 8, tool_audit 11, agent_harness 30.
 
 ## 2026-06-07
 
