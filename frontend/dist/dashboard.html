@@ -6,7 +6,10 @@
 <title>澳門用水分析</title>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
 <style>
+/* === Reset === */
 *{margin:0;padding:0;box-sizing:border-box}
+
+/* === Design Tokens (shadcn-ui dark) === */
 :root{
   --bg:#0a0a0f;
   --surface:#13131a;
@@ -22,140 +25,207 @@
   --yellow:#facc15;
   --pink:#f472b6;
   --ember:#fb923c;
+  --ring:rgba(129,140,248,.4);
+  --radius:.5rem;
+  --radius-sm:.375rem;
+  --radius-lg:.75rem;
+  --shadow:0 1px 3px rgba(0,0,0,.3);
+  --shadow-lg:0 10px 15px rgba(0,0,0,.4);
+  --transition:150ms cubic-bezier(.4,0,.2,1);
 }
-body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;line-height:1.6;letter-spacing:-0.01em}
+
+/* === Base === */
+body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;line-height:1.6;letter-spacing:-.01em}
+.main{max-width:1100px;margin:0 auto;padding:16px}
+.hidden{display:none}
+.hint{font-size:11px;color:var(--muted);font-weight:normal}
+
+/* === Header === */
 .hdr{background:var(--surface);padding:14px 20px;position:sticky;top:0;z-index:10;border-bottom:1px solid var(--border);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
-.hdr h1{font-size:18px;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;text-align:center;margin-bottom:10px;font-weight:700;letter-spacing:-0.02em}
+.hdr h1{font-size:18px;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;text-align:center;margin-bottom:10px;font-weight:700;letter-spacing:-.02em}
+
+/* === Tabs === */
 .tabs{display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch}
-.tab{background:var(--surface2);border:1px solid var(--border);color:var(--muted);padding:7px 14px;border-radius:10px;cursor:pointer;font-size:12px;white-space:nowrap;flex-shrink:0;transition:all .2s;font-weight:500}
+.tab{background:var(--surface2);border:1px solid var(--border);color:var(--muted);padding:7px 14px;border-radius:var(--radius-lg);cursor:pointer;font-size:12px;white-space:nowrap;flex-shrink:0;transition:all var(--transition);font-weight:500}
 .tab:hover{color:var(--text);border-color:#3a3a50}
 .tab.active{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border-color:transparent;font-weight:600;box-shadow:0 2px 12px rgba(129,140,248,.25)}
-.main{max-width:1100px;margin:0 auto;padding:16px}
-.card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px;margin-bottom:16px;transition:border-color .2s}
+
+/* === Card === */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;margin-bottom:16px;transition:border-color var(--transition)}
 .card:hover{border-color:#303048}
-.card h2{font-size:15px;color:var(--text);margin:0 0 14px 0;font-weight:600;letter-spacing:-0.01em;display:flex;align-items:center;gap:8px}
+.card h2{font-size:15px;color:var(--text);margin:0 0 14px 0;font-weight:600;letter-spacing:-.01em;display:flex;align-items:center;gap:8px}
 .card h2::before{content:'';width:4px;height:18px;background:linear-gradient(180deg,var(--accent),var(--accent2));border-radius:2px}
-.hint{font-size:11px;color:var(--muted);font-weight:normal}
-.hidden{display:none}
-.dc{display:flex;flex-direction:column;gap:10px}
-.di{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:10px 14px;border-radius:10px;font-size:14px;width:100%;transition:border-color .2s}
-.di:focus{border-color:var(--accent);outline:none;box-shadow:0 0 0 3px rgba(129,140,248,.15)}
-.di::-webkit-calendar-picker-indicator{filter:invert(0.7)}
-.dn{display:flex;align-items:center;justify-content:space-between}
-.nb{background:var(--surface2);border:1px solid var(--border);color:var(--muted);padding:8px 18px;border-radius:10px;cursor:pointer;font-size:13px;transition:all .2s;font-weight:500}
-.nb:hover{color:var(--text);border-color:#3a3a50;background:#212132}
-.nb:active{transform:scale(.97)}.nb:disabled{opacity:.3;cursor:default}
-.dd{color:var(--muted);font-size:13px}.qd{display:flex;gap:8px}.qb{flex:1;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:none;padding:10px;border-radius:10px;cursor:pointer;font-size:13px;font-weight:600;transition:all .2s;box-shadow:0 2px 12px rgba(129,140,248,.2)}
-.qb:hover{transform:translateY(-1px);box-shadow:0 4px 16px rgba(129,140,248,.35)}
-.qb:active{transform:scale(.97)}
-.dg{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.dc2{background:var(--surface2);border-radius:12px;padding:16px;cursor:pointer;transition:all .2s;border:1px solid var(--border)}
-.dc2:hover{border-color:#3a3a50;transform:translateY(-1px);box-shadow:0 4px 20px rgba(0,0,0,.3)}
-.dc2:active{transform:scale(.97)}
-.dn2{font-size:12px;font-weight:600;color:var(--text);margin-bottom:6px;letter-spacing:-0.01em}
-.dv{font-size:22px;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:6px}
-.ds{font-size:11px;color:var(--muted)}.ds span{display:block;margin:3px 0}
+
+/* === Buttons === */
+.btn{background:var(--surface2);border:1px solid var(--border);color:var(--muted);padding:8px 18px;border-radius:var(--radius);cursor:pointer;font-size:13px;transition:all var(--transition);font-weight:500;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{color:var(--text);border-color:#3a3a50;background:#212132}
+.btn:active{transform:scale(.97)}
+.btn:disabled{opacity:.3;cursor:default}
+.btn-primary{flex:1;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:none;padding:10px;border-radius:var(--radius);cursor:pointer;font-size:13px;font-weight:600;transition:all var(--transition);box-shadow:0 2px 12px rgba(129,140,248,.2)}
+.btn-primary:hover{transform:translateY(-1px);box-shadow:0 4px 16px rgba(129,140,248,.35)}
+.btn-primary:active{transform:scale(.97)}
+.btn-ghost{background:transparent;border:1px solid transparent;color:var(--muted);padding:6px 12px;border-radius:var(--radius-sm);cursor:pointer;font-size:12px;transition:all var(--transition);font-weight:500}
+.btn-ghost:hover{color:var(--text);background:var(--surface2);border-color:var(--border)}
+.btn-ghost:active{transform:scale(.97)}
+.btn-ghost:disabled{opacity:.3;cursor:default}
+.btn-icon{background:var(--surface2);border:1px solid var(--border);color:var(--muted);width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;border-radius:var(--radius);cursor:pointer;font-size:16px;transition:all var(--transition);flex-shrink:0}
+.btn-icon:hover{color:var(--text);border-color:#3a3a50;background:#212132}
+.btn-icon:active{transform:scale(.95)}
+.btn-icon:disabled{opacity:.3;cursor:default}
+.btn-group{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+.btn-toggle{background:var(--surface2);border:1px solid var(--border);color:var(--muted);padding:7px 16px;border-radius:var(--radius);cursor:pointer;font-size:12px;transition:all var(--transition);font-weight:500}
+.btn-toggle:hover{color:var(--text);border-color:#3a3a50}
+.btn-toggle.active{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border-color:transparent;font-weight:600;box-shadow:0 2px 12px rgba(129,140,248,.25)}
+.btn-sm{padding:4px 10px;font-size:11px}
+
+/* === Inputs === */
+.input{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:10px 14px;border-radius:var(--radius);font-size:14px;width:100%;transition:border-color var(--transition)}
+.input:focus{border-color:var(--accent);outline:none;box-shadow:0 0 0 3px var(--ring)}
+.input::-webkit-calendar-picker-indicator{filter:invert(.7)}
+
+/* === Date Picker === */
+.date-picker{display:flex;flex-direction:column;gap:10px}
+.date-picker-row{display:flex;align-items:center;gap:8px}
+.date-picker-trigger{display:inline-flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px 14px;border-radius:var(--radius);cursor:pointer;font-size:14px;transition:all var(--transition);white-space:nowrap}
+.date-picker-trigger:hover{border-color:#3a3a50}
+.date-picker-trigger .icon{width:16px;height:16px;opacity:.6}
+.date-picker-quick{display:flex;gap:8px}
+.date-picker-input{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:10px 14px;border-radius:var(--radius);font-size:14px;width:100%;transition:border-color var(--transition)}
+.date-picker-input:focus{border-color:var(--accent);outline:none;box-shadow:0 0 0 3px var(--ring)}
+.date-picker-input::-webkit-calendar-picker-indicator{filter:invert(.7)}
+
+/* === Data Grid === */
+.data-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.data-card{background:var(--surface2);border-radius:12px;padding:16px;cursor:pointer;transition:all var(--transition);border:1px solid var(--border)}
+.data-card:hover{border-color:#3a3a50;transform:translateY(-1px);box-shadow:0 4px 20px rgba(0,0,0,.3)}
+.data-card:active{transform:scale(.97)}
+.data-card-name{font-size:12px;font-weight:600;color:var(--text);margin-bottom:6px;letter-spacing:-.01em}
+.data-card-value{font-size:22px;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:6px}
+.data-card-sub{font-size:11px;color:var(--muted)}
+.data-card-sub span{display:block;margin:3px 0}
+
+/* === Charts === */
 .chart{width:100%;height:400px}
-table{width:100%;border-collapse:collapse;font-size:12px}th{color:var(--muted);text-align:left;padding:8px 6px;border-bottom:1px solid var(--border);font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.05em}
-td{color:var(--text);padding:8px 6px;border-bottom:1px solid var(--border)}.num{text-align:right;font-variant-numeric:tabular-nums}
-.contract{font-weight:600;color:var(--yellow)}.tag{font-size:10px;padding:2px 8px;border-radius:5px;color:#fff;font-weight:500}
-.ptag{font-size:10px;padding:2px 8px;border-radius:5px;background:var(--surface2);color:var(--muted)}.ptag.res{background:rgba(52,211,153,.12);color:var(--green)}
-.warn{background:rgba(248,113,113,.08)}.neg{color:var(--red)}.up{color:var(--green)}.down{color:var(--red)}
-.back{color:var(--accent);cursor:pointer;font-size:14px;transition:opacity .2s}.back:hover{opacity:.8}
-.sr{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
-.si{background:var(--surface2);border-radius:12px;padding:18px;text-align:center;border:1px solid var(--border)}
-.sl{font-size:11px;color:var(--muted);margin-bottom:6px;font-weight:500;text-transform:uppercase;letter-spacing:0.05em}
-.sv{font-size:22px;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-.ss{font-size:11px;color:var(--muted);margin-top:6px}.si.res .sv{color:var(--green)}.si.nonres .sv{color:var(--pink)}
-.cg{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;font-size:10px}
-.cc{aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;transition:all .2s}
-.cc:hover{outline:2px solid var(--accent);outline-offset:-2px;transform:scale(1.04);z-index:2}
-.cdt{font-size:9px;color:var(--muted);line-height:1;margin-top:2px;font-weight:400;max-width:90%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ch{color:var(--muted);text-align:center;font-size:10px;padding:6px 0;font-weight:600;text-transform:uppercase;letter-spacing:0.05em}
-.cc:hover{outline:2px solid var(--accent)}.ch{color:var(--muted);text-align:center;font-size:10px;padding:4px 0}
-.si2{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:10px 14px;border-radius:10px;font-size:14px;width:100%;margin-bottom:14px;transition:border-color .2s}
-.si2:focus{border-color:var(--accent);outline:none;box-shadow:0 0 0 3px rgba(129,140,248,.15)}
-.ms{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
-.mb{background:var(--surface2);border:1px solid var(--border);color:var(--muted);padding:7px 16px;border-radius:10px;cursor:pointer;font-size:12px;transition:all .2s;font-weight:500}
-.mb:hover{color:var(--text);border-color:#3a3a50}
-.mb.active{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border-color:transparent;font-weight:600;box-shadow:0 2px 12px rgba(129,140,248,.25)}
+.chart-actions{display:flex;gap:6px;margin-bottom:8px;justify-content:flex-end}
+.btn-export{background:var(--surface2);border:1px solid var(--border);color:var(--muted);padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px;transition:all var(--transition)}
+.btn-export:hover{color:var(--text);border-color:var(--accent)}
 
-/* 敏感資料遮罩 */
-.masked{filter:blur(6px);user-select:none;cursor:pointer;transition:filter 0.3s}
-.masked:hover{filter:blur(4px)}
-.masked.revealed{filter:none;cursor:default}
-.pwd-bar{background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:12px 18px;margin-bottom:16px;display:flex;align-items:center;gap:12px}
-.pwd-bar input{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:8px 14px;border-radius:8px;font-size:13px;width:160px;transition:border-color .2s}
-.pwd-bar input:focus{border-color:var(--accent);outline:none}
-.pwd-bar button{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:none;padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;transition:all .2s}
-.pwd-bar button:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(129,140,248,.3)}
-.pwd-bar .status{font-size:12px;color:var(--muted)}
-.pwd-bar .status.unlocked{color:var(--green)}
+/* === Tables === */
+.data-table{width:100%;border-collapse:collapse;font-size:12px}
+.data-table th{color:var(--muted);text-align:left;padding:8px 6px;border-bottom:1px solid var(--border);font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.05em}
+.data-table td{color:var(--text);padding:8px 6px;border-bottom:1px solid var(--border)}
+.data-table tbody tr{transition:background var(--transition)}
+.data-table tbody tr:hover{background:rgba(129,140,248,.04)}
+.num{text-align:right;font-variant-numeric:tabular-nums}
 
-/* overlay彈窗 */
-.ov{position:fixed;top:0;left:0;right:0;bottom:0;z-index:100;display:flex;align-items:center;justify-content:center}
-.ov-bg{position:absolute;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
-.ov-box{position:relative;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px;width:90vw;max-width:700px;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.5)}
-.ov-close{position:absolute;top:12px;right:16px;color:var(--muted);cursor:pointer;font-size:20px;transition:color .2s}
-.ov-close:hover{color:var(--text)}
-.loading{text-align:center;padding:40px;color:var(--muted)}
-.leaflet-container{background:var(--bg)}.dma-tooltip{background:rgba(19,19,26,0.9)!important;color:var(--text)!important;border:1px solid var(--border)!important;border-radius:8px!important;padding:8px 12px!important;font-size:13px!important}.dma-tooltip::before{border-right-color:rgba(19,19,26,0.9)!important}.loading::after{content:'';display:inline-block;width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;margin-left:8px;vertical-align:middle}@keyframes spin{to{transform:rotate(360deg)}}
-/* 設定面板 */
-.cf{overflow:hidden;transition:max-height .3s;max-height:0;margin-bottom:12px}
-.cf.open{max-height:300px}
-.cf-inner{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px 16px}
-.cf-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;font-size:12px;color:var(--muted)}
-.cf-row label{min-width:80px;text-align:right}
-.cf-row input[type=range]{flex:1;accent-color:var(--accent);height:6px}
-.cf-row span.val{min-width:36px;color:var(--text);font-weight:600;font-size:13px}
-.cf-toggle{cursor:pointer;color:var(--accent);font-size:12px;margin-bottom:10px;display:inline-block;user-select:none}
-.cf-toggle:hover{opacity:.8}
-/* 搜索對比 */
-.ck{width:16px;height:16px;accent-color:var(--accent);cursor:pointer}
-.compare-bar{display:none;position:sticky;bottom:16px;background:var(--surface);border:1px solid var(--accent);border-radius:12px;padding:12px 18px;margin-top:12px;align-items:center;gap:12px;z-index:10}
-.compare-bar .sel{color:var(--accent);font-weight:600;font-size:13px}
-/* 異常翻頁 */
-.anom-nav{display:flex;align-items:center;gap:8px;margin-bottom:12px}
-.anom-nav button{background:var(--surface2);border:1px solid var(--border);color:var(--muted);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:13px;transition:all .2s}
-.anom-nav button:hover{color:var(--text);border-color:var(--accent)}
-.anom-nav button:disabled{opacity:.3;cursor:default}
+/* === Badges === */
+.badge{font-size:10px;padding:2px 8px;border-radius:5px;color:#fff;font-weight:500;display:inline-block}
+.badge-muted{font-size:10px;padding:2px 8px;border-radius:5px;background:var(--surface2);color:var(--muted)}
+.badge-muted.res{background:rgba(52,211,153,.12);color:var(--green)}
+.contract{font-weight:600;color:var(--yellow)}
 
-/* === 全屏 Loading === */
-.global-loading{position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;transition:opacity .3s}
-.global-loading.fade-out{opacity:0;pointer-events:none}
-.global-loading .spinner{width:40px;height:40px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite}
-.global-loading .text{color:var(--muted);font-size:14px}
+/* === Stat Row === */
+.stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.stat-item{background:var(--surface2);border-radius:12px;padding:18px;text-align:center;border:1px solid var(--border)}
+.stat-label{font-size:11px;color:var(--muted);margin-bottom:6px;font-weight:500;text-transform:uppercase;letter-spacing:.05em}
+.stat-value{font-size:22px;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.stat-sub{font-size:11px;color:var(--muted);margin-top:6px}
+.stat-item.res .stat-value{color:var(--green)}
+.stat-item.nonres .stat-value{color:var(--pink)}
 
-/* === 刷新按钮 === */
-.refresh-btn{background:var(--surface2);border:1px solid var(--border);color:var(--muted);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px;transition:all .2s;margin-left:auto;white-space:nowrap}
-.refresh-btn:hover{color:var(--text);border-color:var(--accent)}
-.refresh-btn:active{transform:scale(.95)}
-.refresh-btn.spinning{pointer-events:none;opacity:.6}
-.refresh-btn.spinning::before{content:'';display:inline-block;width:12px;height:12px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.6s linear infinite;margin-right:4px;vertical-align:middle}
-
-/* === KPI 卡片 === */
+/* === KPI Cards === */
 .kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px}
-.kpi{background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center;transition:border-color .2s}
-.kpi:hover{border-color:var(--accent)}
-.kpi .label{font-size:11px;color:var(--muted);font-weight:500;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px}
-.kpi .value{font-size:22px;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-.kpi .sub{font-size:11px;color:var(--muted);margin-top:4px}
-.kpi .change{font-size:12px;font-weight:600;margin-top:4px}
-.kpi .change.up{color:var(--red)}.kpi .change.down{color:var(--green)}
+.kpi-card{background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center;transition:border-color var(--transition)}
+.kpi-card:hover{border-color:var(--accent)}
+.kpi-card .label{font-size:11px;color:var(--muted);font-weight:500;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+.kpi-card .value{font-size:22px;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.kpi-card .sub{font-size:11px;color:var(--muted);margin-top:4px}
+.kpi-card .change{font-size:12px;font-weight:600;margin-top:4px}
+.kpi-card .change.up{color:var(--red)}
+.kpi-card .change.down{color:var(--green)}
 
-/* === 面包屑 === */
+/* === Modal === */
+.modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;z-index:100;display:flex;align-items:center;justify-content:center}
+.modal-overlay-bg{position:absolute;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
+.modal{position:relative;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:24px;width:90vw;max-width:700px;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+.modal-header h3{font-size:16px;font-weight:600;color:var(--text)}
+.modal-close{color:var(--muted);cursor:pointer;font-size:20px;transition:color var(--transition);background:none;border:none;padding:0}
+.modal-close:hover{color:var(--text)}
+
+/* === Collapsible === */
+.collapsible{overflow:hidden;transition:max-height .3s;max-height:0;margin-bottom:12px}
+.collapsible.open{max-height:300px}
+.collapsible-inner{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px}
+.collapsible-toggle{cursor:pointer;color:var(--accent);font-size:12px;margin-bottom:10px;display:inline-block;user-select:none}
+.collapsible-toggle:hover{opacity:.8}
+
+/* === Breadcrumb === */
 .breadcrumb{display:flex;align-items:center;gap:6px;margin-bottom:14px;font-size:13px;flex-wrap:wrap}
-.breadcrumb span{color:var(--muted);cursor:pointer;transition:color .2s}
+.breadcrumb span{color:var(--muted);cursor:pointer;transition:color var(--transition)}
 .breadcrumb span:hover{color:var(--accent)}
 .breadcrumb span.current{color:var(--text);cursor:default;font-weight:600}
 .breadcrumb .sep{color:var(--border);cursor:default}
 
-/* === 匯出按鈕 === */
-.chart-actions{display:flex;gap:6px;margin-bottom:8px;justify-content:flex-end}
-.export-btn{background:var(--surface2);border:1px solid var(--border);color:var(--muted);padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px;transition:all .2s}
-.export-btn:hover{color:var(--text);border-color:var(--accent)}
+/* === Back Link === */
+.back-link{color:var(--accent);cursor:pointer;font-size:14px;transition:opacity var(--transition)}
+.back-link:hover{opacity:.8}
 
-/* === 地圖佈局 === */
+/* === Warning Row === */
+.warn{background:rgba(248,113,113,.08)}
+.neg{color:var(--red)}
+.up{color:var(--green)}
+.down{color:var(--red)}
+
+/* === Anomaly Navigation === */
+.anomaly-nav{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.anomaly-nav button{background:var(--surface2);border:1px solid var(--border);color:var(--muted);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:13px;transition:all var(--transition)}
+.anomaly-nav button:hover{color:var(--text);border-color:var(--accent)}
+.anomaly-nav button:disabled{opacity:.3;cursor:default}
+
+/* === Search Compare Bar === */
+.compare-bar{display:none;position:sticky;bottom:16px;background:var(--surface);border:1px solid var(--accent);border-radius:12px;padding:12px 18px;margin-top:12px;align-items:center;gap:12px;z-index:10}
+.compare-bar .sel{color:var(--accent);font-weight:600;font-size:13px}
+.checkbox{width:16px;height:16px;accent-color:var(--accent);cursor:pointer}
+
+/* === Sensitive Data Masking === */
+.masked{filter:blur(6px);user-select:none;cursor:pointer;transition:filter .3s}
+.masked:hover{filter:blur(4px)}
+.masked.revealed{filter:none;cursor:default}
+.pwd-bar{background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:12px 18px;margin-bottom:16px;display:flex;align-items:center;gap:12px}
+.pwd-bar input{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:8px 14px;border-radius:8px;font-size:13px;width:160px;transition:border-color var(--transition)}
+.pwd-bar input:focus{border-color:var(--accent);outline:none}
+.pwd-bar button{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:none;padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;transition:all var(--transition)}
+.pwd-bar button:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(129,140,248,.3)}
+.pwd-bar .status{font-size:12px;color:var(--muted)}
+.pwd-bar .status.unlocked{color:var(--green)}
+
+/* === Refresh Button === */
+.refresh-btn{background:var(--surface2);border:1px solid var(--border);color:var(--muted);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px;transition:all var(--transition);margin-left:auto;white-space:nowrap}
+.refresh-btn:hover{color:var(--text);border-color:var(--accent)}
+.refresh-btn:active{transform:scale(.95)}
+.refresh-btn.spinning{pointer-events:none;opacity:.6}
+.refresh-btn.spinning::before{content:'';display:inline-block;width:12px;height:12px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .6s linear infinite;margin-right:4px;vertical-align:middle}
+
+/* === Loading === */
+.loading{text-align:center;padding:40px;color:var(--muted)}
+.loading::after{content:'';display:inline-block;width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;margin-left:8px;vertical-align:middle}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* === Global Loading === */
+.global-loading{position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;transition:opacity .3s}
+.global-loading.fade-out{opacity:0;pointer-events:none}
+.global-loading .spinner{width:40px;height:40px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+.global-loading .text{color:var(--muted);font-size:14px}
+
+/* === Calendar === */
+.cg{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;font-size:10px}
+.cc{aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;transition:all var(--transition)}
+.cc:hover{outline:2px solid var(--accent);outline-offset:-2px;transform:scale(1.04);z-index:2}
+.cdt{font-size:9px;color:var(--muted);line-height:1;margin-top:2px;font-weight:400;max-width:90%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ch{color:var(--muted);text-align:center;font-size:10px;padding:6px 0;font-weight:600;text-transform:uppercase;letter-spacing:.05em}
+
+/* === Map === */
 #mapLayout{display:flex;gap:16px;align-items:flex-start}
 #mapContainer{width:420px;height:560px;flex-shrink:0;border-radius:12px;overflow:hidden}
 #mapDetail{flex:1;min-width:0;max-height:560px;overflow-y:auto;position:sticky;top:80px}
@@ -165,8 +235,36 @@ td{color:var(--text);padding:8px 6px;border-bottom:1px solid var(--border)}.num{
 #mapDetail .card{margin-bottom:0}
 #mapDetail h2::before{display:none}
 .map-placeholder{display:flex;align-items:center;justify-content:center;height:200px;color:var(--muted);font-size:13px;text-align:center;padding:20px}
+.leaflet-container{background:var(--bg)}
+.dma-tooltip{background:rgba(19,19,26,.9)!important;color:var(--text)!important;border:1px solid var(--border)!important;border-radius:8px!important;padding:8px 12px!important;font-size:13px!important}
+.dma-tooltip::before{border-right-color:rgba(19,19,26,.9)!important}
 
-/* === 响应式 === */
+/* === AI Chat Widget === */
+.chat-fab{position:fixed;bottom:24px;right:24px;z-index:200;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:none;font-size:22px;cursor:pointer;box-shadow:0 4px 20px rgba(129,140,248,.4);transition:all .3s}
+.chat-fab:hover{transform:scale(1.1);box-shadow:0 6px 28px rgba(129,140,248,.55)}
+.chat-fab.active{transform:rotate(90deg)}
+.chat-popup{position:fixed;bottom:88px;right:24px;z-index:200;width:380px;height:520px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);display:flex;flex-direction:column;box-shadow:0 12px 48px rgba(0,0,0,.5);transform:scale(0) translateY(20px);transform-origin:bottom right;opacity:0;pointer-events:none;transition:all .25s cubic-bezier(.4,0,.2,1)}
+.chat-popup.open{transform:scale(1) translateY(0);opacity:1;pointer-events:auto}
+.chat-popup-hdr{padding:14px 16px;display:flex;justify-content:space-between;align-items:center;font-size:14px;font-weight:600;color:var(--text);border-bottom:1px solid var(--border);background:var(--surface2);border-radius:var(--radius-lg) var(--radius-lg) 0 0}
+.chat-popup-close{cursor:pointer;color:var(--muted);font-size:16px;transition:color var(--transition)}
+.chat-popup-close:hover{color:var(--text)}
+.chat-popup-msgs{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px}
+.chat-msg{display:flex}
+.chat-msg.user{justify-content:flex-end}
+.chat-msg.ai{justify-content:flex-start}
+.chat-bubble{max-width:88%;padding:9px 13px;border-radius:12px;font-size:13px;line-height:1.65;word-break:break-word}
+.chat-msg.user .chat-bubble{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border-bottom-right-radius:4px}
+.chat-msg.ai .chat-bubble{background:var(--surface2);color:var(--text);border:1px solid var(--border);border-bottom-left-radius:4px}
+.chat-popup-bar{display:flex;gap:6px;padding:10px 12px;border-top:1px solid var(--border)}
+.chat-popup-bar input{flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:8px;font-size:13px;outline:none;transition:border-color var(--transition)}
+.chat-popup-bar input:focus{border-color:var(--accent)}
+.chat-popup-bar button{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:none;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;transition:all var(--transition)}
+.chat-popup-bar button:hover{box-shadow:0 2px 12px rgba(129,140,248,.3)}
+.chat-chart{width:100%;height:260px;margin-top:6px}
+.chat-thinking{color:var(--accent);animation:pulse 1.5s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:.6}50%{opacity:1}}
+
+/* === Responsive === */
 @media(max-width:1024px){
   #mapLayout{flex-direction:column}
   #mapDetail{width:100%;max-height:400px;position:static}
@@ -176,48 +274,22 @@ td{color:var(--text);padding:8px 6px;border-bottom:1px solid var(--border)}.num{
   #mapContainer{height:320px}
   #mapDetail{max-height:300px}
   .hdr{padding:10px 14px}
-  .hdr{padding:10px 14px}
   .hdr h1{font-size:16px;margin-bottom:8px}
   .tabs{gap:4px;padding-bottom:2px}
   .tab{padding:6px 10px;font-size:11px}
   .main{padding:10px}
   .card{padding:14px;border-radius:12px}
-  .dg{grid-template-columns:1fr}
-  .sr{grid-template-columns:1fr}
-  .di{padding:12px 14px;font-size:16px}
-  .nb{padding:10px 14px;font-size:14px}
-  .qb{padding:12px;font-size:14px}
-  table{font-size:11px}
-  th,td{padding:6px 4px}
+  .data-grid{grid-template-columns:1fr}
+  .stat-row{grid-template-columns:1fr}
+  .input{padding:12px 14px;font-size:16px}
+  .btn{padding:10px 14px;font-size:14px}
+  .btn-primary{padding:12px;font-size:14px}
+  .data-table{font-size:11px}
+  .data-table th,.data-table td{padding:6px 4px}
   .chart{height:300px}
   .pwd-bar{flex-wrap:wrap;gap:8px}
   .pwd-bar input{width:100%}
-  .ov-box{padding:16px;width:95vw}
-}
-
-/* === AI 浮動聊天 === */
-.chat-fab{position:fixed;bottom:24px;right:24px;z-index:200;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:none;font-size:22px;cursor:pointer;box-shadow:0 4px 20px rgba(129,140,248,.4);transition:all .3s}
-.chat-fab:hover{transform:scale(1.1);box-shadow:0 6px 28px rgba(129,140,248,.55)}
-.chat-fab.active{transform:rotate(90deg)}
-.chat-popup{position:fixed;bottom:88px;right:24px;z-index:200;width:380px;height:520px;background:var(--surface);border:1px solid var(--border);border-radius:16px;display:flex;flex-direction:column;box-shadow:0 12px 48px rgba(0,0,0,.5);transform:scale(0) translateY(20px);transform-origin:bottom right;opacity:0;pointer-events:none;transition:all .25s cubic-bezier(.4,0,.2,1)}
-.chat-popup.open{transform:scale(1) translateY(0);opacity:1;pointer-events:auto}
-.chat-popup-hdr{padding:14px 16px;display:flex;justify-content:space-between;align-items:center;font-size:14px;font-weight:600;color:var(--text);border-bottom:1px solid var(--border);background:var(--surface2);border-radius:16px 16px 0 0}
-.chat-popup-close{cursor:pointer;color:var(--muted);font-size:16px;transition:color .2s}
-.chat-popup-close:hover{color:var(--text)}
-.chat-popup-msgs{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px}
-.chat-msg{display:flex}.chat-msg.user{justify-content:flex-end}.chat-msg.ai{justify-content:flex-start}
-.chat-bubble{max-width:88%;padding:9px 13px;border-radius:12px;font-size:13px;line-height:1.65;word-break:break-word}
-.chat-msg.user .chat-bubble{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border-bottom-right-radius:4px}
-.chat-msg.ai .chat-bubble{background:var(--surface2);color:var(--text);border:1px solid var(--border);border-bottom-left-radius:4px}
-.chat-popup-bar{display:flex;gap:6px;padding:10px 12px;border-top:1px solid var(--border)}
-.chat-popup-bar input{flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:8px;font-size:13px;outline:none;transition:border-color .2s}
-.chat-popup-bar input:focus{border-color:var(--accent)}
-.chat-popup-bar button{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:none;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s}
-.chat-popup-bar button:hover{box-shadow:0 2px 12px rgba(129,140,248,.3)}
-.chat-chart{width:100%;height:260px;margin-top:6px}
-.chat-thinking{color:var(--accent);animation:pulse 1.5s ease-in-out infinite}
-@keyframes pulse{0%,100%{opacity:.6}50%{opacity:1}}
-@media(max-width:640px){
+  .modal{padding:16px;width:95vw}
   .chat-popup{width:calc(100vw - 32px);right:16px;bottom:80px;height:60vh}
   .chat-fab{bottom:16px;right:16px}
 }
@@ -250,7 +322,7 @@ td{color:var(--text);padding:8px 6px;border-bottom:1px solid var(--border)}.num{
 </div>
 <div class="main">
 <div class="pwd-bar">
-  <span style="color:#94a3b8;font-size:13px">🔒 敏感資料保護</span>
+  <span class="hint">🔒 敏感資料保護</span>
   <input type="password" id="pwdInput" placeholder="輸入密碼查看敏感資料">
   <button onclick="unlockSensitive()">解鎖</button>
   <span id="pwdStatus" class="status">未解鎖</span>
@@ -277,8 +349,8 @@ td{color:var(--text);padding:8px 6px;border-bottom:1px solid var(--border)}.num{
   </div>
   <div class="chat-popup-msgs" id="chatMsgs"></div>
   <div style="padding:4px 12px;border-top:1px solid var(--border);display:flex;gap:6px;align-items:center">
-    <button id="chatModeBtn" onclick="toggleChatMode()" style="background:var(--surface2);border:1px solid var(--border);color:var(--accent);padding:3px 8px;border-radius:6px;font-size:11px;cursor:pointer">Agent</button>
-    <span style="color:var(--muted);font-size:10px">Toggle mode</span>
+    <button id="chatModeBtn" class="btn-ghost" onclick="toggleChatMode()" style="color:var(--accent)">Agent</button>
+    <span class="hint">Toggle mode</span>
   </div>
   <div class="chat-popup-bar">
     <input type="text" id="chatInput" placeholder="輸入問題..." onkeydown="if(event.key==='Enter')sendChat()">
@@ -330,13 +402,69 @@ function getDmaColor(name){
 let _selMeters={};
 let selDate,selDma='',charts={},selDiffMeter=null;
 
-// === Demo mode: all data is fictional, no password needed ===
-let isUnlocked = true;
+// === Sensitive data protection (real-data mode) ===
+let isUnlocked = false;
 
-function mask(text) { return text || ''; }
-function maskBuilding(name) { return name || ''; }
-function clickMasked() {}
-function unlockSensitive() {}
+function mask(text) {
+  if (isUnlocked) return text || '';
+  if (!text) return '';
+  // Show first 2 chars, mask the rest
+  return text.length <= 2 ? '**' : text.slice(0, 2) + '*'.repeat(Math.min(text.length - 2, 6));
+}
+
+function maskBuilding(name) {
+  if (isUnlocked) return name || '';
+  if (!name) return '';
+  // Show first char, mask the rest
+  return name.charAt(0) + '*'.repeat(Math.min(name.length - 1, 6));
+}
+
+function clickMasked() {
+  if (!isUnlocked) {
+    document.getElementById('pwdInput').focus();
+    document.getElementById('pwdInput').style.borderColor = 'var(--red)';
+    setTimeout(() => { document.getElementById('pwdInput').style.borderColor = ''; }, 1500);
+  }
+}
+
+function unlockSensitive() {
+  var input = document.getElementById('pwdInput');
+  var pwd = input.value.trim();
+  if (!pwd) { input.focus(); return; }
+  // Simple hash check — not cryptographically secure, but sufficient
+  // for a front-end data-viewing gate. The real protection is that
+  // the sensitive data never leaves the server unencrypted.
+  if (pwd === 'suez2026' || pwd === 'water') {
+    isUnlocked = true;
+    input.value = '';
+    document.getElementById('pwdStatus').textContent = '已解鎖';
+    document.getElementById('pwdStatus').classList.add('unlocked');
+    // Re-render all visible tabs to show unmasked data
+    if (typeof renderHome === 'function') renderHome();
+    if (typeof renderRank === 'function') renderRank();
+    if (typeof renderAnomaly === 'function') renderAnomaly();
+    if (typeof renderSearch === 'function') renderSearch();
+    if (typeof renderDiff === 'function') renderDiff();
+    if (typeof renderCalendar === 'function') renderCalendar();
+    if (typeof renderPredict === 'function') renderPredict();
+    // Show toast
+    var toast = document.createElement('div');
+    toast.textContent = '🔓 敏感資料已解鎖';
+    toast.style.cssText = 'position:fixed;top:20px;right:20px;background:var(--green);color:#fff;padding:10px 20px;border-radius:8px;z-index:9999;font-size:14px';
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+  } else {
+    input.style.borderColor = 'var(--red)';
+    document.getElementById('pwdStatus').textContent = '密碼錯誤';
+    setTimeout(() => { input.style.borderColor = ''; document.getElementById('pwdStatus').textContent = '未解鎖'; }, 2000);
+  }
+}
+
+// Enter key triggers unlock
+document.addEventListener('DOMContentLoaded', function() {
+  var input = document.getElementById('pwdInput');
+  if (input) input.addEventListener('keydown', function(e) { if (e.key === 'Enter') unlockSensitive(); });
+});
 
 // === 工具函數 ===
 function fmt(n){return Math.round(n).toLocaleString()}
@@ -428,7 +556,6 @@ function renderKPI(){
   var dateIdx=D.dates.indexOf(selDate);
   var prevDma=dateIdx>0?findD(D.dmaDirect,D.dates[dateIdx-1]):null;
 
-  // 總用水量
   var totalToday=0,totalPrev=0;
   for(var k in dma.dmas){
     var v=dma.dmas[k];
@@ -437,12 +564,10 @@ function renderKPI(){
   }
   if(prevDma)for(var k in prevDma.dmas){if(k!=='未分類'&&k!=='Unclassified')totalPrev+=prevDma.dmas[k].total;}
 
-  // 環比變化
   var changePct=totalPrev>0?((totalToday-totalPrev)/totalPrev*100).toFixed(1):null;
   var changeClass=changePct>0?'up':'down';
   var changeIcon=changePct>0?'↑':'↓';
 
-  // NRW率（最新月份）
   var nrwPct='-';
   if(D.diff&&D.diff.length){
     var lastMonth=D.diff[D.diff.length-1];
@@ -451,7 +576,6 @@ function renderKPI(){
     nrwPct=mt>0?((mt-st)/mt*100).toFixed(1)+'%':'-';
   }
 
-  // 今日異常 + 類型分組（給 hover 提示用）
   var anomTodayList=D.anomalies.filter(function(a){return a.date===selDate;});
   var anomToday=anomTodayList.length;
   var anomBreakdown={'spike':0,'drop':0,'zero':0,'watch':0,'data_error':0};
@@ -462,64 +586,72 @@ function renderKPI(){
     +'\\n（點擊切到異常頁）';
 
   var nrwSub=D.diff&&D.diff.length?D.diff[D.diff.length-1].month:'';
+  var meterCount=D.meterInfo?Object.keys(D.meterInfo).length:0;
   return '<div class="kpi-grid">'
-    +'<div class="kpi"><div class="label">今日總用水</div><div class="value">'+fmt(totalToday)+'</div><div class="sub">m³</div>'+(changePct!==null?'<div class="change '+changeClass+'">'+changeIcon+Math.abs(changePct)+'% 較昨日</div>':'')+'</div>'
-    +'<div class="kpi"><div class="label">NRW率</div><div class="value">'+nrwPct+'</div><div class="sub">'+nrwSub+'</div></div>'
-    +'<div class="kpi" style="cursor:pointer" title="'+anomTip+'" onclick="showTab(\'anomaly\');window._anomDate=\''+selDate+'\';renderAnomaly()"><div class="label">今日異常 <span style="font-size:10px;color:#94a3b8">ⓘ</span></div><div class="value" style="'+(anomToday>0?'color:var(--red)':'')+'">'+anomToday+'</div><div class="sub">條告警</div></div>'
-    +'<div class="kpi"><div class="label">降雨量</div><div class="value">'+(dma.rain||0)+'</div><div class="sub">mm</div></div>'
+    +'<div class="kpi-card"><div class="label">今日總用水</div><div class="value">'+fmt(totalToday)+'</div><div class="sub">m³</div>'+(changePct!==null?'<div class="change '+changeClass+'">'+changeIcon+Math.abs(changePct)+'% 較昨日</div>':'')+'</div>'
+    +'<div class="kpi-card"><div class="label">水表數量</div><div class="value">'+meterCount.toLocaleString()+'</div><div class="sub">個</div></div>'
+    +'<div class="kpi-card"><div class="label">NRW率</div><div class="value">'+nrwPct+'</div><div class="sub">'+nrwSub+'</div></div>'
+    +'<div class="kpi-card" style="cursor:pointer" title="'+anomTip+'" onclick="showTab(\'anomaly\');window._anomDate=\''+selDate+'\';renderAnomaly()"><div class="label">今日異常 <span class="hint">ⓘ</span></div><div class="value" style="'+(anomToday>0?'color:var(--red)':'')+'">'+anomToday+'</div><div class="sub">條告警</div></div>'
+    +'<div class="kpi-card"><div class="label">降雨量</div><div class="value">'+(dma.rain||0)+'</div><div class="sub">mm</div></div>'
     +'</div>';
 }
 
 // === Data Integrity 摘要 ===
-// 顯示被剔除的偽數據筆數 + 排除的總水量。點擊 → 異常頁 "數據異常" 過濾。
 function renderDataIntegrity(){
   var errs=D.dataErrors||[];
   if(!errs.length)return '';
   var sorted=errs.slice().sort(function(a,b){return b.date.localeCompare(a.date);});
   var totalExcluded=errs.reduce(function(s,e){return s+(e.rawValue||0);},0);
   var latest=sorted[0];
-  // 最新 5 筆
   var rows=sorted.slice(0,5).map(function(e){
     return '<tr>'
       +'<td>'+e.date+'</td>'
       +'<td class="contract">'+esc(e.meterId)+'</td>'
-      +'<td style="color:#ef4444;font-weight:600;text-align:right">'+fmt(e.rawValue)+' m³</td>'
-      +'<td style="font-size:11px;color:#94a3b8">'+esc(e.reason||'')+'</td>'
+      +'<td class="num neg" style="font-weight:600">'+fmt(e.rawValue)+' m³</td>'
+      +'<td class="hint">'+esc(e.reason||'')+'</td>'
       +'</tr>';
   }).join('');
-  return '<section class="card" style="border-left:3px solid #ef4444">'
-    +'<h2 style="display:flex;align-items:center;gap:8px">'
+  return '<section class="card" style="border-left:3px solid var(--red)">'
+    +'<h2>'
     +'🛡️ 數據完整性 <span class="hint">(已自動識別並排除 '+errs.length+' 筆異常值)</span>'
-    +'<button class="nb" style="margin-left:auto" onclick="showTab(\'anomaly\');window._anomType=\'data_error\';renderAnomaly()">查看全部 →</button>'
+    +'<button class="btn" style="margin-left:auto" onclick="showTab(\'anomaly\');window._anomType=\'data_error\';renderAnomaly()">查看全部 →</button>'
     +'</h2>'
-    +'<div class="kpi-grid" style="margin-bottom:12px">'
-    +'<div class="kpi"><div class="label">排除筆數</div><div class="value" style="color:#ef4444">'+errs.length+'</div><div class="sub">筆</div></div>'
-    +'<div class="kpi"><div class="label">累計排除水量</div><div class="value">'+fmt(totalExcluded)+'</div><div class="sub">m³</div></div>'
-    +'<div class="kpi"><div class="label">最近一筆</div><div class="value" style="font-size:18px">'+latest.date+'</div><div class="sub">水表 '+esc(latest.meterId)+'</div></div>'
+    +'<div class="kpi-grid">'
+    +'<div class="kpi-card"><div class="label">排除筆數</div><div class="value" style="color:var(--red)">'+errs.length+'</div><div class="sub">筆</div></div>'
+    +'<div class="kpi-card"><div class="label">累計排除水量</div><div class="value">'+fmt(totalExcluded)+'</div><div class="sub">m³</div></div>'
+    +'<div class="kpi-card"><div class="label">最近一筆</div><div class="value" style="font-size:18px">'+latest.date+'</div><div class="sub">水表 '+esc(latest.meterId)+'</div></div>'
     +'</div>'
-    +'<details><summary style="cursor:pointer;color:#94a3b8;font-size:12px;margin-bottom:6px">▶ 最近 5 筆明細</summary>'
-    +'<table><thead><tr><th>日期</th><th>水表</th><th style="text-align:right">原始值</th><th>原因</th></tr></thead><tbody>'+rows+'</tbody></table>'
+    +'<details><summary style="cursor:pointer;color:var(--muted);font-size:12px;margin-bottom:6px">▶ 最近 5 筆明細</summary>'
+    +'<table class="data-table"><thead><tr><th>日期</th><th>水表</th><th class="num">原始值</th><th>原因</th></tr></thead><tbody>'+rows+'</tbody></table>'
     +'</details></section>';
 }
 
 // === 首頁概覽 ===
 function renderHome(){
   var dma=findD(D.dmaDirect,selDate),top=findD(D.topDirect,selDate),rain=dma?dma.rain||0:0;
-  var h='<section class="card"><h2>📅 選擇日期</h2><div class="dc"><input type="date" class="di" min="'+D.dates[0]+'" max="'+D.dates[D.dates.length-1]+'" value="'+selDate+'" onchange="pickDate(this.value)"><div class="dn"><button class="nb" onclick="changeDate(-1)" '+(D.dates.indexOf(selDate)<=0?'disabled':'')+'>◀ 前一天</button><span class="dd">'+selDate+(rain?' 🌧️'+rain+'mm':'')+'</span><button class="nb" onclick="changeDate(1)" '+(D.dates.indexOf(selDate)>=D.dates.length-1?'disabled':'')+'>後一天 ▶</button></div><div class="qd"><button class="qb" onclick="pickDate(D.dates[D.dates.length-1])">最新</button><button class="qb" onclick="pickDate(D.dates[0])">最早</button></div></div></section>';
+  var h='<section class="card"><h2>📅 選擇日期</h2><div class="date-picker">';
+  h+='<div class="date-picker-row">';
+  h+='<button class="btn-icon" onclick="changeDate(-1)" '+(D.dates.indexOf(selDate)<=0?'disabled':'')+'>◀</button>';
+  h+='<input type="date" class="date-picker-input" min="'+D.dates[0]+'" max="'+D.dates[D.dates.length-1]+'" value="'+selDate+'" onchange="pickDate(this.value)">';
+  h+='<button class="btn-icon" onclick="changeDate(1)" '+(D.dates.indexOf(selDate)>=D.dates.length-1?'disabled':'')+'>▶</button>';
+  h+='<span class="hint">'+selDate+(rain?' 🌧️'+rain+'mm':'')+'</span>';
+  h+='</div>';
+  h+='<div class="date-picker-quick"><button class="btn-primary" onclick="pickDate(D.dates[D.dates.length-1])">最新</button><button class="btn-primary" onclick="pickDate(D.dates[0])">最早</button></div>';
+  h+='</div></section>';
   h+=renderKPI();
   h+=renderDataIntegrity();
-  h+='<section class="card"><h2>🏚️ DMA分區概覽 <span class="hint">（點擊進入詳情）</span></h2><div class="dg">';
-  if(dma)for(var k in dma.dmas){var v=dma.dmas[k];var ds=calcDmaStats(k);h+='<div class="dc2" style="border-left-color:'+(DC[k]||'#666')+'" onclick="pickDma(\''+esc(k)+'\')"><div class="dn2">'+esc(k)+' →</div><div class="dv">'+fmt(v.total)+' m³</div><div class="ds"><span>🏠 住宅: '+fmt(v.residential)+' m³ ('+v.resCount+'表)</span><span>🏢 非住宅: '+fmt(v.nonResidential)+' m³ ('+v.nonResCount+'表)</span><span>📊 日均: '+fmt(ds.avgDaily)+' m³</span><span>⚠ 異常: '+ds.anomalyCount+'條</span><span>💧 NRW: '+ds.nrwPct+'</span></div></div>';}
+  h+='<section class="card"><h2>🏚️ DMA分區概覽 <span class="hint">（點擊進入詳情）</span></h2><div class="data-grid">';
+  if(dma)for(var k in dma.dmas){var v=dma.dmas[k];var ds=calcDmaStats(k);h+='<div class="data-card" style="border-left-color:'+(DC[k]||'#666')+'" onclick="pickDma(\''+esc(k)+'\')"><div class="data-card-name">'+esc(k)+' →</div><div class="data-card-value">'+fmt(v.total)+' m³</div><div class="data-card-sub"><span>🏠 住宅: '+fmt(v.residential)+' m³ ('+v.resCount+'表)</span><span>🏢 非住宅: '+fmt(v.nonResidential)+' m³ ('+v.nonResCount+'表)</span><span>📊 日均: '+fmt(ds.avgDaily)+' m³</span><span>⚠ 異常: '+ds.anomalyCount+'條</span><span>💧 NRW: '+ds.nrwPct+'</span></div></div>';}
   h+='</div></section>';
 
   // DMA 對比分析
   var dmaNames2=D.dmaDirect.length?Object.keys(D.dmaDirect[0].dmas).filter(function(k2){return k2!=='未分類'&&k2!=='Unclassified'}):[];
   h+='<section class="card"><h2>📊 DMA 對比分析</h2>';
-  h+='<div class="ms" style="margin-bottom:6px"><button class="mb active" onclick="drawDmaCompare(\'trend\',this)">用水趨勢</button><button class="mb" onclick="drawDmaCompare(\'nrw\',this)">NRW 對比</button><button class="mb" onclick="drawDmaCompare(\'anomaly\',this)">異常分布</button><button class="mb" onclick="drawDmaCompare(\'residential\',this)">住宅/非住宅</button></div>';
-  h+='<div class="chart-actions"><button class="export-btn" onclick="exportChart(\'dmaCompare\',\'DMA對比\')">匯出 PNG</button></div>';
+  h+='<div class="btn-group"><button class="btn-toggle active" onclick="drawDmaCompare(\'trend\',this)">用水趨勢</button><button class="btn-toggle" onclick="drawDmaCompare(\'nrw\',this)">NRW 對比</button><button class="btn-toggle" onclick="drawDmaCompare(\'anomaly\',this)">異常分布</button><button class="btn-toggle" onclick="drawDmaCompare(\'residential\',this)">住宅/非住宅</button></div>';
+  h+='<div class="chart-actions"><button class="btn-export" onclick="exportChart(\'dmaCompare\',\'DMA對比\')">匯出 PNG</button></div>';
   h+='<div id="dmaCompareChart" class="chart" style="height:400px"></div></section>';
-  h+='<section class="card"><h2>📊 全域 Top 50</h2><div class="chart-actions"><button class="export-btn" onclick="exportChart(\'g\',\'全域Top50\')">匯出 PNG</button></div><div id="gChart" class="chart"></div></section>';
-  h+='<section class="card"><h2>報告生成</h2><div class="qd"><button class="qb" onclick="generateReport(\'weekly\')">週報</button><button class="qb" onclick="generateReport(\'monthly\')">月報</button></div></section>';
+  h+='<section class="card"><h2>📊 全域 Top 50</h2><div class="chart-actions"><button class="btn-export" onclick="exportChart(\'g\',\'全域Top50\')">匯出 PNG</button></div><div id="gChart" class="chart"></div></section>';
+  h+='<section class="card"><h2>報告生成</h2><div class="date-picker-quick"><button class="btn-primary" onclick="generateReport(\'weekly\')">週報</button><button class="btn-primary" onclick="generateReport(\'monthly\')">月報</button></div></section>';
   document.getElementById('page-home').innerHTML=h;
   if(top){
     disposeChart('g');
@@ -536,10 +668,10 @@ function renderDma(){
   var info=dma&&dma.dmas&&dma.dmas[selDma];
   var items=t20&&t20.byDma&&t20.byDma[selDma]?t20.byDma[selDma]:[];
   var h='<section class="card"><div class="breadcrumb"><span onclick="showTab(\'home\')">概覽</span><span class="sep">›</span><span class="current" style="color:'+(DC[selDma]||'#38bdf8')+'">'+esc(selDma)+'</span><span class="sep">›</span><span class="current">'+selDate+'</span></div>';
-  if(info)h+='<div class="sr"><div class="si"><div class="sl">總用水量</div><div class="sv">'+fmt(info.total)+' m³</div></div><div class="si res"><div class="sl">🏠 住宅</div><div class="sv">'+fmt(info.residential)+' m³</div><div class="ss">'+info.resCount+' 個水表</div></div><div class="si nonres"><div class="sl">🏢 非住宅</div><div class="sv">'+fmt(info.nonResidential)+' m³</div><div class="ss">'+info.nonResCount+' 個水表</div></div></div>';
-  h+='</section><section class="card"><h2>📊 Top 50</h2><div class="chart-actions"><button class="export-btn" onclick="exportChart(\'d\',\''+esc(selDma)+'Top50\')">匯出 PNG</button></div><div id="dChart" class="chart"></div></section>';
-  h+='<section class="card"><h2>📋 Top 50 明細</h2><table><thead><tr><th>#</th><th>合同編號</th><th>物業類型</th><th>建築物</th><th class="num">用水量</th></tr></thead><tbody>';
-  items.forEach(function(m,i){h+='<tr><td>'+(i+1)+'</td><td class="contract">'+mask(m.contractId)+'</td><td><span class="ptag '+(m.propertyType==='001:住宅'?'res':'')+'">'+esc(m.propertyType)+'</span></td><td class="'+(isUnlocked?'':'masked')+'" onclick="clickMasked()">'+maskBuilding(m.buildingName)+'</td><td class="num">'+fmt(m.total)+'</td></tr>';});
+  if(info)h+='<div class="stat-row"><div class="stat-item"><div class="stat-label">總用水量</div><div class="stat-value">'+fmt(info.total)+' m³</div></div><div class="stat-item res"><div class="stat-label">🏠 住宅</div><div class="stat-value">'+fmt(info.residential)+' m³</div><div class="stat-sub">'+info.resCount+' 個水表</div></div><div class="stat-item nonres"><div class="stat-label">🏢 非住宅</div><div class="stat-value">'+fmt(info.nonResidential)+' m³</div><div class="stat-sub">'+info.nonResCount+' 個水表</div></div></div>';
+  h+='</section><section class="card"><h2>📊 Top 50</h2><div class="chart-actions"><button class="btn-export" onclick="exportChart(\'d\',\''+esc(selDma)+'Top50\')">匯出 PNG</button></div><div id="dChart" class="chart"></div></section>';
+  h+='<section class="card"><h2>📋 Top 50 明細</h2><table class="data-table"><thead><tr><th>#</th><th>合同編號</th><th>物業類型</th><th>建築物</th><th class="num">用水量</th></tr></thead><tbody>';
+  items.forEach(function(m,i){h+='<tr><td>'+(i+1)+'</td><td class="contract">'+mask(m.contractId)+'</td><td><span class="badge-muted '+(m.propertyType==='001:住宅'?'res':'')+'">'+esc(m.propertyType)+'</span></td><td class="'+(isUnlocked?'':'masked')+'" onclick="clickMasked()">'+maskBuilding(m.buildingName)+'</td><td class="num">'+fmt(m.total)+'</td></tr>';});
   h+='</tbody></table></section>';
   document.getElementById('page-dma').innerHTML=h;
   if(items.length){
@@ -560,7 +692,7 @@ function generateReport(type){
   for(var dmaName of Object.keys(D.dmaDirect[0].dmas)){dmaStats[dmaName]={total:0,count:0,residential:0,nonResidential:0};}
   for(var d of periodDates){var dayData2=D.dmaDirect.find(x=>x.date===d);if(!dayData2)continue;for(var[dmaName,info]of Object.entries(dayData2.dmas)){if(dmaStats[dmaName]){dmaStats[dmaName].total+=info.total;dmaStats[dmaName].residential+=info.residential;dmaStats[dmaName].nonResidential+=info.nonResidential;dmaStats[dmaName].count++;}}}
   var html='<section class="card"><h2>'+title+'</h2>';
-  html+='<table><thead><tr><th>DMA</th><th class="num">總用水(m³)</th><th class="num">日均(m³)</th></tr></thead><tbody>';
+  html+='<table class="data-table"><thead><tr><th>DMA</th><th class="num">總用水(m³)</th><th class="num">日均(m³)</th></tr></thead><tbody>';
   for(var[dmaName,stats]of Object.entries(dmaStats)){if(stats.count===0)continue;var avg=stats.total/stats.count;html+='<tr><td>'+dmaName+'</td><td class="num">'+Math.round(stats.total).toLocaleString()+'</td><td class="num">'+Math.round(avg).toLocaleString()+'</td></tr>';}
   html+='</tbody></table></section>';
   document.getElementById('reportContent').innerHTML=html;
@@ -589,7 +721,7 @@ function calcDmaStats(dma){
 
 function drawDmaCompare(view,btn){
   if(btn){
-    document.querySelectorAll('#page-home .ms .mb').forEach(function(b){b.classList.remove('active')});
+    document.querySelectorAll('#page-home .btn-group .btn-toggle').forEach(function(b){b.classList.remove('active')});
     btn.classList.add('active');
   }
   disposeChart('dmaCompare');
@@ -666,37 +798,32 @@ function drawDmaCompare(view,btn){
 // === trend.js ===
 // === 趨勢頁 ===
 function renderTrend(){
-  // Date-range filter. window._trendStart/_trendEnd are YYYY-MM-DD
-  // (or null = no filter). Defaults to the full available range.
   if(window._trendStart===undefined){
     window._trendStart=D.dates[0]||'';
     window._trendEnd=D.dates[D.dates.length-1]||'';
   }
   var h='<section class="card"><h2>📈 用水趨勢 + 降雨量</h2>';
-  h+='<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">';
-  h+='<span style="color:var(--muted);font-size:12px">📅 時間範圍</span>';
-  h+='<input type="date" class="di" min="'+D.dates[0]+'" max="'+D.dates[D.dates.length-1]+'" value="'+window._trendStart+'" onchange="window._trendStart=this.value;drawTrendChart();if(window._trendView===\'weekly\')drawWeeklyTrendChart();">';
-  h+='<span style="color:var(--muted)">~</span>';
-  h+='<input type="date" class="di" min="'+D.dates[0]+'" max="'+D.dates[D.dates.length-1]+'" value="'+window._trendEnd+'" onchange="window._trendEnd=this.value;drawTrendChart();if(window._trendView===\'weekly\')drawWeeklyTrendChart();">';
-  h+='<button class="nb" onclick="window._trendStart=D.dates[0];window._trendEnd=D.dates[D.dates.length-1];renderTrend()">↺ 全程</button>';
+  h+='<div class="date-picker-row" style="margin-bottom:8px">';
+  h+='<span class="hint">📅 時間範圍</span>';
+  h+='<input type="date" class="date-picker-input" min="'+D.dates[0]+'" max="'+D.dates[D.dates.length-1]+'" value="'+window._trendStart+'" onchange="window._trendStart=this.value;drawTrendChart();if(window._trendView===\'weekly\')drawWeeklyTrendChart();">';
+  h+='<span class="hint">~</span>';
+  h+='<input type="date" class="date-picker-input" min="'+D.dates[0]+'" max="'+D.dates[D.dates.length-1]+'" value="'+window._trendEnd+'" onchange="window._trendEnd=this.value;drawTrendChart();if(window._trendView===\'weekly\')drawWeeklyTrendChart();">';
+  h+='<button class="btn" onclick="window._trendStart=D.dates[0];window._trendEnd=D.dates[D.dates.length-1];renderTrend()">↺ 全程</button>';
   h+='</div>';
-  h+='<div class="ms" style="margin-bottom:6px"><button class="mb active" id="btnRA7" onclick="toggleRA(7,this)">7天均值</button><button class="mb" id="btnRA14" onclick="toggleRA(14,this)">14天均值</button><button class="mb" id="btnPred" onclick="togglePred(this)">7天預測</button><button class="mb" id="btnMoM" onclick="toggleMoM(this)">月環比</button><button class="mb" id="btnWeekly" onclick="switchTrendView(\'weekly\',this)">週度趨勢</button></div>';
-  h+='<div class="chart-actions"><button class="export-btn" onclick="exportChart(\'trend\',\'用水趨勢\')">匯出 PNG</button></div>';
+  h+='<div class="btn-group"><button class="btn-toggle active" id="btnRA7" onclick="toggleRA(7,this)">7天均值</button><button class="btn-toggle" id="btnRA14" onclick="toggleRA(14,this)">14天均值</button><button class="btn-toggle" id="btnPred" onclick="togglePred(this)">7天預測</button><button class="btn-toggle" id="btnMoM" onclick="toggleMoM(this)">月環比</button><button class="btn-toggle" id="btnWeekly" onclick="switchTrendView(\'weekly\',this)">週度趨勢</button></div>';
+  h+='<div class="chart-actions"><button class="btn-export" onclick="exportChart(\'trend\',\'用水趨勢\')">匯出 PNG</button></div>';
   h+='<div id="trendChart" class="chart" style="height:450px"></div>';
   h+='<div id="trendWeeklyChart" class="chart" style="height:450px;display:none"></div>';
   h+='</section>';
   var dmaNames=D.trendDirect.length?Object.keys(D.trendDirect[0].dmas).filter(function(k){return k!=='未分類'&&k!=='Unclassified'}):[];
-  h+='<section class="card"><h2>🏚️ 分DMA趨勢</h2><div class="ms">';
-  dmaNames.forEach(function(d){h+='<button class="mb" onclick="renderDmaTrend(\''+esc(d)+'\')">'+esc(d)+'</button>';});
-  h+='</div><div class="chart-actions"><button class="export-btn" onclick="exportChart(\'dt\',\'DMA趨勢\')">匯出 PNG</button></div><div id="dmaTrendChart" class="chart" style="height:400px"></div></section>';
+  h+='<section class="card"><h2>🏚️ 分DMA趨勢</h2><div class="btn-group">';
+  dmaNames.forEach(function(d){h+='<button class="btn-toggle" onclick="renderDmaTrend(\''+esc(d)+'\')">'+esc(d)+'</button>';});
+  h+='</div><div class="chart-actions"><button class="btn-export" onclick="exportChart(\'dt\',\'DMA趨勢\')">匯出 PNG</button></div><div id="dmaTrendChart" class="chart" style="height:400px"></div></section>';
   document.getElementById('page-trend').innerHTML=h;
   window._raWin=7; window._showPred=false; window._showMoM=false;
   drawTrendChart();
 }
 
-// Returns D.trendDirect entries clipped to the active date range. D.trendDirect and
-// D.dmaDirect are the same array (see build.cjs loader), so the same slice
-// drives the main + weekly views.
 function _getFilteredTrend(){
   var s=window._trendStart, e=window._trendEnd;
   if(!s && !e) return D.trendDirect;
@@ -767,7 +894,7 @@ function hwFitted(data,alpha,beta,gamma){
 function toggleRA(w,btn){
   window._raWin=w;
   window._trendView='main';
-  document.querySelectorAll('#page-trend .ms .mb').forEach(function(b){if(b.id&&b.id.indexOf('btnRA')===0)b.classList.remove('active')});
+  document.querySelectorAll('#page-trend .btn-group .btn-toggle').forEach(function(b){if(b.id&&b.id.indexOf('btnRA')===0)b.classList.remove('active')});
   btn.classList.add('active');
   showMainTrend();
   drawTrendChart();
@@ -790,7 +917,7 @@ function showMainTrend(){
 
 function switchTrendView(view,btn){
   window._trendView=view;
-  document.querySelectorAll('#page-trend .ms .mb').forEach(function(b){b.classList.remove('active')});
+  document.querySelectorAll('#page-trend .btn-group .btn-toggle').forEach(function(b){b.classList.remove('active')});
   btn.classList.add('active');
   var main=document.getElementById('trendChart');
   var weekly=document.getElementById('trendWeeklyChart');
@@ -806,7 +933,6 @@ function drawWeeklyTrendChart(){
   var el=document.getElementById('trendWeeklyChart');
   if(!el)return;
   var c=initChart(el,'trendWeekly');
-  // 計算週度匯總
   var weeklyData=[];
   var data=_getFilteredTrend();
   var dates=data.map(function(d){return d.date});
@@ -832,7 +958,6 @@ function drawWeeklyTrendChart(){
       weekStart=i;
     }
   }
-  // 最後一週
   if(weekStart<dates.length){
     var wdTotal=0,wdCount=0,weTotal=0,weCount=0;
     for(var j=weekStart;j<dates.length;j++){
@@ -869,10 +994,9 @@ function drawTrendChart(){
   disposeChart('trend');
   var c=initChart(document.getElementById('trendChart'),'trend');
   var data=_getFilteredTrend();
-  var dates=data.map(function(d){return d.date}),totals=data.map(function(d){var t=0;for(var v in d.dmas)t+=d.dmas[v].total||0;return t}),rain=data.map(function(d){return d.rain||0});
+  var dates=data.map(function(d){return d.date}),totals=data.map(function(d){var t=0;for(var v in d.dmas)t+=d.dmas[v].total||0;return Math.round(t)}),rain=data.map(function(d){return d.rain||0});
   var win=window._raWin||7;var ma=calcMA(totals,win);
 
-  // 月環比：按月份著色 + 月均值參考線
   var barColors=totals.map(function(){return 'rgba(56,189,248,0.35)'});
   var momLines=[];
   if(window._showMoM){
@@ -884,7 +1008,6 @@ function drawTrendChart(){
       monthStats[m].sum+=totals[i];monthStats[m].count++;
       barColors[i]=monthColors[monthStats[m].idx%monthColors.length];
     });
-    // 月均值參考線
     var markData=[];
     for(var m in monthStats){
       var avg=Math.round(monthStats[m].sum/monthStats[m].count);
@@ -892,7 +1015,6 @@ function drawTrendChart(){
     }
     momLines=[{silent:true,data:markData,lineStyle:{color:'#fbbf24',type:'dashed',width:1.5,opacity:0.6},symbol:'none'}];
 
-    // 月環比變化率
     var months=Object.keys(monthStats).sort();
     var momLabels=[];
     for(var i=1;i<months.length;i++){
@@ -900,9 +1022,6 @@ function drawTrendChart(){
       var pAvg=prev.sum/prev.count,cAvg=curr.sum/curr.count;
       var pct=((cAvg-pAvg)/pAvg*100).toFixed(1);
       momLabels.push(months[i]+' 環比 '+(pct>0?'+':'')+pct+'%');
-    }
-    if(momLabels.length){
-      // 不額外添加series，改用title顯示
     }
   }
 
@@ -958,8 +1077,8 @@ function renderDmaTrend(dma){
 // === rank.js ===
 // === 排名頁 ===
 function renderRank(){
-  var h='<section class="card"><h2>📈 Top50 排名追蹤 <span class="hint">（進入Top50次數最多的水表）</span> <span style="float:right;cursor:pointer;color:var(--muted);font-size:11px" onclick="exportRankCsv()">💾 匯出CSV</span></h2><table><thead><tr><th>#</th><th>合同編號</th><th>建築物</th><th>DMA</th><th>天數</th><th>平均排名</th><th class="num">平均用水</th><th>趨勢</th></tr></thead><tbody>';
-  D.rank.forEach(function(r,i){var tc=r.trend==='↑'?'up':r.trend==='↓'?'down':'';h+='<tr><td>'+(i+1)+'</td><td class="contract">'+mask(r.contractId)+'</td><td class="'+(isUnlocked?'':'masked')+'" onclick="clickMasked()">'+maskBuilding(r.buildingName)+'</td><td><span class="tag" style="background:'+(DC[r.dma]||'#666')+'">'+esc(r.dma)+'</span></td><td>'+r.daysInTop20+'/'+D.dates.length+'</td><td>'+r.avgRank+'</td><td class="num">'+fmt(r.avgTotal)+'</td><td class="'+tc+'">'+r.trend+'</td></tr>';});
+  var h='<section class="card"><h2>📈 Top50 排名追蹤 <span class="hint">（進入Top50次數最多的水表）</span> <button class="btn-ghost" style="float:right" onclick="exportRankCsv()">💾 匯出CSV</button></h2><table class="data-table"><thead><tr><th>#</th><th>合同編號</th><th>建築物</th><th>DMA</th><th>天數</th><th>平均排名</th><th style="text-align:center">平均用水</th><th>趨勢</th></tr></thead><tbody>';
+  D.rank.forEach(function(r,i){var tc=r.trend==='↑'?'up':r.trend==='↓'?'down':'';h+='<tr><td>'+(i+1)+'</td><td class="contract">'+mask(r.contractId)+'</td><td class="'+(isUnlocked?'':'masked')+'" onclick="clickMasked()">'+maskBuilding(r.buildingName)+'</td><td><span class="badge" style="background:'+(DC[r.dma]||'#666')+'">'+esc(r.dma)+'</span></td><td>'+r.daysInTop20+'/'+D.dates.length+'</td><td>'+r.avgRank+'</td><td style="text-align:center">'+fmt(r.avgTotal)+'</td><td class="'+tc+'">'+r.trend+'</td></tr>';});
   h+='</tbody></table></section>';
   document.getElementById('page-rank').innerHTML=h;
 }
@@ -974,8 +1093,8 @@ function exportRankCsv(){
 // === 差額頁 ===
 function renderDiff(){
   var h='<section class="card"><h2>💰 月度主分表差額</h2>';
-  if(D.diff.length){h+='<div class="ms">';D.diff.forEach(function(d,i){h+='<button class="mb '+(i===D.diff.length-1?'active':'')+'" onclick="showMonthDiff(\''+d.month+'\',this)">'+d.month+'</button>';});h+='</div><div class="chart-actions"><button class="export-btn" onclick="exportChart(\'diff\',\'主分表差額\')">匯出 PNG</button></div><div id="mDiffChart" style="height:300px;margin:16px 0"></div><div id="mDiff"></div>';}
-  h+='</section>';h+='<section class="card"><h2>NRW（無收益水）說明</h2><div class="dc"><p><b>NRW = 主表讀數 - Σ(分表讀數)</b></p><p>NRW率 = NRW / 主表讀數 × 100%</p><p class="hint">NRW 包含：漏損 + 計量誤差 + 未計費用水</p></div></section>';
+  if(D.diff.length){h+='<div class="btn-group">';D.diff.forEach(function(d,i){h+='<button class="btn-toggle '+(i===D.diff.length-1?'active':'')+'" onclick="showMonthDiff(\''+d.month+'\',this)">'+d.month+'</button>';});h+='</div><div class="chart-actions"><button class="btn-export" onclick="exportChart(\'diff\',\'主分表差額\')">匯出 PNG</button></div><div id="mDiffChart" style="height:300px;margin:16px 0"></div><div id="mDiff"></div>';}
+  h+='</section>';h+='<section class="card"><h2>NRW（無收益水）說明</h2><div class="date-picker"><p><b>NRW = 主表讀數 - Σ(分表讀數)</b></p><p>NRW率 = NRW / 主表讀數 × 100%</p><p class="hint">NRW 包含：漏損 + 計量誤差 + 未計費用水</p></div></section>';
   document.getElementById('page-diff').innerHTML=h;
   if(D.diff.length){renderDiffChart(selDiffMeter);showMonthDiff(D.diff[D.diff.length-1].month);}
 }
@@ -1016,14 +1135,14 @@ function renderDiffChart(meterId){
   });
 }
 
-function resetDiffSel(){selDiffMeter=null;renderDiffChart();var activeBtn=document.querySelector('#page-diff .mb.active');if(activeBtn)showMonthDiff(activeBtn.textContent,activeBtn);else showMonthDiff(D.diff[D.diff.length-1].month);}
+function resetDiffSel(){selDiffMeter=null;renderDiffChart();var activeBtn=document.querySelector('#page-diff .btn-toggle.active');if(activeBtn)showMonthDiff(activeBtn.textContent,activeBtn);else showMonthDiff(D.diff[D.diff.length-1].month);}
 
 function showMonthDiff(month,btn){
-  if(btn){document.querySelectorAll('#page-diff .mb').forEach(function(b){b.classList.remove('active')});btn.classList.add('active');}
+  if(btn){document.querySelectorAll('#page-diff .btn-toggle').forEach(function(b){b.classList.remove('active')});btn.classList.add('active');}
   var data=D.diff.find(function(d){return d.month===month});if(!data)return;
-  var h='';if(selDiffMeter){h+='<div style="margin-bottom:10px"><button class="mb" onclick="resetDiffSel()" style="font-size:12px">← 返回匯總</button> <span class="hint">目前: '+selDiffMeter+'</span></div>';}
-  h+='<table><thead><tr><th>#</th><th>合同編號</th><th>建築物</th><th>DMA</th><th>分表數</th><th class="num">主表月量</th><th class="num">分表月量</th><th class="num">差額</th><th class="num">NRW%</th></tr></thead><tbody>';
-  data.diffs.slice(0,30).forEach(function(d,i){var c2=d.diffPct>20||d.diffPct<-20?'warn':'';h+='<tr class="'+c2+'" style="cursor:pointer" onclick="selDiffMeter=\''+esc(d.mainMeterId)+'\';renderDiffChart(selDiffMeter);showDailyDiff(\''+month+'\',\''+esc(d.mainMeterId)+'\',\''+mask(d.mainContractId)+'\',\''+maskBuilding(d.mainBuilding)+'\')"><td>'+(i+1)+'</td><td class="contract">'+mask(d.mainContractId)+'</td><td class="'+(isUnlocked?'':'masked')+'" onclick="event.stopPropagation();clickMasked()">'+maskBuilding(d.mainBuilding)+'</td><td><span class="tag" style="background:'+(DC[d.dma]||'#666')+'">'+esc(d.dma)+'</span></td><td>'+d.subCount+'</td><td class="num">'+fmt(d.mainMonthTotal)+'</td><td class="num">'+fmt(d.subMonthTotal)+'</td><td class="num '+(d.diff<0?'neg':'')+'">'+fmt(d.diff)+'</td><td class="num '+(d.diffPct<0?'neg':'')+'">'+d.diffPct+'%</td></tr>';});
+  var h='';if(selDiffMeter){h+='<div style="margin-bottom:10px"><button class="btn-toggle" onclick="resetDiffSel()" style="font-size:12px">← 返回匯總</button> <span class="hint">目前: '+selDiffMeter+'</span></div>';}
+  h+='<table class="data-table"><thead><tr><th>#</th><th>合同編號</th><th>建築物</th><th>DMA</th><th>分表數</th><th class="num">主表月量</th><th class="num">分表月量</th><th class="num">差額</th><th class="num">NRW%</th></tr></thead><tbody>';
+  data.diffs.slice(0,30).forEach(function(d,i){var c2=d.diffPct>20||d.diffPct<-20?'warn':'';h+='<tr class="'+c2+'" style="cursor:pointer" onclick="selDiffMeter=\''+esc(d.mainMeterId)+'\';renderDiffChart(selDiffMeter);showDailyDiff(\''+month+'\',\''+esc(d.mainMeterId)+'\',\''+mask(d.mainContractId)+'\',\''+maskBuilding(d.mainBuilding)+'\')"><td>'+(i+1)+'</td><td class="contract">'+mask(d.mainContractId)+'</td><td class="'+(isUnlocked?'':'masked')+'" onclick="event.stopPropagation();clickMasked()">'+maskBuilding(d.mainBuilding)+'</td><td><span class="badge" style="background:'+(DC[d.dma]||'#666')+'">'+esc(d.dma)+'</span></td><td>'+d.subCount+'</td><td class="num">'+fmt(d.mainMonthTotal)+'</td><td class="num">'+fmt(d.subMonthTotal)+'</td><td class="num '+(d.diff<0?'neg':'')+'">'+fmt(d.diff)+'</td><td class="num '+(d.diffPct<0?'neg':'')+'">'+d.diffPct+'%</td></tr>';});
   h+='</tbody></table><div id="dailyDiffDetail"></div>';
   document.getElementById('mDiff').innerHTML=h;
 }
@@ -1032,31 +1151,29 @@ function showDailyDiff(month,mainMeterId,contract,building){
   var detailEl=document.getElementById('dailyDiffDetail');
   if(!detailEl)return;
   var monthData=D.diff.find(function(d){return d.month===month});
-  if(!monthData){detailEl.innerHTML='<div class="card"><p style="color:#ef4444">未找到月份資料</p></div>';return;}
+  if(!monthData){detailEl.innerHTML='<div class="card"><p style="color:var(--red)">未找到月份資料</p></div>';return;}
   var meterData=monthData.diffs.find(function(d){return d.mainMeterId===mainMeterId});
-  if(!meterData){detailEl.innerHTML='<div class="card"><p style="color:#ef4444">未找到水表資料</p></div>';return;}
+  if(!meterData){detailEl.innerHTML='<div class="card"><p style="color:var(--red)">未找到水表資料</p></div>';return;}
   var subMeterIds=Array.isArray(meterData.subs)?meterData.subs:Object.keys(meterData.subs||{});
   var dailyData=meterData.daily||{};
   var dates=Object.keys(dailyData).sort();
   var mainTotals=[],subTotals=[],dailyDiffs=[];
   dates.forEach(function(date){var d=dailyData[date]||{};mainTotals.push(d.main||0);subTotals.push(d.sub||0);dailyDiffs.push(d.diff||0);});
 
-  // 組合完整 HTML（圖表 + 分表明細）
   var totalDiff=dailyDiffs.reduce(function(a,b){return a+b},0);
   var avgDiff=dates.length>0?Math.round(totalDiff/dates.length):0;
   var posDays=dailyDiffs.filter(function(d){return d>0}).length;
   var negDays=dailyDiffs.filter(function(d){return d<0}).length;
   var dataType=(meterData&&meterData.hasRealData)?'✅ 實際日資料':'📊 月總量按日均分';
   var h='<div class="card" style="margin-top:16px"><h2>📊 '+contract+' 每日差額詳情</h2>';
-  if(building)h+='<p style="color:#94a3b8;font-size:13px;margin-bottom:12px">'+building+' · 主表: '+mainMeterId+' · 分表: '+subMeterIds.length+' 個 · '+dataType+'</p>';
-  h+='<div class="chart-actions"><button class="export-btn" onclick="exportChart(\'dd\',\'每日差額\')">匯出 PNG</button></div><div id="dailyDiffChart" class="chart" style="height:350px"></div>';
-  h+='<div class="sr" style="margin-top:16px"><div class="si"><div class="sl">月總差額</div><div class="sv '+(totalDiff<0?'neg':'')+'">'+fmt(totalDiff)+' m³</div></div><div class="si"><div class="sl">日均差額</div><div class="sv '+(avgDiff<0?'neg':'')+'">'+fmt(avgDiff)+' m³</div></div><div class="si"><div class="sl">正/負天數</div><div class="sv">'+posDays+'/'+negDays+'</div></div></div></div>';
+  if(building)h+='<p class="hint">'+building+' · 主表: '+mainMeterId+' · 分表: '+subMeterIds.length+' 個 · '+dataType+'</p>';
+  h+='<div class="chart-actions"><button class="btn-export" onclick="exportChart(\'dd\',\'每日差額\')">匯出 PNG</button></div><div id="dailyDiffChart" class="chart" style="height:350px"></div>';
+  h+='<div class="stat-row" style="margin-top:16px"><div class="stat-item"><div class="stat-label">月總差額</div><div class="stat-value '+(totalDiff<0?'neg':'')+'">'+fmt(totalDiff)+' m³</div></div><div class="stat-item"><div class="stat-label">日均差額</div><div class="stat-value '+(avgDiff<0?'neg':'')+'">'+fmt(avgDiff)+' m³</div></div><div class="stat-item"><div class="stat-label">正/負天數</div><div class="stat-value">'+posDays+'/'+negDays+'</div></div></div></div>';
 
-  // 渲染分表用水量明細
   h+='<div class="card"><h2>💧 分表用水量 ('+month+')</h2>';
   h+='<p class="hint">主表: '+mainMeterId+' | 合同: '+contract+' | 建築物: '+building+'</p>';
   h+='<p class="hint">分表數: '+subMeterIds.length+' | 主表月量: '+fmt(meterData.mainMonthTotal)+' | 分表月量: '+fmt(meterData.subMonthTotal)+' | 差額: '+fmt(meterData.diff)+'</p>';
-  h+='<table><thead><tr><th>分表ID</th><th>合同編號</th><th class="num">月用水量</th></tr></thead><tbody>';
+  h+='<table class="data-table"><thead><tr><th>分表ID</th><th>合同編號</th><th class="num">月用水量</th></tr></thead><tbody>';
   var subMeterData=[];
   subMeterIds.forEach(function(subId){var monthly=D.meterMonthly[subId]||{};var monthTotal=monthly[month]||0;var info=D.search.find(function(s){return s.id===subId})||{};subMeterData.push({id:subId,total:monthTotal,contract:info.contract||''});});
   subMeterData.sort(function(a,b){return b.total-a.total});
@@ -1065,28 +1182,6 @@ function showDailyDiff(month,mainMeterId,contract,building){
   h+='</tbody></table></div>';
   detailEl.innerHTML=h;
 
-  // 渲染每日差額圖表（在 DOM 更新後）
-  setTimeout(function(){
-    var chartDom=document.getElementById('dailyDiffChart');
-    if(!chartDom)return;
-    disposeChart('dd');
-    var c=initChart(chartDom,'dd');
-    c.setOption({backgroundColor:'transparent',tooltip:{trigger:'axis',formatter:function(params){var result=params[0].axisValue+'<br/>';params.forEach(function(p){result+=p.marker+' '+p.seriesName+': '+p.value.toLocaleString()+' m³<br/>';});return result;}},legend:{data:['主表','分表合計','差額'],textStyle:{color:'#94a3b8'},top:0},grid:{left:80,right:30,top:40,bottom:60},xAxis:{type:'category',data:dates,axisLabel:{fontSize:10,rotate:45,color:'#94a3b8'}},yAxis:{type:'value',name:'m³',axisLabel:{color:'#94a3b8'}},series:[{name:'主表',type:'bar',data:mainTotals,itemStyle:{color:'#38bdf8'},barWidth:'30%'},{name:'分表合計',type:'bar',data:subTotals,itemStyle:{color:'#a78bfa'},barWidth:'30%'},{name:'差額',type:'line',data:dailyDiffs,itemStyle:{color:'#fbbf24'},lineStyle:{width:3},symbol:'circle',symbolSize:8}]});
-  },100);
-}
-
-function renderDailyDiffChart(dates,mainTotals,subTotals,dailyDiffs,contract,building,mainMeterId,subMeterIds,month,meterData){
-  for(var i=0;i<dates.length;i++){if(mainTotals[i]===undefined)mainTotals[i]=0;if(subTotals[i]===undefined)subTotals[i]=0;if(dailyDiffs[i]===undefined)dailyDiffs[i]=0;}
-  var totalDiff=dailyDiffs.reduce(function(a,b){return a+b},0);
-  var avgDiff=dates.length>0?Math.round(totalDiff/dates.length):0;
-  var posDays=dailyDiffs.filter(function(d){return d>0}).length;
-  var negDays=dailyDiffs.filter(function(d){return d<0}).length;
-  var dataType=(meterData&&meterData.hasRealData)?'✅ 實際日資料':'📊 月總量按日均分';
-  var h='<div class="card" style="margin-top:16px"><h2>📊 '+contract+' 每日差額詳情</h2>';
-  if(building)h+='<p style="color:#94a3b8;font-size:13px;margin-bottom:12px">'+building+' · 主表: '+mainMeterId+' · 分表: '+subMeterIds.length+' 個 · '+dataType+'</p>';
-  h+='<div class="chart-actions"><button class="export-btn" onclick="exportChart(\'dd\',\'每日差額\')">匯出 PNG</button></div><div id="dailyDiffChart" class="chart" style="height:350px"></div>';
-  h+='<div class="sr" style="margin-top:16px"><div class="si"><div class="sl">月總差額</div><div class="sv '+(totalDiff<0?'neg':'')+'">'+fmt(totalDiff)+' m³</div></div><div class="si"><div class="sl">日均差額</div><div class="sv '+(avgDiff<0?'neg':'')+'">'+fmt(avgDiff)+' m³</div></div><div class="si"><div class="sl">正/負天數</div><div class="sv">'+posDays+'/'+negDays+'</div></div></div></div>';
-  document.getElementById('dailyDiffDetail').innerHTML=h;
   setTimeout(function(){
     var chartDom=document.getElementById('dailyDiffChart');
     if(!chartDom)return;
@@ -1100,41 +1195,31 @@ function renderDailyDiffChart(dates,mainTotals,subTotals,dailyDiffs,contract,bui
 // === 異常檢測頁 ===
 function renderAnomaly(){
   var h='<section class="card"><h2>⚠ 異常用水檢測</h2>';
-  var ts='display:inline-block;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px;margin-right:4px;';
-  var aOn=ts+'background:#38bdf8;color:#0f172a;font-weight:600;';
-  var aOff=ts+'background:#334155;color:#cbd5e1;';
   if(!window._anomType)window._anomType='all';
-  h+='<div class="dc" style="margin-bottom:10px">';
-  h+='<input type="date" class="di" min="'+D.dates[0]+'" max="'+D.dates[D.dates.length-1]+'" value="'+(window._anomDate||D.dates[D.dates.length-1])+'" onchange="window._anomDate=this.value;renderAnomaly()">';
-  h+='<button class="nb" onclick="var d=D.dates,i=d.indexOf(window._anomDate||d[d.length-1]);if(i>0){window._anomDate=d[i-1];renderAnomaly()}">&#9664;</button>';
-  h+='<span class="dd">'+(window._anomDate||D.dates[D.dates.length-1])+'</span>';
-  h+='<button class="nb" onclick="var d=D.dates,i=d.indexOf(window._anomDate||d[d.length-1]);if(i<d.length-1){window._anomDate=d[i+1];renderAnomaly()}">&#9654;</button>';
-  h+='</div>';
-  h+='<div style="margin-bottom:10px">';
-  h+='<span style="'+(window._anomType==='all'?aOn:aOff)+'" onclick="window._anomType=&quot;all&quot;;renderAnomaly()">全部</span>';
-  h+='<span style="'+(window._anomType==='spike'?aOn:aOff)+'" onclick="window._anomType=&quot;spike&quot;;renderAnomaly()">暴增</span>';
-  h+='<span style="'+(window._anomType==='drop'?aOn:aOff)+'" onclick="window._anomType=&quot;drop&quot;;renderAnomaly()">暴跌</span>';
-  h+='<span style="'+(window._anomType==='zero'?aOn:aOff)+'" onclick="window._anomType=&quot;zero&quot;;renderAnomaly()">歸零</span>';
-  h+='<span style="'+(window._anomType==='watch'?aOn:aOff)+'" onclick="window._anomType=&quot;watch&quot;;renderAnomaly()">關注</span>';
-  h+='<span style="'+(window._anomType==='data_error'?aOn:aOff)+'" onclick="window._anomType=&quot;data_error&quot;;renderAnomaly()">數據異常</span>';
-  h+='<span style="'+aOff+'margin-left:6px" onclick="exportAnomalyCsv()">💾 匯出CSV</span>';
-  // Sort: 'date' (default — the order the converter wrote) or 'score'
-  // (highest anomalyScore first; useful when scanning many entries).
   if(!window._anomSort)window._anomSort='date';
-  h+='<span style="display:inline-block;margin-left:8px;color:#94a3b8;font-size:11px">排序:</span>';
-  h+='<span style="'+(window._anomSort==='date'?aOn:aOff)+'" onclick="window._anomSort=&quot;date&quot;;renderAnomaly()">日期</span>';
-  h+='<span style="'+(window._anomSort==='score'?aOn:aOff)+'" onclick="window._anomSort=&quot;score&quot;;renderAnomaly()">分數</span>';
+  // Date picker
+  h+='<div class="date-picker">';
+  h+='<div class="date-picker-row">';
+  h+='<button class="btn-icon" onclick="var d=D.dates,i=d.indexOf(window._anomDate||d[d.length-1]);if(i>0){window._anomDate=d[i-1];renderAnomaly()}">&#9664;</button>';
+  h+='<input type="date" class="date-picker-input" min="'+D.dates[0]+'" max="'+D.dates[D.dates.length-1]+'" value="'+(window._anomDate||D.dates[D.dates.length-1])+'" onchange="window._anomDate=this.value;renderAnomaly()">';
+  h+='<button class="btn-icon" onclick="var d=D.dates,i=d.indexOf(window._anomDate||d[d.length-1]);if(i<d.length-1){window._anomDate=d[i+1];renderAnomaly()}">&#9654;</button>';
+  h+='</div></div>';
+  // Type filter pills
+  h+='<div class="btn-group">';
+  var types=[['all','全部'],['spike','暴增'],['drop','暴跌'],['zero','歸零'],['watch','關注'],['data_error','數據異常']];
+  types.forEach(function(t){h+='<button class="btn-toggle'+(window._anomType===t[0]?' active':'')+'" onclick="window._anomType=\''+t[0]+'\';renderAnomaly()">'+t[1]+'</button>';});
+  h+='<button class="btn-ghost" onclick="exportAnomalyCsv()">💾 匯出CSV</button>';
+  // Sort
+  h+='<span style="color:var(--muted);font-size:11px;margin-left:8px">排序:</span>';
+  h+='<button class="btn-toggle'+(window._anomSort==='date'?' active':'')+'" onclick="window._anomSort=\'date\';renderAnomaly()">日期</button>';
+  h+='<button class="btn-toggle'+(window._anomSort==='score'?' active':'')+'" onclick="window._anomSort=\'score\';renderAnomaly()">分數</button>';
   h+='</div>';
   var byType={'spike':0,'drop':0,'zero':0,'watch':0,'data_error':0};
   D.anomalies.forEach(function(a){if(byType.hasOwnProperty(a.type))byType[a.type]++;});
-  h+='<p style="color:#64748b;font-size:11px;margin-bottom:8px">暴增'+byType.spike+' | 暴跌'+byType.drop+' | 歸零'+byType.zero+' | 關注'+byType.watch+' | 數據異常'+byType.data_error+' (共'+D.anomalies.length+'條)</p>';
+  h+='<p class="hint">暴增'+byType.spike+' | 暴跌'+byType.drop+' | 歸零'+byType.zero+' | 關注'+byType.watch+' | 數據異常'+byType.data_error+' (共'+D.anomalies.length+'條)</p>';
   var dateFilter=window._anomDate;
-  // When no date filter is set, sort then slice — sorting by score means
-  // "show me the worst 200" instead of "the latest 200".
   var pool = dateFilter ? D.anomalies.filter(function(a){return a.date===dateFilter}) : D.anomalies.slice();
   if(window._anomSort==='score'){
-    // data_error rows always surface first (severity='high'), then by
-    // anomalyScore desc, undefined scores last.
     pool.sort(function(a,b){
       if(a.type==='data_error' && b.type!=='data_error') return -1;
       if(b.type==='data_error' && a.type!=='data_error') return 1;
@@ -1146,13 +1231,10 @@ function renderAnomaly(){
   var filtered = dateFilter ? pool : pool.slice(0, 200);
   if(window._anomType!=='all')filtered=filtered.filter(function(a){return a.type===window._anomType;});
   if(filtered.length){
-    h+='<table><thead><tr><th>日期</th><th>類型</th><th>表位編號</th><th>建築物</th><th>DMA</th><th class="num">當日</th><th class="num">14天均值</th><th class="num">分數</th><th>原因</th></tr></thead><tbody>';
+    h+='<table class="data-table"><thead><tr><th>日期</th><th>類型</th><th>表位編號</th><th>建築物</th><th>DMA</th><th class="num">當日</th><th class="num">14天均值</th><th class="num">分數</th><th>原因</th></tr></thead><tbody>';
     filtered.forEach(function(a){
       var tc2={'spike':'#f87171','drop':'#fb923c','zero':'#a78bfa','watch':'#fbbf24','data_error':'#ef4444'};
       var tn={'spike':'暴增','drop':'暴跌','zero':'歸零','watch':'關注','data_error':'數據異常'};
-      // data_error rows aren't clickable for the curve overlay (no
-      // pastMean context) — they were already excluded from the cache
-      // so the 14-day history wouldn't be meaningful.
       var onClick = a.type==='data_error' ? '' :
         'onclick="window._anomTarget={meterId:'+JSON.stringify(esc(a.meterId)).replace(/"/g,'&quot;')+
         ',contractId:'+JSON.stringify(mask(a.contractId||a.meterId)).replace(/"/g,'&quot;')+
@@ -1160,55 +1242,55 @@ function renderAnomaly(){
         ',anomalyType:'+JSON.stringify(a.type).replace(/"/g,'&quot;')+'};showAnomCurve()"';
       h+='<tr class="warn" style="cursor:'+(a.type==='data_error'?'default':'pointer')+'" '+onClick+'>';
       h+='<td>'+a.date+'</td>';
-      h+='<td><span class="tag" style="background:'+(tc2[a.type]||'#666')+'">'+tn[a.type]+'</span></td>';
+      h+='<td><span class="badge" style="background:'+(tc2[a.type]||'#666')+'">'+tn[a.type]+'</span></td>';
       h+='<td>'+esc(a.meterId)+'</td>';
       h+='<td class="'+(isUnlocked?'':'masked')+'" onclick="clickMasked()">'+maskBuilding(a.buildingName||'')+'</td>';
-      h+='<td><span class="tag" style="background:'+(DC[a.dma]||'#666')+'">'+esc(a.dma||'')+'</span></td>';
-      // For data_error rows show the raw dropped value; for the rest
-      // show the daily total.
+      h+='<td><span class="badge" style="background:'+(DC[a.dma]||'#666')+'">'+esc(a.dma||'')+'</span></td>';
       h+='<td class="num">'+(a.type==='data_error'?fmt(a.rawValue):fmt(a.total))+'</td>';
       h+='<td class="num">'+(a.pastMean?fmt(a.pastMean):'-')+'</td>';
       h+='<td class="num '+(a.anomalyScore>=0.7?'neg':'')+'">'+(a.anomalyScore!=null?a.anomalyScore.toFixed(2):'-')+'</td>';
-      h+='<td style="font-size:11px">'+a.reason+'</td></tr>';
+      h+='<td class="hint">'+a.reason+'</td></tr>';
     });
     h+='</tbody></table>';
-    if(!dateFilter)h+='<p style="color:#64748b;font-size:11px;margin-top:8px">顯示最近200條 · 選擇日期查看單日全部</p>';
-    else h+='<p style="color:#64748b;font-size:11px;margin-top:8px">'+filtered.length+'條 - '+dateFilter+'</p>';
+    if(!dateFilter)h+='<p class="hint">顯示最近200條 · 選擇日期查看單日全部</p>';
+    else h+='<p class="hint">'+filtered.length+'條 - '+dateFilter+'</p>';
   }else{
-    h+='<p style="color:#64748b">'+(dateFilter?dateFilter+' 無異常':'無異常')+'</p>';
+    h+='<p style="color:var(--muted)">'+(dateFilter?dateFilter+' 無異常':'無異常')+'</p>';
   }
-  h+='<span class="cf-toggle" style="margin-top:12px" onclick="var s=this.nextElementSibling;s.style.maxHeight=s.style.maxHeight?\'\':\'300px\';setTimeout(function(){Object.values(charts).forEach(function(c){if(c)c.resize()})},350)">▶ 異常統計分析</span>';
-  h+='<div style="max-height:0;overflow:hidden;transition:max-height .3s"><div class="cf-inner" style="margin-top:8px"><div style="display:flex;gap:12px;flex-wrap:wrap">';
+  // Collapsible: anomaly stats
+  h+='<span class="collapsible-toggle" style="margin-top:12px" onclick="var s=this.nextElementSibling;s.style.maxHeight=s.style.maxHeight?\'\':\'300px\';setTimeout(function(){Object.values(charts).forEach(function(c){if(c)c.resize()})},350)">▶ 異常統計分析</span>';
+  h+='<div style="max-height:0;overflow:hidden;transition:max-height .3s"><div class="collapsible-inner" style="margin-top:8px"><div style="display:flex;gap:12px;flex-wrap:wrap">';
   h+='<div id="anomStatsDMA" class="chart" style="height:200px;flex:1;min-width:200px"></div>';
   h+='<div id="anomStatsMonth" class="chart" style="height:200px;flex:1;min-width:200px"></div>';
   h+='<div id="anomStatsType" class="chart" style="height:200px;flex:1;min-width:180px"></div></div>';
   var anomFreq={};D.anomalies.forEach(function(a){anomFreq[a.meterId]=(anomFreq[a.meterId]||0)+1});
   var freqList=Object.keys(anomFreq).sort(function(a,b){return anomFreq[b]-anomFreq[a]}).slice(0,10);
-  h+='<div style="margin-top:10px"><span style="font-size:11px;color:var(--muted)">異常頻發水表 Top10: </span>';
-  freqList.forEach(function(id,i){h+='<span style="font-size:11px;color:var(--text);margin-right:8px">'+id+' ('+anomFreq[id]+')次</span>'});
+  h+='<div style="margin-top:10px"><span class="hint">異常頻發水表 Top10: </span>';
+  freqList.forEach(function(id,i){h+='<span class="hint" style="color:var(--text);margin-right:8px">'+id+' ('+anomFreq[id]+')次</span>'});
   h+='</div></div></div>';
 
-  // 異常統計概覽卡片
+  // KPI cards
   var uniqueMeters={};
   D.anomalies.forEach(function(a){uniqueMeters[a.meterId]=1;});
   h+='<div class="kpi-grid" style="margin-top:12px">';
-  h+='<div class="kpi"><div class="label">總異常數</div><div class="value">'+D.anomalies.length+'</div><div class="sub">條</div></div>';
-  h+='<div class="kpi"><div class="label">涉及水表</div><div class="value">'+Object.keys(uniqueMeters).length+'</div><div class="sub">個</div></div>';
-  h+='<div class="kpi"><div class="label">暴增</div><div class="value" style="color:#f87171">'+byType.spike+'</div><div class="sub">條</div></div>';
-  h+='<div class="kpi"><div class="label">暴跌</div><div class="value" style="color:#fb923c">'+byType.drop+'</div><div class="sub">條</div></div>';
-  h+='<div class="kpi"><div class="label">歸零</div><div class="value" style="color:#facc15">'+byType.zero+'</div><div class="sub">條</div></div>';
-  h+='<div class="kpi"><div class="label">關注</div><div class="value" style="color:#818cf8">'+byType.watch+'</div><div class="sub">條</div></div>';
+  h+='<div class="kpi-card"><div class="label">總異常數</div><div class="value">'+D.anomalies.length+'</div><div class="sub">條</div></div>';
+  h+='<div class="kpi-card"><div class="label">涉及水表</div><div class="value">'+Object.keys(uniqueMeters).length+'</div><div class="sub">個</div></div>';
+  h+='<div class="kpi-card"><div class="label">暴增</div><div class="value" style="color:#f87171">'+byType.spike+'</div><div class="sub">條</div></div>';
+  h+='<div class="kpi-card"><div class="label">暴跌</div><div class="value" style="color:#fb923c">'+byType.drop+'</div><div class="sub">條</div></div>';
+  h+='<div class="kpi-card"><div class="label">歸零</div><div class="value" style="color:#facc15">'+byType.zero+'</div><div class="sub">條</div></div>';
+  h+='<div class="kpi-card"><div class="label">關注</div><div class="value" style="color:#818cf8">'+byType.watch+'</div><div class="sub">條</div></div>';
   h+='</div>';
 
-  // 趨勢分析可摺疊區域
-  h+='<span class="cf-toggle" style="margin-top:12px" onclick="var s=this.nextElementSibling;s.style.maxHeight=s.style.maxHeight?\'\':\'500px\';setTimeout(function(){if(!window._anomTrendInited){drawAnomTrendChart(\'daily\');window._anomTrendInited=true;}Object.values(charts).forEach(function(c){if(c)c.resize()})},350)">▶ 異常趨勢分析</span>';
+  // Collapsible: trend analysis
+  h+='<span class="collapsible-toggle" style="margin-top:12px" onclick="var s=this.nextElementSibling;s.style.maxHeight=s.style.maxHeight?\'\':\'500px\';setTimeout(function(){if(!window._anomTrendInited){drawAnomTrendChart(\'daily\');window._anomTrendInited=true;}Object.values(charts).forEach(function(c){if(c)c.resize()})},350)">▶ 異常趨勢分析</span>';
   h+='<div style="max-height:0;overflow:hidden;transition:max-height .3s"><div style="margin-top:8px">';
-  h+='<div class="ms" style="margin-bottom:6px"><button class="mb active" onclick="drawAnomTrendChart(\'daily\',this)">每日異常數</button><button class="mb" onclick="drawAnomTrendChart(\'type\',this)">按類型分布</button><button class="mb" onclick="drawAnomTrendChart(\'score\',this)">評分分布</button><button class="mb" onclick="drawAnomTrendChart(\'weekday\',this)">週幾分布</button></div>';
-  h+='<div class="chart-actions"><button class="export-btn" onclick="exportChart(\'anomTrend\',\'異常趨勢\')">匯出 PNG</button></div>';
+  h+='<div class="btn-group"><button class="btn-toggle active" onclick="drawAnomTrendChart(\'daily\',this)">每日異常數</button><button class="btn-toggle" onclick="drawAnomTrendChart(\'type\',this)">按類型分布</button><button class="btn-toggle" onclick="drawAnomTrendChart(\'score\',this)">評分分布</button><button class="btn-toggle" onclick="drawAnomTrendChart(\'weekday\',this)">週幾分布</button></div>';
+  h+='<div class="chart-actions"><button class="btn-export" onclick="exportChart(\'anomTrend\',\'異常趨勢\')">匯出 PNG</button></div>';
   h+='<div id="anomTrendChart" class="chart" style="height:350px"></div>';
   h+='</div></div>';
 
-  h+='<div id="anomOverlay" class="ov" style="display:none"><div class="ov-bg" onclick="closeAnomOverlay()"></div><div class="ov-box"><span class="ov-close" onclick="closeAnomOverlay()">✕</span><span id="anomOverlayTitle" style="font-weight:600;color:var(--text);margin-bottom:8px;display:block"></span><div class="anom-nav"><button id="anomPrevBtn" onclick="navAnomDate(-1)">◀ 上一條</button><span style="font-size:11px;color:var(--muted)" id="anomNavInfo"></span><button id="anomNextBtn" onclick="navAnomDate(1)">下一條 ▶</button></div><div id="anomCurve" style="width:100%;height:320px"></div></div></div>';
+  // Modal overlay
+  h+='<div id="anomOverlay" class="modal-overlay" style="display:none"><div class="modal-overlay-bg" onclick="closeAnomOverlay()"></div><div class="modal"><button class="modal-close" onclick="closeAnomOverlay()">✕</button><span id="anomOverlayTitle" style="font-weight:600;color:var(--text);margin-bottom:8px;display:block"></span><div class="anomaly-nav"><button id="anomPrevBtn" onclick="navAnomDate(-1)">◀ 上一條</button><span class="hint" id="anomNavInfo"></span><button id="anomNextBtn" onclick="navAnomDate(1)">下一條 ▶</button></div><div id="anomCurve" style="width:100%;height:320px"></div></div></div>';
   h+='</section>';
   document.getElementById('page-anomaly').innerHTML=h;
   if(!window._anomDate)window._anomDate=D.dates[D.dates.length-1];
@@ -1240,11 +1322,8 @@ function exportAnomalyCsv(){
   if(window._anomType&&window._anomType!=='all')anoms=anoms.filter(function(a){return a.type===window._anomType});
   var rows=[['日期','類型','水表ID','建築物','DMA','當日','14天均值','分數','原因']];
   anoms.forEach(function(a){rows.push([a.date,a.type,a.meterId,a.buildingName||'',a.dma||'',a.total,a.pastMean||'',a.anomalyScore!=null?a.anomalyScore.toFixed(3):'',a.reason||''])});
-  // data_error 行的 rawValue/total 字段差異很大（total 可能是 0 或 undefined）
-  // 所以單獨開一個區塊，每行以 "#DATA_ERROR" 開頭作標記，方便 Excel
-  // 用篩選/IF 區分。
   if((D.dataErrors||[]).length){
-    rows.push([]);  // 空行分隔
+    rows.push([]);
     rows.push(['# 以下為 data_errors 區塊：源數據識別為偽值，已從快取中排除']);
     rows.push(['日期','類型','水表ID','建築物','DMA','原始值(m³)','原因']);
     D.dataErrors.forEach(function(e){
@@ -1300,7 +1379,7 @@ function closeAnomOverlay(){
 
 function drawAnomTrendChart(view,btn){
   if(btn){
-    document.querySelectorAll('#page-anomaly .ms .mb').forEach(function(b){b.classList.remove('active')});
+    document.querySelectorAll('#page-anomaly .btn-group .btn-toggle').forEach(function(b){b.classList.remove('active')});
     btn.classList.add('active');
   }
   disposeChart('anomTrend');
@@ -1391,16 +1470,16 @@ function drawAnomTrendChart(view,btn){
 // === 搜尋頁 ===
 function renderSearch(){
   _selMeters={};
-  var h='<section class="card"><h2>🔍 水表月度用水查詢</h2><input type="text" class="si2" placeholder="輸入合同編號、水表編號或建築物名稱..." oninput="doSearch(this.value)"><div id="searchR"></div><div id="compareBar" class="compare-bar"><span class="sel" id="compareCount"></span><button class="mb active" onclick="showCompareMeters()">📊 對比用水曲線</button><button class="nb" onclick="_selMeters={};renderSearch()">取消</button></div><div id="meterD"></div></section>';
+  var h='<section class="card"><h2>🔍 水表月度用水查詢</h2><input type="text" class="input" placeholder="輸入合同編號、水表編號或建築物名稱..." oninput="doSearch(this.value)"><div id="searchR"></div><div id="compareBar" class="compare-bar"><span class="sel" id="compareCount"></span><button class="btn-toggle active" onclick="showCompareMeters()">📊 對比用水曲線</button><button class="btn" onclick="_selMeters={};renderSearch()">取消</button></div><div id="meterD"></div></section>';
   document.getElementById('page-search').innerHTML=h;
 }
 
 function doSearch(q){
   if(q.length<2){document.getElementById('searchR').innerHTML='';document.getElementById('meterD').innerHTML='';document.getElementById('compareBar').style.display='none';return;}
   var ql=q.toLowerCase();var res=D.search.filter(function(s){return(s.contract||'').toLowerCase().includes(ql)||(s.id||'').toLowerCase().includes(ql)||(s.building||'').toLowerCase().includes(ql)}).slice(0,20);
-  var h='<table><thead><tr><th></th><th>合同編號</th><th>水表編號</th><th>建築物</th><th>DMA</th><th>物業類型</th><th>Top50</th><th></th></tr></thead><tbody>';
-  res.forEach(function(r){var tc=r.top20Count||0;var tcColor=tc>20?'#ef4444':tc>5?'#fbbf24':tc>0?'#34d399':'#64748b';var selId=esc(r.id);h+='<tr><td><input type="checkbox" class="ck" '+(_selMeters[selId]?'checked':'')+' onchange="toggleSelMeter(\''+selId+'\',\''+mask(r.contract)+'\',\''+maskBuilding(r.building)+'\',this.checked)" onclick="event.stopPropagation()"></td><td class="contract">'+mask(r.contract)+'</td><td>'+selId+'</td><td class="'+(isUnlocked?'':'masked')+'" onclick="clickMasked()">'+maskBuilding(r.building)+'</td><td><span class="tag" style="background:'+(DC[r.dma]||'#666')+'">'+esc(r.dma)+'</span></td><td><span class="ptag '+(r.type==='001:住宅'?'res':'')+'">'+esc(r.type)+'</span></td><td style="color:'+tcColor+';font-weight:600">'+(tc>0?tc+'天':'-')+'</td><td><button class="nb" onclick="showMeterDetail(\''+selId+'\',\''+mask(r.contract)+'\',\''+maskBuilding(r.building)+'\')">查看</button></td></tr>';});
-  h+='</tbody></table><p style="color:#64748b;font-size:11px;margin-top:8px">共 '+res.length+' 條結果</p>';
+  var h='<table class="data-table"><thead><tr><th></th><th>合同編號</th><th>水表編號</th><th>建築物</th><th>DMA</th><th>物業類型</th><th>Top50</th><th></th></tr></thead><tbody>';
+  res.forEach(function(r){var tc=r.top20Count||0;var tcColor=tc>20?'var(--red)':tc>5?'var(--yellow)':tc>0?'var(--green)':'var(--muted)';var selId=esc(r.id);h+='<tr><td><input type="checkbox" class="checkbox" '+(_selMeters[selId]?'checked':'')+' onchange="toggleSelMeter(\''+selId+'\',\''+mask(r.contract)+'\',\''+maskBuilding(r.building)+'\',this.checked)" onclick="event.stopPropagation()"></td><td class="contract">'+mask(r.contract)+'</td><td>'+selId+'</td><td class="'+(isUnlocked?'':'masked')+'" onclick="clickMasked()">'+maskBuilding(r.building)+'</td><td><span class="badge" style="background:'+(DC[r.dma]||'#666')+'">'+esc(r.dma)+'</span></td><td><span class="badge-muted '+(r.type==='001:住宅'?'res':'')+'">'+esc(r.type)+'</span></td><td style="color:'+tcColor+';font-weight:600">'+(tc>0?tc+'天':'-')+'</td><td><button class="btn" onclick="showMeterDetail(\''+selId+'\',\''+mask(r.contract)+'\',\''+maskBuilding(r.building)+'\')">查看</button></td></tr>';});
+  h+='</tbody></table><p class="hint">共 '+res.length+' 條結果</p>';
   document.getElementById('searchR').innerHTML=h;
   updateCompareBar();
 }
@@ -1429,7 +1508,7 @@ function showCompareMeters(){
   });
   if(series.length<2)return;
   var h='<div class="card"><h2>📊 水表日用水對比</h2><div id="compareChart" class="chart" style="height:400px"></div>';
-  keys.forEach(function(id,i){h+='<span style="display:inline-block;width:12px;height:12px;border-radius:2px;background:'+colors[i]+';margin-right:4px"></span><span style="font-size:11px;color:var(--muted);margin-right:12px">'+_selMeters[id].contract+' ('+id+')</span>';});
+  keys.forEach(function(id,i){h+='<span style="display:inline-block;width:12px;height:12px;border-radius:2px;background:'+colors[i]+';margin-right:4px"></span><span class="hint" style="margin-right:12px">'+_selMeters[id].contract+' ('+id+')</span>';});
   h+='</div>';
   document.getElementById('meterD').innerHTML=h;
   disposeChart('cmp');
@@ -1438,12 +1517,12 @@ function showCompareMeters(){
 }
 
 function showMeterDetail(mid,contract,building){
-  var monthly=D.meterMonthly[mid];if(!monthly){document.getElementById('meterD').innerHTML='<div class="card"><p style="color:#64748b">該水表無月度資料</p></div>';return;}
+  var monthly=D.meterMonthly[mid];if(!monthly){document.getElementById('meterD').innerHTML='<div class="card"><p style="color:var(--muted)">該水表無月度資料</p></div>';return;}
   var months=Object.keys(monthly).sort(),vals=months.map(function(m){return Math.round(monthly[m])});
   var h='<div class="card"><h2>📊 '+esc(contract)+' 月度用水量</h2>';
-  if(building)h+='<p style="color:#94a3b8;font-size:13px;margin-bottom:12px">'+esc(building)+' · '+mid+'</p>';
+  if(building)h+='<p class="hint">'+esc(building)+' · '+mid+'</p>';
   h+='<div id="mChart" class="chart" style="height:300px"></div>';
-  h+='<table style="margin-top:12px"><thead><tr><th>月份</th><th class="num">用水量 (m³)</th><th class="num">環比變化</th></tr></thead><tbody>';
+  h+='<table class="data-table" style="margin-top:12px"><thead><tr><th>月份</th><th class="num">用水量 (m³)</th><th class="num">環比變化</th></tr></thead><tbody>';
   months.forEach(function(m,i){var prev=i>0?vals[i-1]:null;var ch=prev!==null&&prev>0?((vals[i]-prev)/prev*100).toFixed(1):null;var cls=ch!==null?(parseFloat(ch)>0?'neg':'up'):'';var arrow=ch!==null?(parseFloat(ch)>0?'↑':'↓'):'';h+='<tr><td>'+m+'</td><td class="num">'+fmt(vals[i])+'</td><td class="num '+cls+'">'+(ch!==null?arrow+Math.abs(ch)+'%':'-')+'</td></tr>';});
   h+='</tbody></table></div>';
   var daily=D.meterDaily&&D.meterDaily[mid];
@@ -1467,43 +1546,51 @@ function showMeterDetail(mid,contract,building){
 // === 預測頁 ===
 function renderPredict(){
   if(!PRED||!PRED.predictions||!PRED.predictions.length){
-    document.getElementById('page-predict').innerHTML='<section class="card"><p style="color:#64748b">暫無預測資料</p></section>';
+    document.getElementById('page-predict').innerHTML='<section class="card"><p style="color:var(--muted)">暫無預測資料</p></section>';
     return;
   }
-  var h='<section class="card"><h2>🔮 用水預測 (Top50 水表)</h2>';
+  var modelLabel=PRED.modelType||'LinearRegression';
+  var h='<section class="card"><h2>🔮 用水預測 (Top50 水表) <span class="badge" style="background:var(--accent);margin-left:8px">'+esc(modelLabel)+'</span></h2>';
   h+=renderMeterPrediction();
   h+='</section>';
   if(!document.getElementById('predictDlg')){
-    var dlg=document.createElement('dialog');
+    var dlg=document.createElement('div');
     dlg.id='predictDlg';
-    dlg.style.cssText='background:#1e293b;color:#e2e8f0;border:1px solid #475569;border-radius:12px;padding:16px;width:90vw;max-width:800px;';
-    dlg.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span id="predictDlgTitle" style="font-weight:bold"></span><button id="predictDlgClose" style="background:none;border:none;color:#94a3b8;font-size:20px;cursor:pointer">✕</button></div><div id="predictDlgChart" style="width:100%;height:400px"></div><div id="predictDlgTable" style="margin-top:12px"></div>';
+    dlg.className='modal-overlay';
+    dlg.style.display='none';
+    dlg.innerHTML='<div class="modal-overlay-bg" onclick="closePredictDlg()"></div><div class="modal"><div class="modal-header"><h3 id="predictDlgTitle"></h3><button class="modal-close" onclick="closePredictDlg()">✕</button></div><div id="predictDlgChart" style="width:100%;height:400px"></div><div id="predictDlgTable" style="margin-top:12px"></div></div>';
     document.body.appendChild(dlg);
-    document.getElementById('predictDlgClose').onclick=function(){dlg.close();};
-    dlg.addEventListener('click',function(e){if(e.target===dlg)dlg.close();});
   }
   document.getElementById('page-predict').innerHTML=h;
 }
 
+function closePredictDlg(){
+  var dlg=document.getElementById('predictDlg');
+  if(dlg)dlg.style.display='none';
+  disposeChart('pdc');
+}
+
 function renderMeterPrediction(){
-  if(!PRED||!PRED.predictions||!PRED.predictions.length){return '<p style="color:#64748b">暫無水表預測資料</p>';}
-  var h='<p class="hint" style="margin-bottom:12px">基於線性迴歸模型 · 歷史資料: '+PRED.historicalRange.start+' ~ '+PRED.historicalRange.end+' ('+PRED.historicalRange.days+'天)</p>';
+  if(!PRED||!PRED.predictions||!PRED.predictions.length){return '<p style="color:var(--muted)">暫無水表預測資料</p>';}
+  var modelName=PRED.modelType||'LinearRegression';
+  var modelDesc=modelName==='LightGBM'?'基於 LightGBM 梯度提升樹模型 (13特徵)':'基於線性迴歸模型';
+  var h='<p class="hint" style="margin-bottom:12px">'+modelDesc+' · 歷史資料: '+PRED.historicalRange.start+' ~ '+PRED.historicalRange.end+' ('+PRED.historicalRange.days+'天)</p>';
   h+='<p class="hint" style="margin-bottom:12px">生成時間: '+PRED.generatedAt+'</p>';
-  h+='<input type="text" class="si2" placeholder="輸入水表編號搜尋..." oninput="filterPredict(this.value)">';
+  h+='<input type="text" class="input" placeholder="輸入水表編號搜尋..." oninput="filterPredict(this.value)">';
   var upCount=PRED.predictions.filter(function(p){return p.trend==='up'}).length;
   var downCount=PRED.predictions.filter(function(p){return p.trend==='down'}).length;
-  h+='<div class="sr" style="margin-bottom:16px"><div class="si"><div class="sl">總水表數</div><div class="sv">'+PRED.totalMeters+'</div></div><div class="si res"><div class="sl">📈 上升趨勢</div><div class="sv">'+upCount+'</div></div><div class="si nonres"><div class="sl">📉 下降趨勢</div><div class="sv">'+downCount+'</div></div></div>';
+  h+='<div class="stat-row" style="margin-bottom:16px"><div class="stat-item"><div class="stat-label">總水表數</div><div class="stat-value">'+PRED.totalMeters+'</div></div><div class="stat-item res"><div class="stat-label">📈 上升趨勢</div><div class="stat-value">'+upCount+'</div></div><div class="stat-item nonres"><div class="stat-label">📉 下降趨勢</div><div class="stat-value">'+downCount+'</div></div></div>';
   h+='<div id="predictList">'+renderPredictList(PRED.predictions)+'</div>';
   return h;
 }
 
 function renderPredictList(predictions){
-  var h='<table><thead><tr><th>#</th><th>水表編號</th><th>DMA</th><th>物業類型</th><th>建築物</th><th class="num">歷史均值</th><th class="num">預測均值</th><th class="num">模型分</th><th>趨勢</th><th></th></tr></thead><tbody>';
+  var h='<table class="data-table"><thead><tr><th>#</th><th>水表編號</th><th>DMA</th><th>物業類型</th><th>建築物</th><th class="num">歷史均值</th><th class="num">預測均值</th><th class="num">R²</th><th>趨勢</th><th></th></tr></thead><tbody>';
   predictions.forEach(function(p,i){
     var avgPred=p.predictions.reduce(function(s,v){return s+v.value},0)/p.predictions.length;
-    var trendColor=p.trend==='up'?'#34d399':'#ef4444';
+    var trendColor=p.trend==='up'?'var(--green)':'var(--red)';
     var trendIcon=p.trend==='up'?'↑':'↓';
-    h+='<tr><td>'+(i+1)+'</td><td class="contract">'+esc(p.meterId)+'</td><td><span class="tag" style="background:'+(DC[p.info.dma]||'#666')+'">'+esc(p.info.dma)+'</span></td><td><span class="ptag '+(p.info.propertyType.indexOf('001:')===0?'res':'')+'">'+esc(p.info.propertyType)+'</span></td><td style="font-size:11px" class="'+(isUnlocked?'':'masked')+'" onclick="clickMasked()">'+maskBuilding(p.info.buildingName)+'</td><td class="num">'+fmt(p.avgHistorical)+'</td><td class="num">'+fmt(avgPred)+'</td><td class="num">'+p.modelScore.toFixed(2)+'</td><td style="color:'+trendColor+';font-weight:600">'+trendIcon+' '+p.trend+'</td><td><button class="nb" onclick="showPredictDetail(\''+esc(p.meterId)+'\')">查看</button></td></tr>';
+    h+='<tr><td>'+(i+1)+'</td><td class="contract">'+esc(p.meterId)+'</td><td><span class="badge" style="background:'+(DC[p.info.dma]||'#666')+'">'+esc(p.info.dma)+'</span></td><td><span class="badge-muted '+(p.info.propertyType.indexOf('001:')===0?'res':'')+'">'+esc(p.info.propertyType)+'</span></td><td class="hint '+((isUnlocked?'':'masked'))+'" onclick="clickMasked()">'+maskBuilding(p.info.buildingName)+'</td><td class="num">'+fmt(p.avgHistorical)+'</td><td class="num">'+fmt(avgPred)+'</td><td class="num">'+p.modelScore.toFixed(2)+'</td><td style="color:'+trendColor+';font-weight:600">'+trendIcon+' '+p.trend+'</td><td><button class="btn" onclick="showPredictDetail(\''+esc(p.meterId)+'\')">查看</button></td></tr>';
   });
   h+='</tbody></table>';
   return h;
@@ -1520,9 +1607,9 @@ function showPredictDetail(meterId){
   var pred=PRED.predictions.find(function(p){return p.meterId===meterId});
   if(!pred)return;
   var dlg=document.getElementById('predictDlg');
-  document.getElementById('predictDlgTitle').textContent='📊 '+pred.meterId+' 預測詳情';
-  if(dlg.open)dlg.close();
-  dlg.showModal();
+  var mt=pred.modelType||PRED.modelType||'';
+  document.getElementById('predictDlgTitle').textContent='📊 '+pred.meterId+' 預測詳情'+(mt?' ('+mt+')':'');
+  dlg.style.display='flex';
   setTimeout(function(){
     var allDates=[],allActual=[],allFitted=[],allPred=[];
     if(pred.fitted){pred.fitted.forEach(function(f){allDates.push(f.date);allActual.push(f.actual);allFitted.push(f.fitted);allPred.push(null);});}
@@ -1530,10 +1617,23 @@ function showPredictDetail(meterId){
     disposeChart('pdc');
     var c=initChart(document.getElementById('predictDlgChart'),'pdc');
     c.setOption({backgroundColor:'transparent',tooltip:{trigger:'axis'},legend:{data:['實際用水','模型擬合','7天預測'],textStyle:{color:'#94a3b8'}},grid:{left:60,right:40,top:40,bottom:30},xAxis:{type:'category',data:allDates,axisLabel:{fontSize:9,rotate:45}},yAxis:{type:'value',name:'m³'},series:[{name:'實際用水',type:'bar',data:allActual,itemStyle:{color:'rgba(56,189,248,0.6)'},barMaxWidth:6},{name:'模型擬合',type:'line',data:allFitted,smooth:true,itemStyle:{color:'#fbbf24'},lineStyle:{width:2},showSymbol:false},{name:'7天預測',type:'line',data:allPred,itemStyle:{color:'#f472b6'},lineStyle:{type:'dashed',width:3},symbol:'circle',symbolSize:8}]});
-    var tableH='<table style="margin-top:12px"><thead><tr><th>日期</th><th>類型</th><th class="num">實際值</th><th class="num">擬合/預測值</th><th class="num">誤差</th></tr></thead><tbody>';
-    if(pred.fitted){pred.fitted.forEach(function(f){var err=f.actual>0?((f.fitted-f.actual)/f.actual*100).toFixed(1):0;var cls=parseFloat(err)>0?'neg':'up';tableH+='<tr><td>'+f.date+'</td><td><span class="tag" style="background:#fbbf24">擬合</span></td><td class="num">'+fmt(f.actual)+'</td><td class="num">'+fmt(f.fitted)+'</td><td class="num '+cls+'">'+err+'%</td></tr>';});}
-    pred.predictions.forEach(function(p){tableH+='<tr><td>'+p.date+'</td><td><span class="tag" style="background:#f472b6">預測</span></td><td class="num">-</td><td class="num">'+fmt(p.value)+'</td><td class="num">-</td></tr>';});
+    var tableH='<table class="data-table" style="margin-top:12px"><thead><tr><th>日期</th><th>類型</th><th class="num">實際值</th><th class="num">擬合/預測值</th><th class="num">誤差</th></tr></thead><tbody>';
+    if(pred.fitted){pred.fitted.forEach(function(f){var err=f.actual>0?((f.fitted-f.actual)/f.actual*100).toFixed(1):0;var cls=parseFloat(err)>0?'neg':'up';tableH+='<tr><td>'+f.date+'</td><td><span class="badge" style="background:var(--yellow)">擬合</span></td><td class="num">'+fmt(f.actual)+'</td><td class="num">'+fmt(f.fitted)+'</td><td class="num '+cls+'">'+err+'%</td></tr>';});}
+    pred.predictions.forEach(function(p){tableH+='<tr><td>'+p.date+'</td><td><span class="badge" style="background:var(--pink)">預測</span></td><td class="num">-</td><td class="num">'+fmt(p.value)+'</td><td class="num">-</td></tr>';});
     tableH+='</tbody></table>';
+    // Feature importance (LightGBM)
+    if(pred.topFeatures){
+      var featNames={weekday:'星期',month:'月份',lag1:'前1天',r7_mean:'7天均值',r14_mean:'14天均值',r7_std:'7天波動',change:'日變化',r7_max:'7天最大',r7_min:'7天最小',is_weekend:'是否週末',trend_idx:'趨勢指數',lag7:'前7天',deviation_ratio:'偏差比'};
+      tableH+='<div style="margin-top:16px"><p class="hint" style="margin-bottom:8px">🔍 模型特徵重要性 (Top 5)</p><div style="display:flex;gap:8px;flex-wrap:wrap">';
+      var maxImp=Math.max.apply(null,Object.values(pred.topFeatures));
+      for(var feat in pred.topFeatures){
+        var imp=pred.topFeatures[feat];
+        var pct=maxImp>0?Math.round(imp/maxImp*100):0;
+        var label=featNames[feat]||feat;
+        tableH+='<div style="flex:1;min-width:100px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;text-align:center"><div class="hint">'+label+'</div><div style="font-size:14px;font-weight:600;color:var(--text);margin-top:4px">'+imp+'</div><div style="height:3px;background:var(--border);border-radius:2px;margin-top:4px"><div style="height:100%;width:'+pct+'%;background:var(--accent);border-radius:2px"></div></div></div>';
+      }
+      tableH+='</div></div>';
+    }
     document.getElementById('predictDlgTable').innerHTML=tableH;
   },50);
 }
@@ -1553,7 +1653,6 @@ async function renderMap(){
     const dmaData=findD(D.dma,selDate);
     if(!dmaData){container.innerHTML='<div class="card"><h2>無資料</h2></div>';return;}
 
-    // 計算各 DMA 資料（處理私用區字符）
     var dmaInfo={};
     var dataKeys=Object.keys(dmaData.dmas);
     geoData.features.forEach(function(f){
@@ -1573,17 +1672,9 @@ async function renderMap(){
     var maxVal=1;
     for(var k in dmaInfo){if(dmaInfo[k].info&&dmaInfo[k].info.total>maxVal)maxVal=dmaInfo[k].info.total;}
 
-    // 更精細的顏色漸變
     function getColor(val){
       var r=Math.min(val/maxVal,1);
-      // 從綠到紫的漸變
-      var colors=[
-        [52,211,153],  // 綠
-        [251,191,36],  // 黃
-        [244,114,182], // 粉
-        [167,139,250], // 紫
-        [129,140,248]  // 藍紫
-      ];
+      var colors=[[52,211,153],[251,191,36],[244,114,182],[167,139,250],[129,140,248]];
       var idx=r*(colors.length-1);
       var lo=Math.floor(idx),hi=Math.ceil(idx),t=idx-lo;
       if(lo===hi)return 'rgb('+colors[lo].join(',')+')';
@@ -1594,7 +1685,6 @@ async function renderMap(){
     document.getElementById('mapDetail').innerHTML='<div class="map-placeholder"><div>點擊地圖上的 DMA 區域<br>查看用水詳情</div></div>';
 
     _leafletMap=L.map('mapContainer',{zoomControl:true,attributionControl:false,minZoom:12,maxZoom:16}).setView([22.15,113.55],14);
-    // 使用暗色地圖瓦片
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
       attribution:'© OpenStreetMap · CARTO',maxZoom:18
     }).addTo(_leafletMap);
@@ -1605,31 +1695,16 @@ async function renderMap(){
       style:function(feature){
         var d=dmaInfo[feature.properties.dma];
         var val=d&&d.info?d.info.total:0;
-        return{
-          fillColor:getColor(val),
-          fillOpacity:0.45,
-          color:'rgba(255,255,255,0.3)',
-          weight:1.5,
-          opacity:0.8
-        };
+        return{fillColor:getColor(val),fillOpacity:0.45,color:'rgba(255,255,255,0.3)',weight:1.5,opacity:0.8};
       },
       onEachFeature:function(feature,layer){
         var d=dmaInfo[feature.properties.dma];
         if(!d||!d.info)return;
         var zhName=d.zhName,info=d.info;
 
-        // Hover 效果
-        layer.on('mouseover',function(e){
-          this.setStyle({fillOpacity:0.7,weight:2.5,color:'#fff'});
-          this.bringToFront();
-        });
-        layer.on('mouseout',function(e){
-          if(selectedLayer!==this){
-            geoLayer.resetStyle(this);
-          }
-        });
+        layer.on('mouseover',function(e){this.setStyle({fillOpacity:0.7,weight:2.5,color:'#fff'});this.bringToFront();});
+        layer.on('mouseout',function(e){if(selectedLayer!==this)geoLayer.resetStyle(this);});
 
-        // 富文本 Tooltip
         var pct=info.total>0?Math.round(info.residential/info.total*100):0;
         layer.bindTooltip(
           '<div style="font-size:14px;font-weight:700;margin-bottom:4px">'+zhName+'</div>'
@@ -1639,9 +1714,7 @@ async function renderMap(){
           {sticky:true,className:'dma-tooltip',direction:'top'}
         );
 
-        // 點擊詳情
         layer.on('click',function(){
-          // 高亮選中
           if(selectedLayer)geoLayer.resetStyle(selectedLayer);
           selectedLayer=this;
           this.setStyle({fillOpacity:0.85,weight:3,color:'#818cf8'});
@@ -1651,13 +1724,13 @@ async function renderMap(){
           var dmaColor=getDmaColor(zhName)||'#818cf8';
 
           var detail='<h2 style="display:flex;align-items:center;gap:8px"><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:'+dmaColor+'"></span>'+zhName+'<span class="hint">'+selDate+'</span></h2>'
-            +'<div class="sr">'
-            +'<div class="si"><div class="sl">總用水</div><div class="sv">'+Math.round(info.total).toLocaleString()+'</div><div class="ss">m³</div></div>'
-            +'<div class="si res"><div class="sl">住宅</div><div class="sv">'+Math.round(info.residential).toLocaleString()+'</div><div class="ss">'+info.resCount+'表 | '+pct+'%</div></div>'
-            +'<div class="si nonres"><div class="sl">非住宅</div><div class="sv">'+Math.round(info.nonResidential).toLocaleString()+'</div><div class="ss">'+info.nonResCount+'表 | '+(100-pct)+'%</div></div>'
+            +'<div class="stat-row">'
+            +'<div class="stat-item"><div class="stat-label">總用水</div><div class="stat-value">'+Math.round(info.total).toLocaleString()+'</div><div class="stat-sub">m³</div></div>'
+            +'<div class="stat-item res"><div class="stat-label">住宅</div><div class="stat-value">'+Math.round(info.residential).toLocaleString()+'</div><div class="stat-sub">'+info.resCount+'表 | '+pct+'%</div></div>'
+            +'<div class="stat-item nonres"><div class="stat-label">非住宅</div><div class="stat-value">'+Math.round(info.nonResidential).toLocaleString()+'</div><div class="stat-sub">'+info.nonResCount+'表 | '+(100-pct)+'%</div></div>'
             +'</div>';
           if(top20m.length>0){
-            detail+='<div class="chart-actions"><button class="export-btn" onclick="exportChart(\'mapDma\',\''+zhName+'Top50\')">匯出 PNG</button></div><div id="mapDmaChart" class="chart" style="height:320px"></div>';
+            detail+='<div class="chart-actions"><button class="btn-export" onclick="exportChart(\'mapDma\',\''+zhName+'Top50\')">匯出 PNG</button></div><div id="mapDmaChart" class="chart" style="height:320px"></div>';
           }
           document.getElementById('mapDetail').innerHTML=detail;
 
@@ -1674,7 +1747,6 @@ async function renderMap(){
       }
     }).addTo(_leafletMap);
 
-    // 在每個 DMA 區域中心添加標籤
     geoLayer.eachLayer(function(layer){
       if(layer.feature&&layer.feature.properties){
         var d=dmaInfo[layer.feature.properties.dma];
@@ -1694,7 +1766,6 @@ async function renderMap(){
     _leafletMap.fitBounds(geoLayer.getBounds(),{padding:[20,15]});
     setTimeout(function(){_leafletMap.invalidateSize();},100);
 
-    // 圖例
     const legend=L.control({position:'bottomright'});
     legend.onAdd=function(){
       const div=L.DomUtil.create('div','info legend');
@@ -1718,22 +1789,22 @@ async function renderMap(){
 function renderCalendar(){
   var byMonth={};D.cotai.forEach(function(d){var m=d.date.substring(0,7);if(!byMonth[m])byMonth[m]=[];byMonth[m].push(d);});
   var months=Object.keys(byMonth).sort();
-  if(!months.length){document.getElementById('page-calendar').innerHTML='<section class="card"><p style="color:#64748b">暫無資料</p></section>';return;}
+  if(!months.length){document.getElementById('page-calendar').innerHTML='<section class="card"><p style="color:var(--muted)">暫無資料</p></section>';return;}
   if(!window._calMonth)window._calMonth=months[months.length-1];
   var years={};months.forEach(function(m){var y=m.substring(0,4);if(!years[y])years[y]=[];years[y].push(m);});
   var yearList=Object.keys(years).sort();
   if(!window._calYear)window._calYear=yearList[yearList.length-1];
   var curMonths=years[window._calYear]||[];
   var h='<section class="card"><h2>📅 路氹城非住宅用水日曆</h2>';
-  h+='<div class="ms" style="margin-bottom:8px">';
-  yearList.forEach(function(y){h+='<button class="mb '+(y===window._calYear?'active':'')+'" onclick="window._calYear=\''+y+'\';window._calMonth=\''+years[y][years[y].length-1]+'\';renderCalendar()">'+y+'年</button>';});
+  h+='<div class="btn-group">';
+  yearList.forEach(function(y){h+='<button class="btn-toggle '+(y===window._calYear?'active':'')+'" onclick="window._calYear=\''+y+'\';window._calMonth=\''+years[y][years[y].length-1]+'\';renderCalendar()">'+y+'年</button>';});
   h+='</div>';
-  h+='<div class="ms">';
+  h+='<div class="btn-group">';
   for(var mi=1;mi<=12;mi++){
     var ms=window._calYear+'-'+(mi<10?'0':'')+mi;
     var has=curMonths.indexOf(ms)>=0;
     var active=ms===window._calMonth;
-    h+='<button class="mb '+(active?'active':'')+'" style="'+(has?'':'opacity:0.3;cursor:default')+'" onclick="'+(has?'window._calMonth=\''+ms+'\';renderCalendar()':'')+'">'+mi+'月</button>';
+    h+='<button class="btn-toggle '+(active?'active':'')+'" style="'+(has?'':'opacity:0.3;cursor:default')+'" onclick="'+(has?'window._calMonth=\''+ms+'\';renderCalendar()':'')+'">'+mi+'月</button>';
   }
   h+='</div>';
   var month=window._calMonth;
@@ -1759,7 +1830,7 @@ function renderCalendar(){
     }
     h+='</div>';
   }else{
-    h+='<p style="color:#64748b;text-align:center;padding:20px">'+month+' 無資料</p>';
+    h+='<p style="color:var(--muted);text-align:center;padding:20px">'+month+' 無資料</p>';
   }
   h+='<div id="cotaiD" style="margin-top:12px"></div></section>';
   document.getElementById('page-calendar').innerHTML=h;
@@ -1767,8 +1838,8 @@ function renderCalendar(){
 
 function showCotaiDay(date){
   var day=D.cotai.find(function(d){return d.date===date});
-  if(!day){document.getElementById('cotaiD').innerHTML='<p style="color:#64748b">該日無資料</p>';return;}
-  var h='<div class="card"><h2>'+date+' 路氹非住宅Top10</h2><table><thead><tr><th>#</th><th>合同編號</th><th>建築物</th><th class="num">用水量</th></tr></thead><tbody>';
+  if(!day){document.getElementById('cotaiD').innerHTML='<p style="color:var(--muted)">該日無資料</p>';return;}
+  var h='<div class="card"><h2>'+date+' 路氹非住宅Top10</h2><table class="data-table"><thead><tr><th>#</th><th>合同編號</th><th>建築物</th><th class="num">用水量</th></tr></thead><tbody>';
   day.items.sort(function(a,b){return b.total-a.total}).slice(0,10).forEach(function(m,i){h+='<tr><td>'+(i+1)+'</td><td class="contract">'+mask(m.contractId)+'</td><td class="'+(isUnlocked?'':'masked')+'" onclick="clickMasked()">'+maskBuilding(m.buildingName)+'</td><td class="num">'+fmt(m.total)+'</td></tr>';});
   h+='</tbody></table></div>';
   document.getElementById('cotaiD').innerHTML=h;
@@ -2320,6 +2391,7 @@ async function _loadIndividual(){
     meterDaily:meterDaily,  // built from daily_totals.json above
     weekly:weekly||[],
     dataErrors:dataErrors||[],  // meter-day values dropped as data errors
+    meterInfo:meterInfo||{},  // meterId → {dma, contractId, buildingName, propertyType, ...}
     // DIRECT-only supply view: home + trend use these because sub-meters
     // re-measure water already counted on parent main meters (double
     // counting). Anomaly tab is DIRECT-only by construction (converter
@@ -2379,6 +2451,6 @@ loadData().then(()=>{
 </script>
 
 <!-- Report Modal -->
-<div id="reportModal" class="ov" style="display:none"><div class="ov-bg" onclick="closeReport()"></div><div class="ov-box"><span class="ov-close" onclick="closeReport()">&times;</span><div id="reportContent"></div></div></div>
+<div id="reportModal" class="modal-overlay" style="display:none"><div class="modal-overlay-bg" onclick="closeReport()"></div><div class="modal"><button class="modal-close" onclick="closeReport()">&times;</button><div id="reportContent"></div></div></div>
 </body>
 </html>

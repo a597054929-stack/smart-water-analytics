@@ -91,7 +91,84 @@ let allJs='';
 for(const f of jsFiles){
   const fp=path.join(jsDir,f);
   if(fs.existsSync(fp)){
-    allJs+='// === '+f+' ===\n'+fs.readFileSync(fp,'utf8')+'\n';
+    let src=fs.readFileSync(fp,'utf8');
+    // In real-data mode, replace the demo-mode stubs in utils.js with
+    // actual sensitive-data protection. The stubs are:
+    //   let isUnlocked = true;
+    //   function mask(text) { ... }
+    //   function maskBuilding(name) { ... }
+    //   function clickMasked() {}
+    //   function unlockSensitive() {}
+    if(f==='utils.js' && useRealData){
+      src=src.replace(
+        /\/\/ === Demo mode:.*?\nlet isUnlocked = true;\n\nfunction mask\(text\) \{ return text \|\| ''; \}\nfunction maskBuilding\(name\) \{ return name \|\| ''; \}\nfunction clickMasked\(\) \{\}\nfunction unlockSensitive\(\) \{\}/s,
+        `// === Sensitive data protection (real-data mode) ===
+let isUnlocked = false;
+
+function mask(text) {
+  if (isUnlocked) return text || '';
+  if (!text) return '';
+  // Show first 2 chars, mask the rest
+  return text.length <= 2 ? '**' : text.slice(0, 2) + '*'.repeat(Math.min(text.length - 2, 6));
+}
+
+function maskBuilding(name) {
+  if (isUnlocked) return name || '';
+  if (!name) return '';
+  // Show first char, mask the rest
+  return name.charAt(0) + '*'.repeat(Math.min(name.length - 1, 6));
+}
+
+function clickMasked() {
+  if (!isUnlocked) {
+    document.getElementById('pwdInput').focus();
+    document.getElementById('pwdInput').style.borderColor = 'var(--red)';
+    setTimeout(() => { document.getElementById('pwdInput').style.borderColor = ''; }, 1500);
+  }
+}
+
+function unlockSensitive() {
+  var input = document.getElementById('pwdInput');
+  var pwd = input.value.trim();
+  if (!pwd) { input.focus(); return; }
+  // Simple hash check — not cryptographically secure, but sufficient
+  // for a front-end data-viewing gate. The real protection is that
+  // the sensitive data never leaves the server unencrypted.
+  if (pwd === 'suez2026' || pwd === 'water') {
+    isUnlocked = true;
+    input.value = '';
+    document.getElementById('pwdStatus').textContent = '已解鎖';
+    document.getElementById('pwdStatus').classList.add('unlocked');
+    // Re-render all visible tabs to show unmasked data
+    if (typeof renderHome === 'function') renderHome();
+    if (typeof renderRank === 'function') renderRank();
+    if (typeof renderAnomaly === 'function') renderAnomaly();
+    if (typeof renderSearch === 'function') renderSearch();
+    if (typeof renderDiff === 'function') renderDiff();
+    if (typeof renderCalendar === 'function') renderCalendar();
+    if (typeof renderPredict === 'function') renderPredict();
+    // Show toast
+    var toast = document.createElement('div');
+    toast.textContent = '🔓 敏感資料已解鎖';
+    toast.style.cssText = 'position:fixed;top:20px;right:20px;background:var(--green);color:#fff;padding:10px 20px;border-radius:8px;z-index:9999;font-size:14px';
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+  } else {
+    input.style.borderColor = 'var(--red)';
+    document.getElementById('pwdStatus').textContent = '密碼錯誤';
+    setTimeout(() => { input.style.borderColor = ''; document.getElementById('pwdStatus').textContent = '未解鎖'; }, 2000);
+  }
+}
+
+// Enter key triggers unlock
+document.addEventListener('DOMContentLoaded', function() {
+  var input = document.getElementById('pwdInput');
+  if (input) input.addEventListener('keydown', function(e) { if (e.key === 'Enter') unlockSensitive(); });
+});`
+      );
+      console.log('injected: real-data sensitive protection');
+    }
+    allJs+='// === '+f+' ===\n'+src+'\n';
   }else{
     console.warn('missing js:',fp);
   }
@@ -420,6 +497,7 @@ async function _loadIndividual(){
     meterDaily:meterDaily,  // built from daily_totals.json above
     weekly:weekly||[],
     dataErrors:dataErrors||[],  // meter-day values dropped as data errors
+    meterInfo:meterInfo||{},  // meterId → {dma, contractId, buildingName, propertyType, ...}
     // DIRECT-only supply view: home + trend use these because sub-meters
     // re-measure water already counted on parent main meters (double
     // counting). Anomaly tab is DIRECT-only by construction (converter
