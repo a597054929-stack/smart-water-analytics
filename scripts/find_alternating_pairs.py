@@ -108,9 +108,9 @@ def find_alternating_pairs(
     # Only buildings with >= 2 meters
     buildings = {b: mids for b, mids in buildings.items() if len(mids) >= 2}
 
-    pairs = []
+    # Step 1: Compute all candidate pairs across all buildings
+    candidates = []
     for building, mids in buildings.items():
-        # Sort for deterministic pair generation
         mids_sorted = sorted(mids)
         for i in range(len(mids_sorted)):
             for j in range(i + 1, len(mids_sorted)):
@@ -118,7 +118,6 @@ def find_alternating_pairs(
                 a_daily = meter_daily.get(a_id, {})
                 b_daily = meter_daily.get(b_id, {})
 
-                # Find overlapping dates
                 common_dates = sorted(set(a_daily.keys()) & set(b_daily.keys()))
                 if len(common_dates) < min_days:
                     continue
@@ -130,8 +129,6 @@ def find_alternating_pairs(
                 if r >= threshold:
                     continue
 
-                # Count "alternating days": days where one is above median
-                # and the other is below.
                 a_median = float(np.median(a_vals))
                 b_median = float(np.median(b_vals))
                 alt_days = sum(
@@ -139,20 +136,17 @@ def find_alternating_pairs(
                     if (av > a_median and bv < b_median) or (av < a_median and bv > b_median)
                 )
 
-                # Require minimum alternating ratio to filter noise
                 if alt_days / len(common_dates) < min_alt_ratio:
                     continue
 
                 a_meta = meter_meta.get(a_id, {})
                 b_meta = meter_meta.get(b_id, {})
-                # mainCode is null for all meters in this dataset;
-                # fall back to shared contractId as a proxy for "related meters".
                 shared_main = bool(
                     (a_meta.get("mainCode") and a_meta["mainCode"] == b_meta.get("mainCode"))
                     or (a_meta.get("contractId") and a_meta["contractId"] == b_meta.get("contractId"))
                 )
 
-                pairs.append({
+                candidates.append({
                     "building": building,
                     "meterA": a_id,
                     "meterB": b_id,
@@ -167,8 +161,20 @@ def find_alternating_pairs(
                     "supplyModeB": b_meta.get("supplyMode", ""),
                 })
 
-    # Sort by correlation (most negative first)
-    pairs.sort(key=lambda p: p["correlation"])
+    # Step 2: Greedy matching — each meter can only appear in ONE pair.
+    # Sort by correlation (most negative = strongest alternation first),
+    # then greedily assign pairs. Once a meter is "used", it cannot
+    # appear in any other pair.
+    candidates.sort(key=lambda p: p["correlation"])
+    used: set[str] = set()
+    pairs = []
+    for c in candidates:
+        if c["meterA"] in used or c["meterB"] in used:
+            continue
+        pairs.append(c)
+        used.add(c["meterA"])
+        used.add(c["meterB"])
+
     return pairs
 
 
