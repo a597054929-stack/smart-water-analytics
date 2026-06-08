@@ -72,12 +72,14 @@ Available tools:
 - query_weekly()
 - query_rank_changes(limit)
 - query_monthly_diff(month)
-- generate_chart(chart_type, dma, days)
+- sql_chart(sql, chart_type, title, x_column, y_column, y_label)   # SQL + chart in one call (bar/line/pie)
+  *** USE THIS for ANY chart that requires custom data (top-N, building totals, trends, etc.) ***
+- generate_chart(chart_type, dma, days)   # FIXED chart types ONLY: "weekly_trend" / "anomaly_by_dma" / "anomaly_type" / "daily_usage"
+  *** DO NOT use generate_chart for custom data or arbitrary queries — use sql_chart instead ***
 - compare_months(month1, month2, dma)
 - analyze_anomaly(meter_id)
 - generate_report(dma, month)
 - query_data_quality(date, meter_id, reason)
-- sql_chart(sql, chart_type, title, x_column, y_column, y_label)   # SQL + chart in one call
 
 Database schema (analytics_real.db — 10 tables, copy these column names):
 - meters: meterId, id, contractId, propertyType, isResidential, buildingName, dma, supplyMode, mainCode
@@ -116,6 +118,12 @@ Rules (tool selection):
 - For comparison questions, include compare_months
 - For investigation questions, include analyze_anomaly
 - Always end with generate_report if the user asks for a summary
+- NEVER use generate_chart for custom data queries. generate_chart
+  only supports 4 hardcoded types: weekly_trend, anomaly_by_dma,
+  anomaly_type, daily_usage. For ANY other chart (top-N, building
+  totals, trends by meter, property breakdown) use sql_chart.
+  WRONG: generate_chart(chart_type="bar")  ← will return error
+  RIGHT: sql_chart(sql="SELECT ...", chart_type="bar", ...)
 
 SQL ROUTING — when to use sql_query instead of JSON tools:
 Use sql_query when the question needs cross-table JOINs, custom GROUP BY,
@@ -148,6 +156,17 @@ SQL examples (copy these patterns):
 
 - Fire system usage:
   sql_query("SELECT m.propertyType, SUM(h.consumption) AS total FROM hourly_meter h JOIN meters m ON h.meterId=m.meterId WHERE m.propertyType LIKE '%Fire%' GROUP BY m.propertyType")
+
+CHART ROUTING — when user asks for a chart / graph / 图:
+- "路氹城區前10用水柱状图"  →  sql_chart(sql="SELECT m.meterId, ... ORDER BY total DESC LIMIT 10", chart_type="bar", title="路氹城區 Top 10 用水", y_label="m³")
+- "物业类型用水饼图"       →  sql_chart(sql="SELECT m.propertyType, ... GROUP BY m.propertyType", chart_type="pie", title="物业类型用水占比")
+- "路氹城區日用水趋势图"   →  sql_chart(sql="SELECT substr(h.datetime,1,10) AS day, ... GROUP BY day", chart_type="line", title="路氹城區日用水趋势", y_label="m³")
+- "周趋势图" (fixed)       →  generate_chart(chart_type="weekly_trend", dma="路氹城區")
+- "异常类型分布图" (fixed) →  generate_chart(chart_type="anomaly_type")
+
+Example (chart):
+User: 路氹城區前10用水量的水表柱状图
+Output: [{"tool": "sql_chart", "params": {"sql": "SELECT m.meterId, m.buildingName, SUM(h.consumption) AS total FROM hourly_meter h JOIN meters m ON h.meterId=m.meterId WHERE m.dma='路氹城區' GROUP BY m.meterId ORDER BY total DESC LIMIT 10", "chart_type": "bar", "title": "路氹城區 Top 10 用水水表", "x_column": "meterId", "y_column": "total", "y_label": "m³"}}]
 
 Use JSON tools when the pre-aggregated files already cover the query:
 - query_anomalies: anomaly list/stats for a DMA+month
