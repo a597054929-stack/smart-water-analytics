@@ -23,16 +23,15 @@ Safety:
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
-from typing import Optional
 
 from langchain_core.tools import tool
+
+from safe_tool_call import safe_tool_call
 
 # Reuse the loader's helpers; the loader is intentionally side-effect-light.
 try:
     from .sql_loader import (
-        DEFAULT_DB_PATH,
         get_table_schema,
         list_tables,
         run_query,
@@ -44,7 +43,6 @@ except ImportError:
     if str(_pipe_dir) not in sys.path:
         sys.path.insert(0, str(_pipe_dir))
     from sql_loader import (  # type: ignore
-        DEFAULT_DB_PATH,
         get_table_schema,
         list_tables,
         run_query,
@@ -54,6 +52,7 @@ except ImportError:
 # ── Tool: list tables ────────────────────────────────────────
 
 @tool
+@safe_tool_call("list_tables_tool", timeout_seconds=5)
 def list_tables_tool() -> str:
     """List all available tables in the analytics SQLite database.
 
@@ -70,6 +69,7 @@ def list_tables_tool() -> str:
 # ── Tool: get table schema ───────────────────────────────────
 
 @tool
+@safe_tool_call("get_table_schema_tool", timeout_seconds=5)
 def get_table_schema_tool(table_name: str) -> str:
     """Get the schema (columns + types) of a specific table.
 
@@ -92,7 +92,8 @@ def get_table_schema_tool(table_name: str) -> str:
 # ── Tool: run a SQL query ────────────────────────────────────
 
 @tool
-def sql_query(sql: str, limit: Optional[int] = None) -> str:
+@safe_tool_call("sql_query", timeout_seconds=30)
+def sql_query(sql: str, limit: int | None = None) -> str:
     """Execute a read-only SQL query against the analytics database.
 
     Args:

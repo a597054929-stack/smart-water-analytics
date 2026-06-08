@@ -90,3 +90,67 @@ def build_memory_message(messages: list) -> dict | None:
                    "Use this to understand the user's ongoing interests and avoid "
                    "repeating information already discussed.",
     }
+
+
+# ── Two-tier compression (added 2026-06-08, see ADR-0004) ─────
+
+def get_context_for_agent(session_id: str, llm, recent_turns: int = 6) -> str:
+    """Two-tier memory. Falls back to ``summarize_messages`` if compressor fails.
+
+    Layered fallback (most graceful first):
+      1. Short history            → return verbatim, no LLM call
+      2. Long history + LLM ok    → summary + recent verbatim
+      3. Long history + LLM fail  → legacy regex summary + recent verbatim
+      4. Total failure            → empty string
+
+    The ``session_id`` argument is reserved for future per-session
+    history (currently we read the single ``chat_history.json`` file).
+    """
+    # Local imports keep this module importable in test environments
+    # where langchain_core isn't on the path.
+    from pathlib import Path
+    import json as _json
+    from langchain_core.messages import AIMessage, HumanMessage
+
+    from memory_compressor import MemoryCompressor
+
+    _ = session_id  # currently unused; see docstring
+    path = Path("agent/chat_history.json")
+    if not path.exists():
+        return ""
+    try:
+        raw = _json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return ""
+
+    history = []
+    for msg in raw:
+        role = msg.get("role")
+        content = msg.get("content", "")
+        if role == "user":
+            history.append(HumanMessage(content=content))
+        elif role == "assistant":
+            history.append(AIMessage(content=content))
+
+    if not history:
+        return ""
+
+    compressor = MemoryCompressor(llm, recent_turns=recent_turns)
+
+    # Short history: just return it
+    if len(history) <= recent_turns:
+        return compressor.reconstruct_context({"recent": history, "summary": ""})
+
+    # Long history: compress
+    try:
+        return compressor.reconstruct_context(compressor.compress(history))
+    except Exception:
+        # Worst-case fallback: legacy regex summary + recent verbatim
+        legacy = summarize_messages(raw)
+        recent_text = "\n".join(
+            f"{'User' if isinstance(m, HumanMessage) else 'Assistant'}: {m.content}"
+            for m in history[-recent_turns:]
+        )
+        if legacy:
+            return f"[CONVERSATION MEMORY]\n{legacy}\n\n[Recent conversation]\n{recent_text}"
+        return recent_text

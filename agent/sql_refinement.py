@@ -26,22 +26,26 @@ import json
 import logging
 import os
 import re
-from typing import Any, Optional
+from typing import Any
 
 from langchain_core.tools import tool
+
+from safe_tool_call import safe_tool_call
 
 # Same bootstrap as sql_tools.py: `agent/` is not a real package (no
 # __init__.py), so `from .sql_tools` always fails. Fall back to a flat
 # import that uses an absolute path.
 try:
-    from .sql_tools import sql_query as _raw_sql_query, get_table_schema_tool
+    from .sql_tools import get_table_schema_tool
+    from .sql_tools import sql_query as _raw_sql_query
 except ImportError:
     import sys
     from pathlib import Path
     _agent_dir = str(Path(__file__).resolve().parent)
     if _agent_dir not in sys.path:
         sys.path.insert(0, _agent_dir)
-    from sql_tools import sql_query as _raw_sql_query, get_table_schema_tool  # type: ignore
+    from sql_tools import get_table_schema_tool
+    from sql_tools import sql_query as _raw_sql_query  # type: ignore
 
 from config import get_llm_config
 
@@ -84,8 +88,8 @@ Fix:   SELECT meterId, SUM(total) FROM meter_daily GROUP BY meterId
 
 def _create_refine_llm():
     """Reuse the same provider / model / key as the main agent."""
-    from langchain_openai import ChatOpenAI
     from langchain_anthropic import ChatAnthropic
+    from langchain_openai import ChatOpenAI
     cfg = get_llm_config()
     if cfg["provider"] == "anthropic":
         return ChatAnthropic(
@@ -142,7 +146,7 @@ def _extract_sql(text: str) -> str:
     return text.rstrip(";").strip()
 
 
-def _refine_sql(sql: str, limit: Optional[int], log_path: Optional[str]) -> dict[str, Any]:
+def _refine_sql(sql: str, limit: int | None, log_path: str | None) -> dict[str, Any]:
     """Try sql_query; on error, ask LLM to fix and retry.
 
     Returns a dict matching the format of raw sql_query JSON output,
@@ -222,7 +226,8 @@ def _append_log(path: str, attempts: int, sql: str, row_count) -> None:
 # ── Public tool ───────────────────────────────────────────────
 
 @tool
-def sql_query(sql: str, limit: Optional[int] = None) -> str:
+@safe_tool_call("sql_query", timeout_seconds=30)
+def sql_query(sql: str, limit: int | None = None) -> str:
     """Execute a read-only SQL query against the analytics database, with
     automatic self-refinement on errors.
 

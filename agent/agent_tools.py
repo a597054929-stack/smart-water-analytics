@@ -5,17 +5,19 @@ Each @tool-decorated function becomes callable by the LLM agent.
 The docstring is critical — the agent reads it to decide when to use each tool.
 """
 
-import json, os
-from langchain_core.tools import tool
+import json
+import os
 
 # Page-context state lives in its own module so that LangGraph's tool
 # runtime (which may rebind tool functions into its own namespace) still
 # sees the same global dict. See _page_state.py for the rationale.
 from _page_state import (
-    set_page_context,
-    get_page_context,
     PAGE_STATE,
+    get_page_context,
 )
+from langchain_core.tools import tool
+
+from safe_tool_call import safe_tool_call
 
 # Always resolve the data dir to an absolute path.
 #
@@ -46,7 +48,7 @@ _data_cache = {}
 
 def _load(filename):
     if filename not in _data_cache:
-        with open(os.path.join(DATA_DIR, filename), "r", encoding="utf-8") as f:
+        with open(os.path.join(DATA_DIR, filename), encoding="utf-8") as f:
             _data_cache[filename] = json.load(f)
     return _data_cache[filename]
 
@@ -65,7 +67,7 @@ def _load_errors():
         candidates.append(os.path.join(parent, sibling, "data_errors.json"))
     for path in candidates:
         if os.path.exists(path):
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 return json.load(f)
     return []
 
@@ -82,6 +84,7 @@ def _match_dma(query, dma_name):
 # ── Tool 1: Query anomalies (merged) ─────────────────────────
 
 @tool
+@safe_tool_call("query_anomalies", timeout_seconds=30)
 def query_anomalies(mode: str = "list", dma: str = "", month: str = "",
                     anomaly_type: str = "", meter_id: str = "", limit: int = 10) -> str:
     """Query anomaly data. mode=list (default): list anomaly records; mode=stats: summary by DMA/type; mode=analyze: deep-dive a specific meter.
@@ -146,6 +149,7 @@ def query_anomalies(mode: str = "list", dma: str = "", month: str = "",
 # ── Tool 2: Query meters ─────────────────────────────────────
 
 @tool
+@safe_tool_call("query_meters", timeout_seconds=30)
 def query_meters(dma: str = "", is_residential: bool = None, building: str = "", limit: int = 10) -> str:
     """Query smart water meter information. Filter by DMA zone, residential type, or building name.
     Use when the user asks about specific meters, buildings, or meter details."""
@@ -169,6 +173,7 @@ def query_meters(dma: str = "", is_residential: bool = None, building: str = "",
 # ── Tool 3: Anomaly statistics ───────────────────────────────
 
 @tool
+@safe_tool_call("get_anomaly_stats", timeout_seconds=30)
 def get_anomaly_stats(month: str = "", dma: str = "") -> str:
     """Get anomaly statistics summary. Shows count by DMA zone and anomaly type.
     Use when the user asks about anomaly overview, which zone has most issues, or monthly summary."""
@@ -198,6 +203,7 @@ def get_anomaly_stats(month: str = "", dma: str = "") -> str:
 # ── Tool 4: Predictions (merged) ─────────────────────────────
 
 @tool
+@safe_tool_call("get_predictions", timeout_seconds=30)
 def get_predictions(query_type: str = "meter", meter_id: str = "",
                     building: str = "", limit: int = 5) -> str:
     """Get water consumption predictions (7-day forecast).
@@ -250,6 +256,7 @@ def get_predictions(query_type: str = "meter", meter_id: str = "",
 # ── Tool 5: Data overview ────────────────────────────────────
 
 @tool
+@safe_tool_call("get_data_overview", timeout_seconds=30)
 def get_data_overview() -> str:
     """Get overall data overview: total meters, DMA zones, date range, anomaly count.
     Use when the user asks about data summary, system overview, or general stats."""
@@ -270,6 +277,7 @@ def get_data_overview() -> str:
 # ── Tool 6: Consumption data (merged) ───────────────────────
 
 @tool
+@safe_tool_call("query_consumption", timeout_seconds=30)
 def query_consumption(mode: str = "daily", date: str = "", dma: str = "",
                       month1: str = "", month2: str = "", limit: int = 7) -> str:
     """Query water consumption data. mode=daily: daily DMA summary; mode=weekly: weekly trends; mode=compare: month-over-month comparison.
@@ -327,6 +335,7 @@ def query_consumption(mode: str = "daily", date: str = "", dma: str = "",
 # ── Tool 7: Rank changes ─────────────────────────────────────
 
 @tool
+@safe_tool_call("query_rank_changes", timeout_seconds=30)
 def query_rank_changes(limit: int = 10) -> str:
     """Query Top-20 consumption ranking changes. Shows meters that consistently appear in high-usage rankings.
     Use when the user asks about highest consumption meters, ranking trends, or Top-20 tracking."""
@@ -337,6 +346,7 @@ def query_rank_changes(limit: int = 10) -> str:
 # ── Tool 9: NRW / Main-Sub diff ─────────────────────────────
 
 @tool
+@safe_tool_call("query_monthly_diff", timeout_seconds=30)
 def query_monthly_diff(month: str = "") -> str:
     """Query main-sub meter difference data for Non-Revenue Water (NRW) analysis.
     Use when the user asks about water loss, leakage, NRW rate, or meter differences."""
@@ -367,6 +377,7 @@ def query_monthly_diff(month: str = "") -> str:
 # ── Tool 10: Generate chart ──────────────────────────────────
 
 @tool
+@safe_tool_call("generate_chart", timeout_seconds=15)
 def generate_chart(chart_type: str, dma: str = "Zone-3", days: int = 30) -> str:
     """Generate an ECharts visualization. chart_type options: weekly_trend, anomaly_by_dma, anomaly_type, daily_usage.
     Use when the user asks to see a chart, graph, or visualization."""
@@ -377,6 +388,7 @@ def generate_chart(chart_type: str, dma: str = "Zone-3", days: int = 30) -> str:
 # ── Tool 10: Anomaly deep analysis ───────────────────────────
 
 @tool
+@safe_tool_call("analyze_anomaly", timeout_seconds=15)
 def analyze_anomaly(meter_id: str) -> str:
     """Deep-dive analysis for a specific meter's anomalies.
     Shows all anomaly history, consumption pattern, and possible causes.
@@ -425,6 +437,7 @@ def analyze_anomaly(meter_id: str) -> str:
 # ── Tool 13: Auto-generate report ───────────────────────────
 
 @tool
+@safe_tool_call("generate_report", timeout_seconds=30)
 def generate_report(dma: str = "", month: str = "") -> str:
     """Generate a summary report for a DMA zone and month.
     Combines anomaly stats, consumption data, rankings, and NRW into one report.
@@ -491,6 +504,7 @@ def generate_report(dma: str = "", month: str = "") -> str:
 # ── Tool 15: Page context ─────────────────────────────────────
 
 @tool
+@safe_tool_call("get_current_page_context", timeout_seconds=5)
 def get_current_page_context() -> str:
     """Return the user's current page state: which tab they're on, the selected
     date, the selected DMA zone, and other UI filters.
@@ -520,6 +534,7 @@ def get_current_page_context() -> str:
 # ── Tool 16: Data quality (added 2026-06-06) ─────────────────
 
 @tool
+@safe_tool_call("query_data_quality", timeout_seconds=15)
 def query_data_quality(date: str = "", meter_id: str = "", reason: str = "") -> str:
     """Query data quality / integrity errors logged by the converter pipeline.
     Returns the records that were dropped from analytics (e.g. negative readings,
@@ -594,7 +609,7 @@ try:
     _agent_dir = str(Path(__file__).resolve().parent)
     if _agent_dir not in sys.path:
         sys.path.insert(0, _agent_dir)
-    from sql_tools import list_tables_tool, get_table_schema_tool  # raw helpers
+    from sql_tools import get_table_schema_tool, list_tables_tool  # raw helpers
     try:
         from sql_refinement import sql_query  # refined: 2 retries on error
         _sql_query = sql_query

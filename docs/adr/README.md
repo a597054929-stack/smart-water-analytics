@@ -22,6 +22,7 @@ Each ADR follows MADR (Markdown Architectural Decision Records):
 | 001 | [使用 SQLite 而非 PostgreSQL](0001-使用-sqlite-不-postgres.md) | Accepted | 2026-06-07 |
 | 002 | [用 Pandera 在管道邊界做 Schema 校驗](0002-pandera-做-schema-校驗.md) | Accepted | 2026-06-07 |
 | 003 | [單一 monorepo 包含四大組件](0003-monorepo-單倉多組件.md) | Accepted | 2026-06-07 |
+| 004 | [Claude Code 設計哲學對我們項目的啟發](0004-claude-code-design.md) | Accepted | 2026-06-08 |
 
 ## How to add a new ADR
 
