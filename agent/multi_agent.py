@@ -125,6 +125,20 @@ Rules (tool selection):
   WRONG: generate_chart(chart_type="bar")  ← will return error
   RIGHT: sql_chart(sql="SELECT ...", chart_type="bar", ...)
 
+Tool call budget (soft hints — execution layer enforces hard limits):
+- **Don't repeat the same tool call** — if you already called
+  query_anomalies(dma="路氹城區"), don't call it again with the
+  same params. The executor dedupes by (tool, params) anyway.
+- **Don't re-query schema** — all 10 table schemas are listed
+  above. Don't call list_tables_tool or get_table_schema_tool
+  unless you genuinely need a column you don't see.
+- **Don't cross-validate** — once you got an answer from
+  query_anomalies, don't also call get_data_overview to "double
+  check" the same number. Data is stable within a 30-min window.
+- **Aim for 1-3 tool calls per question** — multi-tool plans
+  are fine for multi-step reasoning (compare 2 months needs 2
+  queries), but avoid calling the same query 5+ times.
+
 SQL ROUTING — when to use sql_query instead of JSON tools:
 Use sql_query when the question needs cross-table JOINs, custom GROUP BY,
 ORDER BY, LIMIT, or time granularity finer than the pre-aggregated JSONs.
@@ -320,27 +334,70 @@ def plan(question: str, llm) -> dict:
 
 # ── Executor ──────────────────────────────────────────────────
 
-def execute(plan_steps: list) -> list:
-    """Execute a plan by calling tools in sequence."""
+def execute(plan_steps: list, max_tools: int = 8, max_consecutive_failures: int = 2) -> list:
+    """Execute a plan by calling tools in sequence.
+
+    Three execution-layer guards (P0 fixes from 2026-06-09):
+    1. Dedup by (tool_name, frozenset(params)) — LLM sometimes
+       repeats the same call (e.g. "query_anomalies dma=路氹城區"
+       called 10 times for the same question). Different params
+       like dma=路氹城區 vs dma=澳大橫琴區 are NOT deduped.
+    2. Circuit breaker — if max_consecutive_failures tools in a row
+       all error, abort the rest of the plan. Avoids burning 20+
+       tool calls on a broken plan.
+    3. Hard cap on total tools (max_tools) — prevents runaway plans
+       from N>M where the LLM hallucinates dozens of steps.
+    """
     results = []
+    called: set = set()
+    consecutive_failures = 0
+
     for step in plan_steps:
+        # Hard cap: stop if we've already executed too many tools
+        if len(results) >= max_tools:
+            results.append({
+                "tool": "_executor",
+                "skipped": f"hit max_tools={max_tools} cap"
+            })
+            break
+
+        # Defensive: handle string steps (LLM sometimes returns ["tool1", "tool2"])
+        if isinstance(step, str):
+            step = {"tool": step, "params": {}}
         tool_name = step.get("tool", "")
         params = step.get("params", {})
 
+        # Dedup: skip if (tool, params) already called
+        sig = (tool_name, tuple(sorted(params.items())))
+        if sig in called:
+            results.append({"tool": tool_name, "skipped": "duplicate call"})
+            continue
+        called.add(sig)
+
         if tool_name not in TOOL_REGISTRY:
             results.append({"tool": tool_name, "error": f"Unknown tool: {tool_name}"})
-            continue
+            consecutive_failures += 1
+        else:
+            try:
+                tool = TOOL_REGISTRY[tool_name]
+                # LangChain @tool-decorated functions: invoke() accepts either
+                # positional input (str) or a dict unpacked as kwargs. Pass via
+                # `input=` so the dict is always treated as kwargs, never a
+                # raw string. (Fixes 'str' object has no attribute 'get'.)
+                output = tool.invoke(input=params)
+                results.append({"tool": tool_name, "result": output})
+                consecutive_failures = 0
+            except Exception as e:
+                results.append({"tool": tool_name, "error": str(e)})
+                consecutive_failures += 1
 
-        try:
-            tool = TOOL_REGISTRY[tool_name]
-            # LangChain @tool-decorated functions: invoke() accepts either
-            # positional input (str) or a dict unpacked as kwargs. Pass via
-            # `input=` so the dict is always treated as kwargs, never a
-            # raw string. (Fixes 'str' object has no attribute 'get'.)
-            output = tool.invoke(input=params)
-            results.append({"tool": tool_name, "result": output})
-        except Exception as e:
-            results.append({"tool": tool_name, "error": str(e)})
+        # Circuit breaker: too many consecutive failures -> stop
+        if consecutive_failures >= max_consecutive_failures:
+            results.append({
+                "tool": "_executor",
+                "skipped": f"circuit breaker: {consecutive_failures} consecutive failures"
+            })
+            break
 
     return results
 

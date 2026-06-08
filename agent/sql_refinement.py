@@ -151,9 +151,15 @@ def _refine_sql(sql: str, limit: int | None, log_path: str | None) -> dict[str, 
 
     Returns a dict matching the format of raw sql_query JSON output,
     with one extra key `attempts` for observability.
+
+    2026-06-09 update: added error deduplication circuit breaker.
+    If two consecutive errors are the same (LLM is in a rewrite loop),
+    stop early — no point burning tokens on a third identical attempt.
     """
     last_error = None
     current_sql = sql
+    prev_error = None
+    prev_sql = None
     for attempt in range(_MAX_RETRIES + 1):
         raw = _raw_sql_query.invoke({"sql": current_sql, "limit": limit})
         try:
@@ -170,8 +176,19 @@ def _refine_sql(sql: str, limit: int | None, log_path: str | None) -> dict[str, 
             return parsed
 
         last_error = parsed["error"]
+        # Circuit breaker: same error twice in a row -> LLM is looping
+        if last_error == prev_error and attempt > 0:
+            log.warning("refine loop detected: same error twice, aborting. sql=%s err=%s",
+                        current_sql[:120], last_error[:120])
+            break
+        # Circuit breaker: LLM didn't actually change the SQL -> give up
+        if attempt > 0 and current_sql.strip().lower() == prev_sql.strip().lower():
+            log.warning("refine loop: SQL unchanged, aborting. sql=%s", current_sql[:120])
+            break
         if attempt >= _MAX_RETRIES:
             break
+        prev_error = last_error
+        prev_sql = current_sql
 
         # Get the table name from the SQL (first FROM / JOIN) so we can pass schema
         m = re.search(r"(?:FROM|JOIN)\s+([A-Za-z_]\w*)", current_sql, re.IGNORECASE)
