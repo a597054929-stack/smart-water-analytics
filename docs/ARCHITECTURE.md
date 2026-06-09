@@ -29,12 +29,9 @@
 | 你的需求 | 看哪一节 |
 |---------|---------|
 | 30 秒了解项目 | 速览表 + 图 1 |
-| 讲给面试官 | 图 1 + 3NF 分析 + 12.1 Agent 工具清单 |
 | 加一个新工具 | Cookbook 第 1 条 + 第 17 节代码入口 |
 | 修数据 bug | 第 14.4 节 corrections.json |
 | 部署到新机器 | 第 16 节 + bat 脚本 |
-| 面试被追问 deep dive | 3NF + 图 6 ER + 预测故事 |
-| 想知道"为什么这么设计" | 演进记录 + 3NF 分析 |
 
 ## 目录
 
@@ -399,17 +396,16 @@ bat 脚本。切换 = `USE_REAL_DATA=1`，零共享状态。
   │  weekEnd            │
   │  label              │
   │  dates              │  ← JSON 数组
-  │  totalByDma         │  ← JSON 对象（反 3NF）
+  │  totalByDma         │  ← JSON 对象
   │  grandTotal         │
   │  weekdayAvg         │
   │  weekendAvg         │
-  │  wdByDmaRes         │  ← JSON 对象（反 3NF）
+  │  wdByDmaRes         │  ← JSON 对象
   │  rain               │
-  │  dailyTotals        │  ← JSON 数组（反 3NF）
+  │  dailyTotals        │  ← JSON 数组
   └─────────────────────┘
 ```
 
-**反 3NF 字段**（OLAP 故意为之）：
 - `weekly.totalByDma` / `wdByDmaRes` / `dailyTotals` 是 JSON 字符串
 - `anomalies` / `rank_changes` 重复了 `meters` 表的字段（避免 join）
 - `monthly_diff.subs` 是逗号分隔字符串
@@ -610,7 +606,7 @@ python pipeline/orchestrator.py \
 | 无重复组 | ✅ | 所有列原子 |
 | TEXT 里藏 JSON | ⚠️ | `weekly.totalByDma`, `weekly.dailyTotals`, `weekly.wdByDmaRes` |
 
-JSON 列是**有意的反范式**——为了仪表盘读取速度（一次读、无 join）。
+JSON 列是为了仪表盘读取速度（一次读、无 join）。
 
 ## 11.2 2NF——无部分依赖
 
@@ -618,7 +614,7 @@ JSON 列是**有意的反范式**——为了仪表盘读取速度（一次读�
 
 ## 11.3 3NF——无传递依赖
 
-**故意违反 3NF**。这是 OLAP，不是 OLTP。
+
 
 | 违反 | 位置 | 为什么 |
 |------|------|--------|
@@ -626,10 +622,6 @@ JSON 列是**有意的反范式**——为了仪表盘读取速度（一次读�
 | 逗号分隔多值 | `monthly_diff.subs` = `"12345,67890,..."` | 输出形态——仪表盘把 subs 显示为逗号列表 |
 | weekly 里 JSON 聚合 | `totalByDma` = `{"Zone-1": 1234, ...}` | 预先聚合，省每次页面加载的 CPU |
 
-**面试金句**：
-> "OLTP 部分（agent 的 text-to-SQL）是 3NF 干净的；OLAP 部分
->（仪表盘）故意反范式——把 join 成本从读路径移到 pipeline 路径。对
-> 于 5MB 静态 dashboard 部署是正确取舍。"
 
 ---
 
@@ -683,7 +675,7 @@ Planner-Executor-Synthesizer 管线（同一个 LLM，3 个专门 prompt）。
 | 单元（pytest） | 104 | ~37s | 纯逻辑，不调 LLM |
 | LLM QA（evaluate.py） | 30 | ~10 分钟 | 真模型调用，按工具准确率、关键词召回、行为通过/失败、延迟、失败率打分 |
 
-**最新运行**：通过率 76.7%，失败率 0%，语义通过 93%。
+**最新运行**（2026-06-08）：通过率 86.7%（26/30），工具准确率 80.0%，关键词召回 88.3%，失败率 0%，平均延迟 30.8s。verdict: pass。
 
 **Schema 完整性测试**：grep 系统 prompt 里的 `FROM <table>` 引用，
 断言在真实 SQLite DB 里存在——抓住"工具改名了但 prompt 没改"的情
@@ -759,7 +751,6 @@ reason}`。下次 converter 跑时自动应用。用于：
 |------|----------|------|
 | **静态 HTML** | 只有 `frontend/dist/dashboard.html` | 分享、Telegram、邮件、无服务器 |
 | **Docker Compose** | `agent`（Python）+ `dashboard`（Node）两个服务 | 本地开发 |
-| **内部服务器** | 静态 HTML 放 VPN 后 | 生产供运维团队 |
 
 仪表盘**完全离线**可用（所有数据内联）。Agent 是**可选**——没有
 agent 仪表盘照样跑。
@@ -838,6 +829,11 @@ agent 仪表盘照样跑。
 | 2026-06-08 | **清除真实 meter ID**（`corrections.json` + `qa_pairs.json`） | 712720→MOCK0001, 753832→MOCK7538 |
 | 2026-06-08 | **Agent ask-back 全链路**（`multi_agent.py` + `server.py` + `chat.js`） | 模糊输入触发反问 + 选项按钮 + real DMA 名 + 自然语言问题 |
 | 2026-06-08 | **交替用水表对检测**（`scripts/find_alternating_pairs.py`） | 路氹城區 29 对负相关表，贪心匹配保证唯一性 |
+| 2026-06-09 | **execute() dedup + 断路器**（`multi_agent.py`） | Q1 工具调用 42→2，延迟 149s→9s。3 层防护：(tool, params) 去重、2 连续 fail 熔断、max_tools=8 上限 |
+| 2026-06-09 | **SQL 自纠去重**（`sql_refinement.py`） | 同错误连续 2 次熔断 / SQL 未变熔断 — 避免 LLM rewrite 死循环 |
+| 2026-06-09 | **PLANNER 软提示**（`multi_agent.py`） | "不要重复调同工具" + "不要查 schema" + "不要交叉验证" + "1-3 calls/题" |
+| 2026-06-09 | **Eval v2: 86.7% → 93.3%**（30 QA live LLM） | pass_rate +6.6pp, kw_recall +8.4pp, latency -43%；2 FAIL→PASS（Q24 SQL、Q25 report）。详细报告 `reports/eval_v1 vs v2_optimization.md` |
+| 2026-06-09 | **execute dedup 测试**（`tests/test_execute_dedup.py`，6 cases） | 防改坏：去重 / 断路器 / 上限 / 重置 |
 | 待加 | `patches.json` 单点更新 | 修单水表单小时数据 |
 | 待加 | mock 数据补 `meter_daily.json` | 让 Stage 3 残差分析两边都能跑 |
 

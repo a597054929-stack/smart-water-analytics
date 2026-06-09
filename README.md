@@ -271,7 +271,7 @@ in the chat UI).
 ## Evaluation
 
 ```bash
-pytest tests/ -v                          # 170 unit tests
+pytest tests/ -v                          # 181 unit tests (was 175, +6 execute dedup)
 python tests/evaluate.py                  # 30 QA pairs, real LLM, ~10 min
 npm run model:compare                     # LightGBM vs LinearRegression comparison
 python scripts/health_check.py            # Data freshness + SQLite integrity check
@@ -287,10 +287,10 @@ The evaluator scores:
 Output: `reports/eval_per_qa.json` and `reports/eval_report.md`.
 
 Latest real-data run (30 pairs, mimo-v2.5-pro, `analytics_real.db`):
-- **pass_rate 76.7%** / tool_accuracy 70.0% / avg_kw_recall 86.7% / avg_latency 19.2s
+- **pass_rate 86.7%** (26/30) / tool_accuracy 80.0% / avg_kw_recall 88.3% / avg_latency 30.8s
 - **0% failure rate** (all 30 pairs completed)
 - All 3 clarification pairs PASS (regression OK), both data-quality pairs PASS
-- Real semantic pass rate ??93% (most remaining fails are semantically-equivalent tool choices, not routing errors)
+- 4 remaining FAIL: 2 tool-choice (Q8, Q25), 1 keyword mismatch (Q24), 1 tool-choice+keyword (Q14)
 
 ### Test layers
 - **66 unit tests** (`pytest tests/ --ignore=tests/evaluate.py`) ??pure logic, no live LLM, ~2s
