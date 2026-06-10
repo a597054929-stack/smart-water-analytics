@@ -213,48 +213,96 @@ def get_predictions(query_type: str = "meter", meter_id: str = "",
     """Get water consumption predictions (7-day forecast).
     query_type=meter (default): per-meter predictions; query_type=building: per-building predictions.
     Parameters: query_type=meter/building, meter_id - for meter type, building - for building type, limit - max results."""
+    from _sql_helpers import _query_all
+
     if query_type == "building":
-        data = _load("predictions_by_building.json")
-        predictions = data.get("predictions", [])
+        rows = _query_all(
+            f"SELECT * FROM predictions_building ORDER BY building LIMIT {int(limit) * 7}"
+        )
+        if not rows:
+            return f"No prediction found for building '{building}'"
+
+        # Group by building: predictions_building is one row per (building, date)
+        by_building: dict[str, dict] = {}
+        for r in rows:
+            b = r.get("building", "")
+            if building and building.lower() not in b.lower():
+                continue
+            entry = by_building.setdefault(b, {
+                "building": b,
+                "propertyType": "",
+                "meterCount": 0,
+                "trend": "",
+                "modelScore": 0,
+                "avgHistorical": 0,
+                "predictions": [],
+            })
+            entry["predictions"].append({
+                "date": r.get("date"),
+                "predicted": r.get("predicted"),
+                "lower": r.get("lower"),
+                "upper": r.get("upper"),
+            })
+
+        buildings = list(by_building.values())
+        if not buildings:
+            return f"No prediction found for building '{building}'"
+
+        # If a specific building is requested, return its full entry
         if building:
-            pred = [p for p in predictions if building.lower() in p.get("building", "").lower()]
-            if not pred:
-                return f"No prediction found for building '{building}'"
-            return json.dumps(pred, ensure_ascii=False, indent=2)
-        top = predictions[:limit]
+            bl = building.lower()
+            match = [b for b in buildings if bl in b["building"].lower()]
+            return json.dumps(match[0] if match else {}, ensure_ascii=False, indent=2)
+
+        # Summary (top N by first-row order)
         summary = [{
-            "building": p["building"], "propertyType": p.get("propertyType", ""),
-            "meterCount": p.get("meterCount", 0), "trend": p.get("trend", ""),
-            "modelScore": p.get("modelScore", 0), "avgHistorical": p.get("avgHistorical", 0),
-        } for p in top]
-        return json.dumps({"total_buildings": len(predictions), "top": summary}, ensure_ascii=False, indent=2)
+            "building": b["building"],
+            "propertyType": b["propertyType"],
+            "meterCount": b["meterCount"],
+            "trend": b["trend"],
+            "modelScore": b["modelScore"],
+            "avgHistorical": b["avgHistorical"],
+        } for b in buildings[:limit]]
+        return json.dumps({"total_buildings": len(buildings), "top": summary},
+                          ensure_ascii=False, indent=2)
 
     # Default: meter predictions
-    data = _load("predictions.json")
-    predictions = data.get("predictions", [])
     if meter_id:
-        pred = [p for p in predictions if p.get("meterId") == meter_id]
-        if not pred:
+        rows = _query_all(
+            f"SELECT * FROM predictions WHERE meterId = '{meter_id}' ORDER BY date"
+        )
+        if not rows:
             return f"No prediction found for meter {meter_id}"
-        # Merge fitted data from separate file if available
-        result = dict(pred[0])
+        # TODO(phase4): merge predictions_fitted.json — currently no SQLite
+        # equivalent. predictions_fitted.json not in schema_v2.sql; will be
+        # added as a fitted_predictions table in Phase 4 publish.
         try:
-            fitted_data = _load("predictions_fitted.json")
-            for f in fitted_data.get("fitted", []):
+            fitted = _load("predictions_fitted.json")
+            for f in fitted.get("fitted", []):
                 if f.get("meterId") == meter_id:
-                    result["fitted"] = f.get("fitted", [])
+                    rows.append({"fitted": f.get("fitted", [])})
                     break
         except (FileNotFoundError, KeyError):
             pass
-        return json.dumps(result, ensure_ascii=False, indent=2)
-    top = sorted(predictions, key=lambda x: x.get("modelScore", 0), reverse=True)[:limit]
-    summary = [{
-        "meterId": p["meterId"], "building": p.get("info", {}).get("buildingName", ""),
-        "dma": p.get("info", {}).get("dma", ""), "trend": p.get("trend", ""),
-        "modelScore": p.get("modelScore", 0), "avgHistorical": p.get("avgHistorical", 0),
-        "next7days_avg": round(sum(x["value"] for x in p.get("predictions", [])) / max(1, len(p.get("predictions", []))), 2),
-    } for p in top]
-    return json.dumps({"total_predictions": len(predictions), "top": summary}, ensure_ascii=False, indent=2)
+        return json.dumps(rows, ensure_ascii=False, indent=2)
+
+    # Top N by latest predicted value
+    rows = _query_all(
+        f"SELECT * FROM predictions ORDER BY date DESC LIMIT {int(limit) * 7}"
+    )
+    by_meter: dict[str, list] = {}
+    for r in rows:
+        by_meter.setdefault(r.get("meterId"), []).append(r)
+    summary = []
+    for mid, days in list(by_meter.items())[:limit]:
+        vals = [d.get("predicted") for d in days if d.get("predicted") is not None]
+        avg = round(sum(vals) / max(len(vals), 1), 2) if vals else 0
+        summary.append({
+            "meterId": mid,
+            "next7days_avg": avg,
+        })
+    return json.dumps({"total_predictions": len(by_meter), "top": summary},
+                      ensure_ascii=False, indent=2)
 
 
 # ── Tool 5: Data overview ────────────────────────────────────
