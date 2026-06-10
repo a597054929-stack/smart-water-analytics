@@ -654,40 +654,49 @@ def generate_report(dma: str = "", month: str = "") -> str:
     """Generate a summary report for a DMA zone and month.
     Combines anomaly stats, consumption data, rankings, and NRW into one report.
     Use when the user asks for a report, summary, or overview analysis."""
-    anomalies = _load("anomalies.json")
-    daily = _load("daily_dma.json")
-    ranks = _load("rank_changes.json")
+    from _sql_helpers import _query_all, _query_one
 
+    # 1. Anomalies
+    a_where = []
     if month:
-        anomalies = [a for a in anomalies if a["date"].startswith(month)]
+        a_where.append(f"date LIKE '{month}%'")
     if dma:
-        anomalies = [a for a in anomalies if _match_dma(dma, a.get("dma", ""))]
-
-    # Anomaly summary
-    type_counts = {}
-    dma_counts = {}
-    for a in anomalies:
-        t = a.get("type", "unknown")
-        d = a.get("dma", "unknown")
+        a_where.append(f"LOWER(dma) LIKE '%{dma.lower()}%'")
+    a_sql = "SELECT type, dma FROM anomalies"
+    if a_where:
+        a_sql += " WHERE " + " AND ".join(a_where)
+    a_rows = _query_all(a_sql)
+    type_counts: dict[str, int] = {}
+    dma_counts: dict[str, int] = {}
+    for r in a_rows:
+        t = r.get("type") or "unknown"
+        d = r.get("dma") or "unknown"
         type_counts[t] = type_counts.get(t, 0) + 1
         dma_counts[d] = dma_counts.get(d, 0) + 1
 
-    # Consumption summary
-    total_consumption = 0
-    days_count = 0
-    for day in daily:
-        if month and not day["date"].startswith(month):
-            continue
-        for dma_name, stats in day.get("dmas", {}).items():
-            if dma and not _match_dma(dma, dma_name):
-                continue
-            total_consumption += stats.get("total", 0)
-        days_count += 1
-
+    # 2. Consumption (SUM/COUNT via SQL)
+    d_where = []
+    if month:
+        d_where.append(f"date LIKE '{month}%'")
+    if dma:
+        d_where.append(f"LOWER(dma) LIKE '%{dma.lower()}%'")
+    d_sql = "SELECT COALESCE(SUM(total), 0) AS s, COUNT(DISTINCT date) AS days FROM daily_dma"
+    if d_where:
+        d_sql += " WHERE " + " AND ".join(d_where)
+    d_row = _query_one(d_sql) or {"s": 0, "days": 0}
+    total_consumption = d_row.get("s") or 0
+    days_count = d_row.get("days") or 0
     avg_daily = round(total_consumption / max(days_count, 1), 1)
 
-    # Top ranked meters in this DMA
-    top_meters = [r for r in ranks if not dma or _match_dma(dma, r.get("dma", ""))][:5]
+    # 3. Top ranked meters (filtered by DMA if provided)
+    r_where = []
+    if dma:
+        r_where.append(f"LOWER(dma) LIKE '%{dma.lower()}%'")
+    r_sql = "SELECT meterId, buildingName, daysInTop20, avgTotal FROM rank_changes"
+    if r_where:
+        r_sql += " WHERE " + " AND ".join(r_where)
+    r_sql += " LIMIT 5"
+    top_meters = _query_all(r_sql)
 
     report = {
         "report_period": month or "all time",
@@ -698,7 +707,7 @@ def generate_report(dma: str = "", month: str = "") -> str:
             "days": days_count,
         },
         "anomalies": {
-            "total": len(anomalies),
+            "total": len(a_rows),
             "by_type": type_counts,
             "by_dma": dma_counts,
         },
@@ -709,7 +718,6 @@ def generate_report(dma: str = "", month: str = "") -> str:
             "avgTotal": m.get("avgTotal"),
         } for m in top_meters],
     }
-
     return json.dumps(report, ensure_ascii=False, indent=2)
 
 
