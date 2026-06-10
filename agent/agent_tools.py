@@ -360,54 +360,78 @@ def query_consumption(mode: str = "daily", date: str = "", dma: str = "",
                       month1: str = "", month2: str = "", limit: int = 7) -> str:
     """Query water consumption data. mode=daily: daily DMA summary; mode=weekly: weekly trends; mode=compare: month-over-month comparison.
     Parameters: mode=daily/weekly/compare, date - for daily, dma - zone filter, month1/month2 - for compare (YYYY-MM), limit - rows."""
-    daily = _load("daily_dma.json")
+    from _sql_helpers import _query_all, _query_one
 
     if mode == "weekly":
-        return json.dumps(_load("weekly.json"), ensure_ascii=False, indent=2)
+        rows = _query_all("SELECT * FROM weekly ORDER BY weekStart")
+        # The v2 weekly table stores totalByDma/dates/etc. as JSON strings.
+        # Deserialize so the LLM sees the same nested structure as the
+        # legacy JSON path used to produce.
+        for r in rows:
+            for k in ("totalByDma", "wdByDmaRes", "dates", "dailyTotals"):
+                v = r.get(k)
+                if isinstance(v, str) and v:
+                    try:
+                        r[k] = json.loads(v)
+                    except (ValueError, TypeError):
+                        pass
+        return json.dumps(rows, ensure_ascii=False, indent=2)
 
     if mode == "compare":
         if not month1 or not month2:
             return json.dumps({"error": "month1 and month2 are required for compare mode"})
-        def month_stats(month):
-            total = 0; days = 0; res_total = 0; nonres_total = 0; count = 0
-            for day in daily:
-                if not day["date"].startswith(month):
-                    continue
-                days += 1
-                for dma_name, stats in day.get("dmas", {}).items():
-                    if dma and not _match_dma(dma, dma_name):
-                        continue
-                    total += stats.get("total", 0)
-                    res_total += stats.get("residential", 0)
-                    nonres_total += stats.get("nonResidential", 0)
-                    count = max(count, stats.get("meterCount", 0))
-            return {"month": month, "total": round(total, 1),
-                    "daily_avg": round(total / max(days, 1), 1),
-                    "residential": round(res_total, 1), "nonResidential": round(nonres_total, 1), "days": days}
+
+        def month_stats(month: str) -> dict:
+            where = [f"date LIKE '{month}%'"]
+            if dma:
+                where.append(f"LOWER(dma) LIKE '%{dma.lower()}%'")
+            sql = f"""
+                SELECT COALESCE(SUM(total), 0) AS total,
+                       COUNT(DISTINCT date) AS days,
+                       COALESCE(SUM(residential), 0) AS residential,
+                       COALESCE(SUM(nonResidential), 0) AS nonResidential,
+                       MAX(meterCount) AS meterCount
+                FROM daily_dma WHERE {' AND '.join(where)}
+            """
+            r = _query_one(sql) or {}
+            total = r.get("total") or 0
+            days = r.get("days") or 0
+            return {
+                "month": month,
+                "total": round(total, 1),
+                "daily_avg": round(total / max(days, 1), 1),
+                "residential": round(r.get("residential") or 0, 1),
+                "nonResidential": round(r.get("nonResidential") or 0, 1),
+                "days": days,
+            }
+
         s1 = month_stats(month1)
         s2 = month_stats(month2)
         change = round((s2["total"] - s1["total"]) / max(s1["total"], 1) * 100, 1)
-        return json.dumps({"comparison": [s1, s2], "change_percent": change,
-                           "direction": "increased" if change > 0 else "decreased"}, ensure_ascii=False, indent=2)
+        return json.dumps({
+            "comparison": [s1, s2], "change_percent": change,
+            "direction": "increased" if change > 0 else "decreased",
+        }, ensure_ascii=False, indent=2)
 
     # Default: daily mode
-    results = []
-    for day in daily:
-        if date and date not in day["date"]:
-            continue
-        for dma_name, stats in day.get("dmas", {}).items():
-            if dma and not _match_dma(dma, dma_name):
-                continue
-            results.append({
-                "date": day["date"], "dma": dma_name,
-                "total": round(stats["total"], 1),
-                "residential": round(stats.get("residential", 0), 1),
-                "nonResidential": round(stats.get("nonResidential", 0), 1),
-                "meterCount": stats.get("meterCount", 0),
-            })
-        if len(results) >= limit * 5:
-            break
-    return json.dumps(results[:limit * 5], ensure_ascii=False, indent=2)
+    where = []
+    if date:
+        where.append(f"date LIKE '%{date}%'")
+    if dma:
+        where.append(f"LOWER(dma) LIKE '%{dma.lower()}%'")
+
+    sql = ("SELECT date, dma, total, residential, nonResidential, meterCount "
+           "FROM daily_dma")
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += f" ORDER BY date DESC, dma LIMIT {int(limit) * 5}"
+
+    rows = _query_all(sql)
+    for r in rows:
+        r["total"] = round(r.get("total") or 0, 1)
+        r["residential"] = round(r.get("residential") or 0, 1)
+        r["nonResidential"] = round(r.get("nonResidential") or 0, 1)
+    return json.dumps(rows, ensure_ascii=False, indent=2)
 
 
 # ── Tool 7: Rank changes ─────────────────────────────────────
