@@ -432,6 +432,120 @@ def stage_validate(log, db_path: Path) -> dict[str, Any]:
         return report
 
 
+def stage_transform(log, db_path: Path) -> dict[str, Any]:
+    """Transform = clean meter_daily + residual analysis + data_health
+    + import corrections.json -> corrections table.
+
+    Phase 4 step 4: combines the old stage_clean, the residual analysis
+    that was in stage_detect_anomalies, and stage_data_health into one
+    transformation pass that operates on the SQLite state. Also imports
+    corrections.json (the externally-edited file) into the corrections
+    table on every run — corrections is event-driven (L1), so a fresh
+    SQLite from stage_ingest needs the import to mirror the file.
+
+    Old stages 2/3/4/7 will be removed in C4-6. This stage does NOT
+    write JSON checkpoints anymore (the old checkpoints/stage_*.json
+    files are obsolete; new state lives in SQLite).
+    """
+    from pipeline._stages import (
+        clean_meter_daily, detect_anomalies_residual,
+        load_meter_daily_sqlite,
+    )
+    corr_path = ROOT / "backend" / "data" / "corrections.json"
+
+    with plog.stage("transform") as slog:
+        # 1. Clean meter_daily in-memory, then overwrite the SQLite table
+        df = load_meter_daily_sqlite(db_path)
+        cleaned, clean_report = clean_meter_daily(df) if not df.empty else (df, {"status": "skipped"})
+
+        conn = sqlite3.connect(str(db_path))
+        try:
+            cur = conn.cursor()
+            if not cleaned.empty:
+                cleaned.to_sql("meter_daily", conn, if_exists="replace", index=False)
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_meter_daily_meterId ON meter_daily(meterId)")
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_meter_daily_date ON meter_daily(date)")
+
+            # 2. Import corrections.json -> corrections table (L1 event file)
+            n_corr = 0
+            if corr_path.exists():
+                try:
+                    rows = json.loads(corr_path.read_text(encoding="utf-8"))
+                    for c in rows:
+                        sd = c.get("startDate") or c.get("start")
+                        ed = c.get("endDate") or c.get("end")
+                        if sd is None or ed is None:
+                            continue
+                        cur.execute(
+                            "INSERT OR REPLACE INTO corrections VALUES (?,?,?,?,?)",
+                            (c["meterId"], sd, ed, c.get("factor", 1.0), c.get("reason")),
+                        )
+                        n_corr += 1
+                except (json.JSONDecodeError, OSError) as e:
+                    slog.warning(
+                        f"corrections.json import failed: {e}",
+                        extra={"stage": "transform"},
+                    )
+
+            # 3. Residual analysis (predictions vs cleaned meter_daily)
+            pred_df = pd.read_sql_query("SELECT * FROM predictions", conn)
+            actual_df = cleaned if not cleaned.empty else df
+            residual = detect_anomalies_residual(pred_df, actual_df)
+
+            # 4. data_health checks: per_meter_outliers, daily_jumps, negative_pairs
+            # Write per-check counts into the data_health table (also L1).
+            if not cleaned.empty:
+                outliers = dq.detect_per_meter_outliers(cleaned)
+                jumps = dq.detect_daily_jumps(cleaned)
+                pairs = dq.detect_negative_pairs(cleaned)
+            else:
+                outliers, jumps, pairs = [], [], []
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS data_health (
+                    ts TEXT, check_name TEXT, n_found INT
+                )
+            """)
+            for k, v in (
+                ("per_meter_outliers", len(outliers)),
+                ("daily_jumps", len(jumps)),
+                ("negative_pairs", len(pairs)),
+            ):
+                cur.execute(
+                    "INSERT INTO data_health VALUES (datetime('now'), ?, ?)",
+                    (k, int(v)),
+                )
+            conn.commit()
+        finally:
+            conn.close()
+
+        slog.info(
+            "transform complete",
+            extra={
+                "stage": "transform",
+                "metrics": {
+                    "clean_rows": int(len(cleaned)) if cleaned is not None else 0,
+                    "corrections_imported": n_corr,
+                    "residual": residual,
+                    "health": {
+                        "outliers": len(outliers),
+                        "jumps":    len(jumps),
+                        "pairs":    len(pairs),
+                    },
+                },
+            },
+        )
+        return {
+            "clean":               clean_report,
+            "corrections_imported": n_corr,
+            "residual":            residual,
+            "health":              {
+                "outliers": len(outliers),
+                "jumps":    len(jumps),
+                "pairs":    len(pairs),
+            },
+        }
+
+
 def stage_drift(artifacts: dict[str, pd.DataFrame], log) -> dict[str, Any]:
     """Run the data-drift check on anomalies (small, illustrative)."""
     with plog.stage("drift") as slog:
