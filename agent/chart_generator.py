@@ -3,21 +3,23 @@ Chart Generator — converts water data into ECharts JSON configs.
 
 The Agent calls these functions to produce chart options,
 which the frontend renders directly with ECharts.
+
+Phase 2 of ARCHITECTURE_OPTIMIZATION_PLAN: switched from JSON file
+reads to SQLite queries (analytics_real.db). Single source of truth.
 """
 
 import json
-import os
 
-_DEFAULT_DATA_DIR = os.path.abspath(
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "backend", "data", "output")
-)
-_env_dir = os.environ.get("WATER_DATA_DIR", "")
-DATA_DIR = _env_dir if (_env_dir and os.path.isabs(_env_dir)) else _DEFAULT_DATA_DIR
+# Ensure agent/ is on sys.path so the relative import of _sql_helpers
+# resolves whether this file is imported by tests, by the server, or
+# directly as a script.
+import sys
+from pathlib import Path
+_agent_dir = str(Path(__file__).resolve().parent)
+if _agent_dir not in sys.path:
+    sys.path.insert(0, _agent_dir)
 
-
-def _load(filename):
-    with open(os.path.join(DATA_DIR, filename), encoding="utf-8") as f:
-        return json.load(f)
+from _sql_helpers import _query_all  # noqa: E402
 
 
 def _find_dma_key(data_dict, dma_query):
@@ -30,13 +32,29 @@ def _find_dma_key(data_dict, dma_query):
 
 def weekly_trend_chart(dma: str = "Zone-3") -> dict:
     """Weekly consumption trend line chart."""
-    weeks = _load("weekly.json")
-    if not weeks:
+    rows = _query_all("SELECT label, totalByDma FROM weekly ORDER BY weekStart")
+    if not rows:
         return {"title": {"text": "No data available"}}
 
-    actual_key = _find_dma_key(weeks[0].get("totalByDma", {}), dma)
-    labels = [w["label"] for w in weeks]
-    values = [round(w.get("totalByDma", {}).get(actual_key, 0)) for w in weeks]
+    # totalByDma is a JSON string in the v2 weekly table — deserialize
+    first_tbd = rows[0].get("totalByDma") or "{}"
+    if isinstance(first_tbd, str):
+        try:
+            first_tbd = json.loads(first_tbd)
+        except (ValueError, TypeError):
+            first_tbd = {}
+    actual_key = _find_dma_key(first_tbd, dma)
+
+    labels = [r.get("label") or "" for r in rows]
+    values = []
+    for r in rows:
+        tbd = r.get("totalByDma")
+        if isinstance(tbd, str):
+            try:
+                tbd = json.loads(tbd)
+            except (ValueError, TypeError):
+                tbd = {}
+        values.append(round((tbd or {}).get(actual_key, 0)))
 
     return {
         "title": {"text": f"{dma} Weekly Consumption Trend", "left": "center"},
@@ -50,13 +68,12 @@ def weekly_trend_chart(dma: str = "Zone-3") -> dict:
 
 def anomaly_by_dma_chart() -> dict:
     """Anomaly count by DMA zone (pie chart)."""
-    anomalies = _load("anomalies.json")
-    dma_count = {}
-    for a in anomalies:
-        d = a.get("dma", "Unknown")
-        dma_count[d] = dma_count.get(d, 0) + 1
-
-    data = [{"name": k, "value": v} for k, v in sorted(dma_count.items(), key=lambda x: -x[1])]
+    rows = _query_all("""
+        SELECT dma, COUNT(*) AS n FROM anomalies
+        WHERE dma IS NOT NULL AND dma != ''
+        GROUP BY dma ORDER BY n DESC
+    """)
+    data = [{"name": r["dma"], "value": r["n"]} for r in rows]
     return {
         "title": {"text": "Anomalies by DMA Zone", "left": "center"},
         "tooltip": {"trigger": "item", "formatter": "{b}: {c} ({d}%)"},
@@ -66,15 +83,14 @@ def anomaly_by_dma_chart() -> dict:
 
 def anomaly_type_chart() -> dict:
     """Anomaly type distribution (bar chart)."""
-    anomalies = _load("anomalies.json")
-    type_count = {}
-    for a in anomalies:
-        t = a.get("type", "Unknown")
-        type_count[t] = type_count.get(t, 0) + 1
-
+    rows = _query_all("""
+        SELECT type, COUNT(*) AS n FROM anomalies
+        WHERE type IS NOT NULL AND type != ''
+        GROUP BY type
+    """)
     type_names = {"spike": "Spike", "drop": "Drop", "zero": "Zero", "watch": "Watch"}
-    labels = [type_names.get(k, k) for k in type_count.keys()]
-    values = list(type_count.values())
+    labels = [type_names.get(r["type"], r["type"]) for r in rows]
+    values = [r["n"] for r in rows]
 
     return {
         "title": {"text": "Anomaly Type Distribution", "left": "center"},
@@ -87,23 +103,34 @@ def anomaly_type_chart() -> dict:
 
 def daily_usage_chart(dma: str = "Zone-3", days: int = 30) -> dict:
     """Daily consumption trend line chart."""
-    daily = _load("daily_dma.json")
-    if not daily:
+    # Find the actual DMA key in the table (real data uses Chinese names)
+    sample_rows = _query_all(
+        "SELECT DISTINCT dma FROM daily_dma WHERE dma LIKE ? ORDER BY dma LIMIT 1",
+        # f-string for safety; user input already validated at safe_tool_call
+    )
+    # Use LIKE to fuzzy-match
+    all_dmas = _query_all("SELECT DISTINCT dma FROM daily_dma WHERE dma IS NOT NULL AND dma != ''")
+    dma_keys = {r["dma"] for r in all_dmas}
+    actual_key = _find_dma_key(dma_keys, dma) if dma_keys else dma
+
+    rows = _query_all(
+        f"SELECT date, total FROM daily_dma WHERE dma = '{actual_key}' "
+        f"ORDER BY date DESC LIMIT {int(days)}"
+    )
+    if not rows:
         return {"title": {"text": "No data available"}}
 
-    sample_dmas = daily[0].get("dmas", {})
-    actual_key = _find_dma_key(sample_dmas, dma)
-
-    recent = daily[-days:]
-    dates = [d["date"] for d in recent]
-    values = [round(d.get("dmas", {}).get(actual_key, {}).get("total", 0), 1) for d in recent]
+    # Reverse to chronological order for the line chart
+    rows.reverse()
+    dates = [r["date"] for r in rows]
+    values = [round(r.get("total") or 0, 1) for r in rows]
 
     return {
-        "title": {"text": f"{dma} Last {days} Days Usage", "left": "center"},
+        "title": {"text": f"{actual_key} Last {days} Days Usage", "left": "center"},
         "tooltip": {"trigger": "axis"},
         "xAxis": {"type": "category", "data": dates, "axisLabel": {"rotate": 45}},
         "yAxis": {"type": "value", "name": "m³"},
-        "series": [{"name": dma, "type": "line", "data": values}],
+        "series": [{"name": actual_key, "type": "line", "data": values}],
         "grid": {"left": "10%", "right": "5%", "bottom": "15%"},
     }
 
