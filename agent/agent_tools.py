@@ -89,24 +89,32 @@ def query_anomalies(mode: str = "list", dma: str = "", month: str = "",
                     anomaly_type: str = "", meter_id: str = "", limit: int = 10) -> str:
     """Query anomaly data. mode=list (default): list anomaly records; mode=stats: summary by DMA/type; mode=analyze: deep-dive a specific meter.
     Parameters: mode=list/stats/analyze, dma - Zone name, month - YYYY-MM, anomaly_type - spike/drop/zero/watch, meter_id - for mode=analyze, limit - max results."""
-    anomalies = _load("anomalies.json")
+    from _sql_helpers import _query_all, _query_one
 
+    where = []
     if dma:
-        anomalies = [a for a in anomalies if _match_dma(dma, a.get("dma", ""))]
+        where.append(f"LOWER(dma) LIKE '%{dma.lower()}%'")
     if month:
-        anomalies = [a for a in anomalies if a["date"].startswith(month)]
+        where.append(f"date LIKE '{month}%'")
     if anomaly_type:
-        anomalies = [a for a in anomalies if a.get("type") == anomaly_type]
+        where.append(f"type = '{anomaly_type}'")
 
     if mode == "stats":
-        dma_count = {}
-        type_count = {}
-        for a in anomalies:
-            dma_count[a.get("dma", "Unknown")] = dma_count.get(a.get("dma", "Unknown"), 0) + 1
-            type_count[a.get("type", "Unknown")] = type_count.get(a.get("type", "Unknown"), 0) + 1
+        sql = "SELECT dma, type, COUNT(*) AS n FROM anomalies"
+        if where:
+            sql += " WHERE " + " AND ".join(where)
+        sql += " GROUP BY dma, type"
+        rows = _query_all(sql)
+        dma_count: dict[str, int] = {}
+        type_count: dict[str, int] = {}
+        for r in rows:
+            d = r.get("dma") or "Unknown"
+            t = r.get("type") or "Unknown"
+            dma_count[d] = dma_count.get(d, 0) + r["n"]
+            type_count[t] = type_count.get(t, 0) + r["n"]
         return json.dumps({
             "filters": {"month": month or "all", "dma": dma or "all"},
-            "total_anomalies": len(anomalies),
+            "total_anomalies": sum(r["n"] for r in rows),
             "by_dma": dict(sorted(dma_count.items(), key=lambda x: -x[1])),
             "by_type": type_count,
         }, ensure_ascii=False, indent=2)
@@ -114,15 +122,15 @@ def query_anomalies(mode: str = "list", dma: str = "", month: str = "",
     if mode == "analyze":
         if not meter_id:
             return json.dumps({"error": "meter_id is required for mode=analyze"})
-        meter_anomalies = [a for a in anomalies if a.get("meterId") == meter_id]
-        if not meter_anomalies:
+        rows = _query_all(f"SELECT * FROM anomalies WHERE meterId = '{meter_id}'")
+        if not rows:
             return json.dumps({"message": f"No anomalies found for meter {meter_id}"})
-        info = _load("meter_info.json").get(meter_id, {})
-        type_counts = {}
-        for a in meter_anomalies:
+        info = _query_one(f"SELECT * FROM meters WHERE meterId = '{meter_id}'") or {}
+        type_counts: dict[str, int] = {}
+        for a in rows:
             t = a.get("type", "unknown")
             type_counts[t] = type_counts.get(t, 0) + 1
-        scores = [a.get("anomalyScore", 0) for a in meter_anomalies]
+        scores = [a.get("anomalyScore", 0) or 0 for a in rows]
         avg_score = sum(scores) / len(scores) if scores else 0
         causes = []
         if type_counts.get("spike", 0) > 2:
@@ -136,14 +144,18 @@ def query_anomalies(mode: str = "list", dma: str = "", month: str = "",
         return json.dumps({
             "meter_id": meter_id, "building": info.get("buildingName", "Unknown"),
             "dma": info.get("dma", "Unknown"), "property_type": info.get("propertyType", "Unknown"),
-            "total_anomalies": len(meter_anomalies), "type_breakdown": type_counts,
-            "avg_anomaly_score": round(avg_score, 2), "recent_anomalies": meter_anomalies[:5],
+            "total_anomalies": len(rows), "type_breakdown": type_counts,
+            "avg_anomaly_score": round(avg_score, 2), "recent_anomalies": rows[:5],
             "possible_causes": causes,
         }, ensure_ascii=False, indent=2)
 
     # Default: list mode
-    anomalies.sort(key=lambda x: x.get("anomalyScore", 0), reverse=True)
-    return json.dumps(anomalies[:limit], ensure_ascii=False, indent=2)
+    sql = "SELECT * FROM anomalies"
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += f" ORDER BY anomalyScore DESC LIMIT {int(limit)}"
+    rows = _query_all(sql)
+    return json.dumps(rows, ensure_ascii=False, indent=2)
 
 
 # ── Tool 2: Query meters ─────────────────────────────────────
@@ -181,24 +193,33 @@ def query_meters(dma: str = "", is_residential: bool = None, building: str = "",
 def get_anomaly_stats(month: str = "", dma: str = "") -> str:
     """Get anomaly statistics summary. Shows count by DMA zone and anomaly type.
     Use when the user asks about anomaly overview, which zone has most issues, or monthly summary."""
-    anomalies = _load("anomalies.json")
+    from _sql_helpers import _query_all
 
+    where = []
     if month:
-        anomalies = [a for a in anomalies if a["date"].startswith(month)]
+        where.append(f"date LIKE '{month}%'")
     if dma:
-        anomalies = [a for a in anomalies if _match_dma(dma, a.get("dma", ""))]
+        where.append(f"LOWER(dma) LIKE '%{dma.lower()}%'")
 
-    dma_count = {}
-    type_count = {}
-    for a in anomalies:
-        d = a.get("dma", "Unknown")
-        t = a.get("type", "Unknown")
-        dma_count[d] = dma_count.get(d, 0) + 1
-        type_count[t] = type_count.get(t, 0) + 1
+    sql = "SELECT dma, type, COUNT(*) AS n FROM anomalies"
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " GROUP BY dma, type"
+
+    rows = _query_all(sql)
+    dma_count: dict[str, int] = {}
+    type_count: dict[str, int] = {}
+    total = 0
+    for r in rows:
+        d = r.get("dma") or "Unknown"
+        t = r.get("type") or "Unknown"
+        dma_count[d] = dma_count.get(d, 0) + r["n"]
+        type_count[t] = type_count.get(t, 0) + r["n"]
+        total += r["n"]
 
     return json.dumps({
         "filters": {"month": month or "all", "dma": dma or "all"},
-        "total_anomalies": len(anomalies),
+        "total_anomalies": total,
         "by_dma": dict(sorted(dma_count.items(), key=lambda x: -x[1])),
         "by_type": type_count,
     }, ensure_ascii=False, indent=2)
@@ -312,17 +333,22 @@ def get_predictions(query_type: str = "meter", meter_id: str = "",
 def get_data_overview() -> str:
     """Get overall data overview: total meters, DMA zones, date range, anomaly count.
     Use when the user asks about data summary, system overview, or general stats."""
-    anomalies = _load("anomalies.json")
-    meters = _load("meter_info.json")
-    dates = _load("available_dates.json")
+    from _sql_helpers import _query_all, _query_one
 
+    total_meters = (_query_one("SELECT COUNT(*) AS n FROM meters") or {"n": 0})["n"]
+    total_anomalies = (_query_one("SELECT COUNT(*) AS n FROM anomalies") or {"n": 0})["n"]
+    dma_rows = _query_all("SELECT DISTINCT dma FROM meters WHERE dma IS NOT NULL AND dma != '' ORDER BY dma")
+    type_rows = _query_all("SELECT DISTINCT type FROM anomalies WHERE type IS NOT NULL AND type != '' ORDER BY type")
+    date_rows = _query_all("SELECT date FROM daily_dma ORDER BY date")
+
+    date_list = [d["date"] for d in date_rows if d.get("date")]
     return json.dumps({
-        "total_meters": len(meters),
-        "total_anomalies": len(anomalies),
-        "dma_zones": sorted(set(m.get("dma", "") for m in meters.values())),
-        "anomaly_types": sorted(set(a.get("type", "") for a in anomalies)),
-        "date_range": f"{dates[0]} ~ {dates[-1]}" if dates else "no data",
-        "total_days": len(dates),
+        "total_meters": total_meters,
+        "total_anomalies": total_anomalies,
+        "dma_zones": [d["dma"] for d in dma_rows],
+        "anomaly_types": [t["type"] for t in type_rows],
+        "date_range": f"{date_list[0]} ~ {date_list[-1]}" if date_list else "no data",
+        "total_days": len(date_list),
     }, ensure_ascii=False, indent=2)
 
 
