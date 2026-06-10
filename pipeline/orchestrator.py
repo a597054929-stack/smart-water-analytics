@@ -547,7 +547,9 @@ def stage_transform(log, db_path: Path) -> dict[str, Any]:
 
 
 def stage_drift(artifacts: dict[str, pd.DataFrame], log) -> dict[str, Any]:
-    """Run the data-drift check on anomalies (small, illustrative)."""
+    """DEPRECATED in Phase 4: stage_publish now does this + persists
+    drift_reports to SQLite. Kept for backward compat with the 7-stage
+    STAGES list (cutover happens in C4-6)."""
     with plog.stage("drift") as slog:
         df = artifacts.get("anomalies", pd.DataFrame())
         if df.empty:
@@ -558,6 +560,45 @@ def stage_drift(artifacts: dict[str, pd.DataFrame], log) -> dict[str, Any]:
             columns=["total", "anomalyScore", "type", "dma"],
         )
         return out
+
+
+def stage_publish(log, db_path: Path) -> dict[str, Any]:
+    """Publish = drift detection + persist to drift_reports table.
+
+    Phase 4 step 5: the old stage_drift only logged to console / JSON.
+    Now it persists per-column metrics into the drift_reports table so
+    the trend over time is queryable via SQL (no more sidecar JSON).
+
+    Layer 1 tables (meters, predictions, rank_changes, anomalies,
+    data_errors, corrections) are already in SQLite from stage_ingest +
+    stage_transform, so this stage's main job is drift persistence.
+    """
+    from pipeline._stages import write_drift_to_sqlite
+    with plog.stage("publish") as slog:
+        conn = sqlite3.connect(str(db_path))
+        try:
+            df = pd.read_sql_query("SELECT * FROM anomalies", conn)
+        finally:
+            conn.close()
+        if df.empty:
+            slog.warning("publish: anomalies table empty, drift skipped")
+            return {"drift": {"overall_status": "skipped"}, "drift_rows_written": 0}
+        out = drift.run_drift_check(
+            df,
+            columns=["total", "anomalyScore", "type", "dma"],
+        )
+        n = write_drift_to_sqlite(db_path, out)
+        slog.info(
+            "publish complete",
+            extra={
+                "stage": "publish",
+                "metrics": {
+                    "drift_rows_written": n,
+                    "overall_status": out.get("overall_status"),
+                },
+            },
+        )
+        return {"drift": out, "drift_rows_written": n}
 
 
 def stage_data_health(artifacts: dict[str, pd.DataFrame], log) -> dict[str, Any]:
