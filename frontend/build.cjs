@@ -1,5 +1,4 @@
 const fs=require('fs'),path=require('path');
-const { execSync } = require('child_process');
 
 const outDir=path.resolve(__dirname,'./dist');
 const dataDir=path.resolve(__dirname,'../backend/data/output');
@@ -20,22 +19,6 @@ for (const f of fs.readdirSync(distDataDir)) {
 const dataDirReal = path.resolve(__dirname, '../backend/data/output_real');
 const useRealData = process.env.USE_REAL_DATA === '1' && fs.existsSync(dataDirReal);
 const activeDataDir = useRealData ? dataDirReal : dataDir;
-
-// Phase 3 bridge: regenerate output_real/*.json from analytics_real.db
-// (the single source of truth after the 4-layer time-granularity refactor).
-// If export fails (e.g. no DB yet, or fresh clone), keep going with the
-// existing JSONs as a fallback so the build doesn't break.
-if (useRealData) {
-  try {
-    execSync('python scripts/export_json_for_frontend.py', {
-      cwd: path.resolve(__dirname, '..'),
-      stdio: 'inherit',
-    });
-    console.log('[build] export_json_for_frontend.py OK');
-  } catch (e) {
-    console.error('[build] SQLite export failed, using existing JSONs:', e.message);
-  }
-}
 
 const dataFiles = useRealData ? [
   // Real data: 13 individual JSONs
