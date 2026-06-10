@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import pandas as pd
 import pandera.pandas as pa
-from pandera import Check, Field
+from pandera import Field
 
 SCHEMA_VERSION = "1.0.0"
 
@@ -143,13 +143,38 @@ class DailyDmaRowSchema(pa.DataFrameModel):
 # ── Predictions ──────────────────────────────────────────────
 
 class PredictionRowSchema(pa.DataFrameModel):
-    """One row per meter-day prediction."""
+    """One row per meter-day prediction.
+
+    `lower` / `upper` are nullable: real-data LightGBM predictions carry
+    a confidence band, but the mock branch (which only computes a point
+    estimate) leaves them NaN. The schema enforces the band exists in
+    shape (column + dtype) without forcing every row to have one.
+    """
 
     date: str = Field(str_length=10)
     meterId: str = Field(str_matches=r"^\d{6,10}$")
-    predicted: float = Field(ge=0, le=5000000)
-    lower: float = Field(ge=0)
-    upper: float = Field(ge=0)
+    predicted: float = Field(ge=0, le=5000000, nullable=False)
+    lower: float = Field(ge=0, nullable=True)
+    upper: float = Field(ge=0, nullable=True)
+
+    class Config:
+        coerce = True
+        strict = False
+
+
+class PredictionsBuildingRowSchema(pa.DataFrameModel):
+    """One row per building-day aggregated prediction.
+
+    The orchestrator's ingest flattens both the real converter's `value`
+    field and the legacy mock's `predicted` field into a `predicted`
+    column, so the schema only needs the canonical name.
+    """
+
+    building: str = Field(str_length={"min_value": 1, "max_value": 200})
+    date: str = Field(str_length=10)
+    predicted: float = Field(ge=0, le=5000000, nullable=False)
+    lower: float = Field(ge=0, nullable=True)
+    upper: float = Field(ge=0, nullable=True)
 
     class Config:
         coerce = True
@@ -254,6 +279,7 @@ SCHEMA_REGISTRY = {
     "meter_info": MeterInfoSchema,
     "daily_dma": DailyDmaRowSchema,
     "predictions": PredictionRowSchema,
+    "predictions_building": PredictionsBuildingRowSchema,
     "weekly": WeeklySummarySchema,
     "rank_changes": RankChangeSchema,
     "search_index": SearchIndexSchema,
@@ -286,6 +312,7 @@ __all__ = [
     "MeterInfoSchema",
     "DailyDmaRowSchema",
     "PredictionRowSchema",
+    "PredictionsBuildingRowSchema",
     "WeeklySummarySchema",
     "RankChangeSchema",
     "SearchIndexSchema",

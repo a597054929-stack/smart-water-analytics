@@ -20,9 +20,9 @@ Methods chosen and why:
 
 from __future__ import annotations
 
-from typing import Iterable, Literal
+from collections.abc import Iterable
+from typing import Literal
 
-import numpy as np
 import pandas as pd
 
 try:

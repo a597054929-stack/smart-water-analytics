@@ -25,6 +25,11 @@ backend/data/corrections.json
 # backend/data/analytics_real.db
 # daily_totals.json
 
+# Phase-1 refactor (ARCHITECTURE_OPTIMIZATION_PLAN §5) safety backups.
+# Snapshots of output_real/ taken before schema changes — kept on disk
+# only, never in git (same sensitivity as live real data).
+backend/data/output_real_backup_*/
+
 # Local secrets — copy .env.example to .env and fill in real keys.
 .env
 

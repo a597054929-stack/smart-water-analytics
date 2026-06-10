@@ -8,8 +8,8 @@ that the orchestrator can call after every stage. Errors are raised as
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Iterable
 
 import pandas as pd
 import pandera.errors as pa_errors

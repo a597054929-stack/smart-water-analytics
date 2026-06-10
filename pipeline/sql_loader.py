@@ -26,8 +26,9 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Iterable, Optional
+from typing import Any
 
 import pandas as pd
 
@@ -355,7 +356,7 @@ class SqlLoader:
         self.conn.close()
 
 
-def list_tables(db_path: Optional[Path] = None) -> list[dict]:
+def list_tables(db_path: Path | None = None) -> list[dict]:
     if db_path is None:
         db_path = _resolve_db_path()
     """Return a list of {name, n_rows} for every table in the analytics DB."""
@@ -376,7 +377,7 @@ def list_tables(db_path: Optional[Path] = None) -> list[dict]:
     return tables
 
 
-def get_table_schema(table_name: str, db_path: Optional[Path] = None) -> list[dict]:
+def get_table_schema(table_name: str, db_path: Path | None = None) -> list[dict]:
     if db_path is None:
         db_path = _resolve_db_path()
     """Return column metadata for a table."""
@@ -393,7 +394,7 @@ def get_table_schema(table_name: str, db_path: Optional[Path] = None) -> list[di
     ]
 
 
-def run_query(sql: str, db_path: Optional[Path] = None, limit: int = 1000) -> tuple[list[str], list[tuple]]:
+def run_query(sql: str, db_path: Path | None = None, limit: int = 1000) -> tuple[list[str], list[tuple]]:
     if db_path is None:
         db_path = _resolve_db_path()
     """Execute a read-only SQL query. Returns (column_names, rows).

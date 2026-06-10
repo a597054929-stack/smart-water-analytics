@@ -31,30 +31,27 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import shutil
 import sys
 import time
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import pandas as pd
 
 try:
     from . import data_quality as dq
-    from . import drift
+    from . import drift, sql_loader
     from . import logger as plog
-    from . import sql_loader
     from . import validators as val
-    from . import schema as pschema
 except ImportError:
     import data_quality as dq  # type: ignore
     import drift  # type: ignore
     import logger as plog  # type: ignore
     import sql_loader  # type: ignore
     import validators as val  # type: ignore
-    import schema as pschema  # type: ignore
 
 
 # ── Paths ────────────────────────────────────────────────────
@@ -220,6 +217,17 @@ def stage_detect_anomalies(artifacts: dict[str, pd.DataFrame], log) -> dict[str,
     The portfolio keeps the pre-computed `anomalies.json` from the upstream
     process. This stage validates the artifact and reports stats so the
     pipeline has a uniform shape.
+
+    Additionally computes a residual analysis: pairs the `predictions`
+    artifact (one row per meter-day with `predicted`) against the
+    `meter_daily` artifact (one row per meter-day with the actual
+    `total`) and reports RMSE/MAE + coverage. Downgrade paths:
+
+    - No `predictions` rows  → skip residual analysis (no fitted model)
+    - No `meter_daily` rows  → skip (the real-data converter doesn't
+      emit meter_daily.json; only the mock branch does)
+    - All-zero residuals     → skip (degenerate model output)
+    - n_compared < 1         → skip
     """
     df = artifacts.get("anomalies", pd.DataFrame())
     if df.empty:
@@ -230,6 +238,52 @@ def stage_detect_anomalies(artifacts: dict[str, pd.DataFrame], log) -> dict[str,
         # Distribution stats
         by_type = validated["type"].value_counts().to_dict()
         by_dma = validated["dma"].value_counts().to_dict()
+        result: dict[str, Any] = {
+            "n": int(len(validated)),
+            "by_type": {k: int(v) for k, v in by_type.items()},
+            "by_dma": {k: int(v) for k, v in by_dma.items()},
+        }
+
+        # Residual analysis: predicted vs actual, where both exist.
+        pred_df = artifacts.get("predictions", pd.DataFrame())
+        actual_df = artifacts.get("meter_daily", pd.DataFrame())
+        if pred_df.empty or actual_df.empty:
+            slog.info(
+                "detect_anomalies residual analysis skipped (missing predictions or meter_daily)",
+                extra={
+                    "stage": "detect_anomalies",
+                    "metrics": {
+                        "has_predictions": not pred_df.empty,
+                        "has_meter_daily": not actual_df.empty,
+                        "reason": "real-data mode (no meter_daily.json) or no predictions",
+                    },
+                },
+            )
+            result["residual"] = {"status": "skipped"}
+        else:
+            joined = pred_df[["meterId", "date", "predicted"]].merge(
+                actual_df[["meterId", "date", "total"]],
+                on=["meterId", "date"],
+                how="inner",
+            )
+            joined = joined.dropna(subset=["predicted", "total"])
+            n_compared = int(len(joined))
+            if n_compared < 1:
+                result["residual"] = {"status": "skipped", "n_compared": 0}
+            else:
+                resid = (joined["total"] - joined["predicted"]).astype(float)
+                rmse = float((resid ** 2).mean() ** 0.5)
+                mae = float(resid.abs().mean())
+                bias = float(resid.mean())
+                result["residual"] = {
+                    "status": "ok",
+                    "n_compared": n_compared,
+                    "rmse": round(rmse, 3),
+                    "mae": round(mae, 3),
+                    "bias": round(bias, 3),
+                    "unit": "m³",
+                }
+
         slog.info(
             "detect_anomalies complete",
             extra={
@@ -238,34 +292,39 @@ def stage_detect_anomalies(artifacts: dict[str, pd.DataFrame], log) -> dict[str,
                     "n": int(len(validated)),
                     "by_type": {k: int(v) for k, v in by_type.items()},
                     "by_dma": {k: int(v) for k, v in by_dma.items()},
+                    "residual": result.get("residual"),
                 },
             },
         )
-        return {"n": int(len(validated)), "by_type": by_type, "by_dma": by_dma}
+        return result
 
 
 def stage_predict(artifacts: dict[str, pd.DataFrame], log) -> dict[str, Any]:
     """Hook for re-running the predictor.
 
     The portfolio keeps the pre-computed `predictions.json` /
-    `predictions_by_building.json`. This stage validates them.
+    `predictions_by_building.json`. This stage validates them against
+    the registered Pandera schemas (`PredictionRowSchema` and
+    `PredictionsBuildingRowSchema`) so a downstream consumer can trust
+    the shape of the rows.
     """
     with plog.stage("predict") as slog:
         out: dict[str, Any] = {}
-        for name, schema in [
-            ("predictions", None),
-            ("predictions_building", None),
-        ]:
+        for name in ("predictions", "predictions_building"):
             df = artifacts.get(name, pd.DataFrame())
             if df.empty:
-                out[name] = {"n": 0}
+                out[name] = {"n": 0, "status": "skipped"}
                 continue
-            # We don't have a fully Pandera-checked schema for the nested form,
-            # so we only check row count here.
-            n = int(len(df))
+            try:
+                validated = val.validate_dataframe(df, name, "predict")
+            except val.ValidationError as e:
+                raise val.ValidationError(
+                    f"predict: {name} failed schema validation: {e}"
+                ) from e
+            n = int(len(validated))
             if n < 1:
-                raise val.ValidationError(f"predict: {name} has 0 rows")
-            out[name] = {"n": n}
+                raise val.ValidationError(f"predict: {name} has 0 rows after validation")
+            out[name] = {"n": n, "status": "ok"}
         slog.info(
             "predict complete",
             extra={"stage": "predict", "metrics": out},
@@ -314,10 +373,10 @@ def stage_data_health(artifacts: dict[str, pd.DataFrame], log) -> dict[str, Any]
     Runs three checks on ``artifacts["meter_daily"]`` (the
     ``[date, meterId, total]`` DataFrame that stage_ingest loads):
 
-    - ``detect_per_meter_outliers`` — per-meter z-score > 4.0.
-    - ``detect_daily_jumps`` — value at least 20× the meter's own
-      median (catches the 712720 / 4月16日 pattern, which is 100-500×).
-    - ``detect_negative_pairs`` — daily total < 1% of the meter's own
+    - ``detect_per_meter_outliers`` ??per-meter z-score > 4.0.
+    - ``detect_daily_jumps`` ??value at least 20? the meter's own
+      median (catches the 712720 / 4??6??pattern, which is 100-500?).
+    - ``detect_negative_pairs`` ??daily total < 1% of the meter's own
       median (catches cancellation-style errors).
 
     Output is split into:
@@ -471,7 +530,7 @@ def run(
     stage_results: dict[str, Any] = {}
     failed: list[str] = []
 
-    # Stage 1 (ingest) — always runs first; produces the artifacts dict.
+    # Stage 1 (ingest) ??always runs first; produces the artifacts dict.
     if not force and (ckpt := _read_checkpoint("ingest", ckpt_dir)):
         log.info(
             "ingest: using checkpoint",
@@ -531,14 +590,54 @@ def run(
         },
     )
 
-    # Write the run summary
+    # Write the run summary (JSON)
     with (REPORTS_DIR / f"run_{plog.get_run_id()}.json").open("w", encoding="utf-8") as f:
         json.dump(summary, f, ensure_ascii=False, indent=2, default=str)
     (REPORTS_DIR / "latest_run.json").write_text(
         json.dumps(summary, ensure_ascii=False, indent=2, default=str),
         encoding="utf-8",
     )
+
+    # Write human-readable markdown report
+    _write_markdown_report(summary, REPORTS_DIR)
+
     return summary
+
+
+def _write_markdown_report(summary: dict, reports_dir: Path) -> None:
+    """Generate a human-readable markdown report from the run summary."""
+    lines = [
+        "# Pipeline Run Report",
+        "",
+        f"**Run ID:** `{summary.get('run_id', 'unknown')}`  ",
+        f"**Started:** {summary.get('started_at', 'unknown')}  ",
+        f"**Duration:** {summary.get('elapsed_s', 0):.1f}s  ",
+        f"**Status:** {'PASSED' if summary.get('status') == 'ok' else 'FAILED'}  ",
+        "",
+        "## Stages",
+        "",
+        "| Stage | Status |",
+        "|-------|--------|",
+    ]
+
+    for stage in summary.get("stages", []):
+        status = "FAILED" if stage in summary.get("failed", []) else "OK"
+        lines.append(f"| {stage} | {status} |")
+
+    if summary.get("failed"):
+        lines.append("")
+        lines.append(f"**Failed stages:** {', '.join(summary['failed'])}")
+
+    lines.append("")
+    lines.append("## Ingest (rows loaded)")
+    lines.append("")
+    lines.append("| Artifact | Rows |")
+    lines.append("|----------|------|")
+    for name, count in summary.get("ingest", {}).items():
+        lines.append(f"| {name} | {count:,} |")
+
+    lines.append("")
+    reports_dir.joinpath("latest_run.md").write_text("\n".join(lines), encoding="utf-8")
 
 
 # ── CLI ──────────────────────────────────────────────────────
@@ -582,3 +681,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+
