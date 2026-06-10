@@ -67,8 +67,18 @@ LOGS_DIR = ROOT / "logs"
 
 # ── Stage implementations ────────────────────────────────────
 
-def stage_ingest(src: Path, log) -> dict[str, pd.DataFrame]:
-    """Read every JSON file in the output directory into DataFrames."""
+def stage_ingest(src: Path, log, db_path: Path = None) -> dict[str, pd.DataFrame]:
+    """Read every JSON file in the output directory into DataFrames,
+    and (if db_path given) write to SQLite in the same pass.
+
+    Phase 4 step 2: merges what used to be stage_load_sql's job. We no
+    longer have a separate "load to SQLite" stage — the SQLite write
+    happens here, alongside the in-memory artifact build, so the
+    downstream stages can read either from `artifacts` or from SQLite.
+
+    The `artifacts` dict is kept because stages 2-7 still consume it.
+    That will go away in C4-6 (cutover to 4 stages).
+    """
     if not src.exists():
         raise FileNotFoundError(f"data source not found: {src}")
     artifacts: dict[str, pd.DataFrame] = {}
@@ -179,16 +189,45 @@ def stage_ingest(src: Path, log) -> dict[str, pd.DataFrame]:
                     artifacts[name] = pd.DataFrame(data)
                 else:
                     artifacts[name] = pd.DataFrame()
-        slog.info(
-            "ingest complete",
-            extra={
-                "stage": "ingest",
-                "metrics": {
-                    "n_artifacts": len(artifacts),
-                    **{k: int(len(v)) for k, v in artifacts.items()},
+
+        # Single-pass SQLite write: take the in-memory artifacts and dump
+        # them all to the analytics DB. Replaces what stage_load_sql used
+        # to do (re-reading the same JSONs from disk).
+        if db_path is not None:
+            try:
+                loader = sql_loader.SqlLoader(db_path=db_path, drop=True)
+                result = loader.load_all(src)
+                loader.close()
+                slog.info(
+                    "ingest complete (read+write single pass)",
+                    extra={
+                        "stage": "ingest",
+                        "metrics": {
+                            "n_artifacts": len(artifacts),
+                            **{k: int(len(v)) for k, v in artifacts.items()},
+                            "sqlite_tables": len(result),
+                            "sqlite_rows": sum(result.values()),
+                        },
+                    },
+                )
+            except Exception as e:
+                slog.error(
+                    f"ingest: SQLite write failed: {e}",
+                    extra={"stage": "ingest", "metrics": {"error": str(e)}},
+                )
+                # Don't fail the whole pipeline — the in-memory artifacts
+                # are still usable for downstream stages.
+        else:
+            slog.info(
+                "ingest complete (no db_path; legacy mode)",
+                extra={
+                    "stage": "ingest",
+                    "metrics": {
+                        "n_artifacts": len(artifacts),
+                        **{k: int(len(v)) for k, v in artifacts.items()},
+                    },
                 },
-            },
-        )
+            )
     return artifacts
 
 
