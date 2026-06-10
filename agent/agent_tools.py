@@ -391,8 +391,9 @@ def query_consumption(mode: str = "daily", date: str = "", dma: str = "",
 def query_rank_changes(limit: int = 10) -> str:
     """Query Top-20 consumption ranking changes. Shows meters that consistently appear in high-usage rankings.
     Use when the user asks about highest consumption meters, ranking trends, or Top-20 tracking."""
-    ranks = _load("rank_changes.json")
-    return json.dumps(ranks[:limit], ensure_ascii=False, indent=2)
+    from _sql_helpers import _query_all
+    rows = _query_all(f"SELECT * FROM rank_changes LIMIT {int(limit)}")
+    return json.dumps(rows, ensure_ascii=False, indent=2)
 
 
 # ── Tool 9: NRW / Main-Sub diff ─────────────────────────────
@@ -518,21 +519,34 @@ def analyze_anomaly(meter_id: str) -> str:
     """Deep-dive analysis for a specific meter's anomalies.
     Shows all anomaly history, consumption pattern, and possible causes.
     Use when the user asks to investigate a specific meter or anomaly."""
-    anomalies = _load("anomalies.json")
-    meter_anomalies = [a for a in anomalies if a.get("meterId") == meter_id]
+    from _sql_helpers import _query_all, _query_one
 
-    if not meter_anomalies:
+    # anomalies + meters JOIN in one SQL
+    rows = _query_all(f"""
+        SELECT a.*, m.buildingName AS building, m.dma AS meter_dma,
+               m.propertyType AS property_type
+        FROM anomalies a LEFT JOIN meters m ON a.meterId = m.meterId
+        WHERE a.meterId = '{meter_id}'
+        ORDER BY a.date DESC
+    """)
+
+    if not rows:
         return json.dumps({"message": f"No anomalies found for meter {meter_id}"})
 
-    info = _load("meter_info.json").get(meter_id, {})
+    # Normalize field names: meter_dma -> dma (matches old output)
+    for r in rows:
+        if "meter_dma" in r:
+            r["dma"] = r.pop("meter_dma")
+
+    info = _query_one(f"SELECT * FROM meters WHERE meterId = '{meter_id}'") or {}
 
     # Analyze patterns
-    type_counts = {}
-    for a in meter_anomalies:
+    type_counts: dict[str, int] = {}
+    for a in rows:
         t = a.get("type", "unknown")
         type_counts[t] = type_counts.get(t, 0) + 1
 
-    scores = [a.get("anomalyScore", 0) for a in meter_anomalies]
+    scores = [a.get("anomalyScore", 0) or 0 for a in rows]
     avg_score = sum(scores) / len(scores) if scores else 0
 
     # Possible causes
@@ -551,10 +565,10 @@ def analyze_anomaly(meter_id: str) -> str:
         "building": info.get("buildingName", "Unknown"),
         "dma": info.get("dma", "Unknown"),
         "property_type": info.get("propertyType", "Unknown"),
-        "total_anomalies": len(meter_anomalies),
+        "total_anomalies": len(rows),
         "type_breakdown": type_counts,
         "avg_anomaly_score": round(avg_score, 2),
-        "recent_anomalies": meter_anomalies[:5],
+        "recent_anomalies": rows[:5],
         "possible_causes": causes,
     }, ensure_ascii=False, indent=2)
 
@@ -674,15 +688,22 @@ def query_data_quality(date: str = "", meter_id: str = "", reason: str = "") -> 
         meter_id: optional 6-digit meter ID filter
         reason: optional substring match on the reason (e.g. 'fire-test', 'typo', '>40000')
     """
-    errors = _load_errors()
+    from _sql_helpers import _query_all
 
+    where = []
     if date:
-        errors = [e for e in errors if e.get("date", "") == date]
+        where.append(f"date = '{date}'")
     if meter_id:
-        errors = [e for e in errors if str(e.get("meterId", "")) == str(meter_id)]
+        where.append(f"CAST(meterId AS TEXT) = '{meter_id}'")
     if reason:
-        rl = reason.lower()
-        errors = [e for e in errors if rl in str(e.get("reason", "")).lower()]
+        where.append(f"LOWER(reason) LIKE '%{reason.lower()}%'")
+
+    sql = "SELECT * FROM data_errors"
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " ORDER BY ts DESC LIMIT 1000"
+
+    errors = _query_all(sql)
 
     by_reason: dict[str, int] = {}
     by_date: dict[str, int] = {}
