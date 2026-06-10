@@ -377,6 +377,10 @@ def stage_load_sql(artifacts: dict[str, pd.DataFrame], log, db_path: Path, src: 
     `src` is the JSON output directory; previously this stage hard-coded
     OUTPUT_DIR which silently loaded hourly_meter.db from the mock-data path
     when the user ran with --src pointing at real data. Now we honor --src.
+
+    DEPRECATED in Phase 4: stage_ingest now does this in the same pass
+    (C4-2). Kept here for backward compat with the 7-stage STAGES list
+    (cutover happens in C4-6).
     """
     with plog.stage("load_sql") as slog:
         loader = sql_loader.SqlLoader(db_path=db_path, drop=True)
@@ -390,6 +394,42 @@ def stage_load_sql(artifacts: dict[str, pd.DataFrame], log, db_path: Path, src: 
             },
         )
     return result
+
+
+def stage_validate(log, db_path: Path) -> dict[str, Any]:
+    """Pandera schema validation across all populated tables in SQLite.
+
+    Phase 4 step 3: lifts the validate_dataframe calls that were inlined
+    inside stage_detect_anomalies and stage_predict into a dedicated stage
+    that runs AFTER ingest (so we can validate what we just wrote).
+
+    Reads each table from SQLite, runs the corresponding Pandera schema,
+    and reports per-table status. Failure is logged but does not raise —
+    the transform stage can still run on the raw data; validation is a
+    quality gate, not a hard error.
+    """
+    with plog.stage("validate") as slog:
+        report: dict[str, Any] = {}
+        for table in (
+            "meters", "anomalies", "predictions", "predictions_building",
+            "meter_daily", "daily_dma", "weekly", "monthly_diff",
+            "rank_changes",
+        ):
+            try:
+                conn = sqlite3.connect(str(db_path))
+                df = pd.read_sql_query(f"SELECT * FROM {table} LIMIT 100000", conn)
+                conn.close()
+                val.validate_dataframe(df, table, "validate")
+                report[table] = {"status": "ok", "rows": int(len(df))}
+            except val.ValidationError as e:
+                report[table] = {"status": "failed", "error": str(e)[:200]}
+            except Exception as e:
+                report[table] = {"status": "skipped", "error": str(e)[:200]}
+        slog.info(
+            "validate complete",
+            extra={"stage": "validate", "metrics": report},
+        )
+        return report
 
 
 def stage_drift(artifacts: dict[str, pd.DataFrame], log) -> dict[str, Any]:
