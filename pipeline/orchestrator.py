@@ -1,30 +1,30 @@
 """Pipeline orchestrator.
 
-Run the end-to-end data flow with:
-- Stage-level structured logging
-- Pandera schema validation at the boundary of every stage
-- Checkpoint files so a failure can be resumed without re-doing work
-- A final run summary (rows processed, validation status, timing)
+Phase 4 cutover: 4 stages, single source of truth (analytics_real.db).
 
 Stages (in order):
-    1. ingest         Read JSON outputs from `backend/data/output/`
-    2. clean          Apply data-quality rules to `meter_daily`
-    3. detect_anomalies  Re-score anomalies (no-op on existing data; demonstrates
-                       the hook for a real detector)
-    4. predict        (Re)run the building-level forecasting (mock for portfolio)
-    5. load_sql       Build the analytics SQLite database
-    6. drift          Compare current distributions to the saved baseline
-    7. data_health    Pattern detection: per-meter z-score outliers, day-over-day
-                     jumps, and cancellation pairs. Written to
-                     `checkpoints/stage_data_health.json` and consumed by
-                     `scripts/notebooks/02_health_check.ipynb`.
+    1. ingest    Read JSON outputs from `backend/data/output*` AND write
+                 to SQLite in the same pass (single read+write).
+    2. validate  Pandera schema check on every populated table in SQLite.
+    3. transform Clean meter_daily + import corrections.json + residual
+                 analysis + data_health checks. Writes back to SQLite.
+    4. publish   Drift detection — persist per-column results to the
+                 drift_reports table.
 
 Why a stage-based runner?
-- MLOps reality: every stage fails differently. Ingest can fail on a missing
-  file. Clean can fail on a null in a critical column. SQL can fail on disk
-  full. Each needs its own log line and recovery hook.
-- Checkpointing is the "resume after crash" primitive. Without it, every
-  partial run costs you an hour of re-computation.
+- Each stage has its own log line and recovery hook.
+- SQLite is the working state — no in-memory artifacts dict, no JSON
+  checkpoints, no latest_run.json sidecar. A crash mid-pipeline leaves
+  the DB in the last successfully-completed stage's state, which is
+  queryable and inspectable.
+
+Phase 4 history: this file used to have 7 stages with a heavy
+in-memory artifacts dict + per-stage JSON checkpoints. That double-hop
+(artifacts dict + on-disk JSON re-read for SQLite) was eliminated.
+The old stage_clean / stage_detect_anomalies / stage_predict /
+stage_load_sql / stage_drift / stage_data_health / stage_clean
+functions are kept (deprecated, marked in their docstrings) for
+backward compat — they are NOT in STAGES anymore.
 """
 
 from __future__ import annotations
@@ -716,34 +716,39 @@ def _clear_checkpoints(ckpt_dir: Path) -> None:
 
 # ── Run ──────────────────────────────────────────────────────
 
+# Phase 4 cutover: STAGES is now 4 entries instead of 7. Each stage
+# reads/writes SQLite directly — no in-memory artifacts dict, no JSON
+# checkpoints, no latest_run.json sidecar. SQLite is the working state.
 STAGES: list[tuple[str, Callable]] = [
-    ("ingest", stage_ingest),
-    ("clean", stage_clean),
-    ("detect_anomalies", stage_detect_anomalies),
-    ("predict", stage_predict),
-    ("load_sql", stage_load_sql),
-    ("drift", stage_drift),
-    ("data_health", stage_data_health),
+    ("ingest",    stage_ingest),
+    ("validate",  stage_validate),
+    ("transform", stage_transform),
+    ("publish",   stage_publish),
 ]
 
 
 def run(
     src: Path = OUTPUT_DIR,
     db_path: Path = DB_PATH,
-    ckpt_dir: Path = CHECKPOINT_DIR,
-    force: bool = False,
+    ckpt_dir: Path = CHECKPOINT_DIR,  # kept for backward-compat signature
+    force: bool = False,              # no-op: no checkpoints to clear
 ) -> dict[str, Any]:
-    """Run the full pipeline with checkpointing.
+    """Run the 4-stage pipeline against SQLite.
+
+    Phase 4 cutover: replaced the 7-stage pipeline that used an
+    in-memory artifacts dict and per-stage JSON checkpoints. SQLite is
+    now the only working state; stages read from it and write to it.
 
     Args:
-        src: directory containing the JSON outputs.
-        db_path: path to the analytics SQLite database.
-        ckpt_dir: where to write stage checkpoints.
-        force: if True, ignore existing checkpoints and re-run every stage.
+        src: directory containing the JSON outputs (consumed by
+            stage_ingest only).
+        db_path: path to the analytics SQLite database. All 4 stages
+            read/write this file.
+        ckpt_dir: kept for backward-compat with old call sites; no
+            longer used (no JSON checkpoints).
+        force: kept for backward-compat; no-op in the 4-stage world.
     """
     plog.new_run_id()
-    if force:
-        _clear_checkpoints(ckpt_dir)
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -755,7 +760,7 @@ def run(
             "metrics": {
                 "src": str(src),
                 "db_path": str(db_path),
-                "ckpt_dir": str(ckpt_dir),
+                "n_stages": len(STAGES),
             },
         },
     )
@@ -764,40 +769,20 @@ def run(
     stage_results: dict[str, Any] = {}
     failed: list[str] = []
 
-    # Stage 1 (ingest) ??always runs first; produces the artifacts dict.
-    if not force and (ckpt := _read_checkpoint("ingest", ckpt_dir)):
-        log.info(
-            "ingest: using checkpoint",
-            extra={"stage": "orchestrator", "metrics": {"ckpt": "ingest"}},
-        )
-        # Re-load the artifacts from disk; we don't store full DataFrames.
-        artifacts = stage_ingest(src, log)
-    else:
-        artifacts = stage_ingest(src, log)
-        _write_checkpoint("ingest", {"rows": {k: int(len(v)) for k, v in artifacts.items()}}, ckpt_dir)
-
-    # Stages 2..N: each receives `artifacts` and may mutate it.
-    for name, fn in STAGES[1:]:
-        ckpt_name = f"stage_{name}"
-        if not force and (ckpt := _read_checkpoint(ckpt_name, ckpt_dir)):
-            log.info(
-                f"{name}: using checkpoint",
-                extra={"stage": "orchestrator", "metrics": {"ckpt": ckpt_name}},
-            )
-            stage_results[name] = ckpt
-            continue
+    for name, fn in STAGES:
         try:
-            if name == "load_sql":
-                out = fn(artifacts, log, db_path, src)
+            if name == "ingest":
+                # ingest is the only stage that takes src.
+                out = fn(src, log, db_path)
             else:
-                out = fn(artifacts, log)
+                # validate / transform / publish all take (log, db_path).
+                out = fn(log, db_path)
             stage_results[name] = out
-            _write_checkpoint(ckpt_name, out, ckpt_dir)
         except Exception as e:
             failed.append(name)
             log.error(
                 f"{name} failed: {e}",
-                extra={"stage": "orchestrator", "metrics": {"failed": name}},
+                extra={"stage": "orchestrator", "metrics": {"failed": name, "error": str(e)[:200]}},
             )
             break
 
@@ -808,7 +793,6 @@ def run(
         "elapsed_s": round(elapsed, 3),
         "stages": list(stage_results.keys()),
         "failed": failed,
-        "ingest": {k: int(len(v)) for k, v in artifacts.items()},
         "stage_results": stage_results,
         "status": "ok" if not failed else "failed",
     }
@@ -824,13 +808,12 @@ def run(
         },
     )
 
-    # Write the run summary (JSON)
+    # Write the run summary (JSON + markdown). Per-run snapshot kept
+    # (run_<id>.json) so historical runs are queryable; latest_run.json
+    # sidecar removed (it was a duplicate pointer, SQLite state IS the
+    # latest state).
     with (REPORTS_DIR / f"run_{plog.get_run_id()}.json").open("w", encoding="utf-8") as f:
         json.dump(summary, f, ensure_ascii=False, indent=2, default=str)
-    (REPORTS_DIR / "latest_run.json").write_text(
-        json.dumps(summary, ensure_ascii=False, indent=2, default=str),
-        encoding="utf-8",
-    )
 
     # Write human-readable markdown report
     _write_markdown_report(summary, REPORTS_DIR)
@@ -863,12 +846,15 @@ def _write_markdown_report(summary: dict, reports_dir: Path) -> None:
         lines.append(f"**Failed stages:** {', '.join(summary['failed'])}")
 
     lines.append("")
-    lines.append("## Ingest (rows loaded)")
+    lines.append("## Stage Metrics")
     lines.append("")
-    lines.append("| Artifact | Rows |")
-    lines.append("|----------|------|")
-    for name, count in summary.get("ingest", {}).items():
-        lines.append(f"| {name} | {count:,} |")
+    lines.append("| Stage | Status | Metrics (truncated) |")
+    lines.append("|-------|--------|--------------------|")
+    for stage_name, stage_out in summary.get("stage_results", {}).items():
+        status = "FAILED" if stage_name in summary.get("failed", []) else "OK"
+        # Truncate metrics dict to 200 chars for the markdown table
+        metrics_repr = json.dumps(stage_out, default=str)[:200] if stage_out else ""
+        lines.append(f"| {stage_name} | {status} | `{metrics_repr}` |")
 
     lines.append("")
     reports_dir.joinpath("latest_run.md").write_text("\n".join(lines), encoding="utf-8")
