@@ -453,25 +453,48 @@ def query_rank_changes(limit: int = 10) -> str:
 def query_monthly_diff(month: str = "") -> str:
     """Query main-sub meter difference data for Non-Revenue Water (NRW) analysis.
     Use when the user asks about water loss, leakage, NRW rate, or meter differences."""
-    months = _load("monthly_main_sub_diff.json")
+    from _sql_helpers import _query_all
 
     if month:
-        for m in months:
-            if m["month"] == month:
-                return json.dumps(m, ensure_ascii=False, indent=2)
-        return f"No data found for {month}"
+        rows = _query_all(f"SELECT * FROM monthly_diff WHERE month = '{month}'")
+        if not rows:
+            return f"No data found for {month}"
+        # Reconstruct the legacy shape: a single month-level dict with
+        # 'month' and 'diffs' list (subs serialized as JSON in SQLite).
+        out = {"month": month, "diffs": []}
+        for r in rows:
+            diff = dict(r)
+            subs_raw = diff.pop("subs", None)
+            if isinstance(subs_raw, str) and subs_raw:
+                try:
+                    diff["subs"] = json.loads(subs_raw)
+                except (ValueError, TypeError):
+                    diff["subs"] = []
+            elif not subs_raw:
+                diff["subs"] = []
+            out["diffs"].append(diff)
+        return json.dumps(out, ensure_ascii=False, indent=2)
 
-    # Summary of all months
+    # Summary across all months — SQL aggregate per month
+    rows = _query_all("""
+        SELECT month,
+               COUNT(*) AS meters_tracked,
+               SUM(mainTotal) AS total_main,
+               SUM(subsTotal) AS total_subs
+        FROM monthly_diff
+        GROUP BY month
+        ORDER BY month
+    """)
     summary = []
-    for m in months:
-        total_main = sum(d.get("mainTotal", 0) for d in m.get("diffs", []))
-        total_subs = sum(d.get("subsTotal", 0) for d in m.get("diffs", []))
-        diff_pct = round((total_main - total_subs) / total_main * 100, 1) if total_main > 0 else 0
+    for r in rows:
+        tm = r.get("total_main") or 0
+        ts = r.get("total_subs") or 0
+        diff_pct = round((tm - ts) / tm * 100, 1) if tm else 0
         summary.append({
-            "month": m["month"],
-            "meters_tracked": len(m.get("diffs", [])),
-            "total_main": round(total_main, 1),
-            "total_subs": round(total_subs, 1),
+            "month": r["month"],
+            "meters_tracked": r["meters_tracked"],
+            "total_main": round(tm, 1),
+            "total_subs": round(ts, 1),
             "diff_percent": diff_pct,
         })
     return json.dumps(summary, ensure_ascii=False, indent=2)
