@@ -153,20 +153,24 @@ def query_anomalies(mode: str = "list", dma: str = "", month: str = "",
 def query_meters(dma: str = "", is_residential: bool = None, building: str = "", limit: int = 10) -> str:
     """Query smart water meter information. Filter by DMA zone, residential type, or building name.
     Use when the user asks about specific meters, buildings, or meter details."""
-    meters = _load("meter_info.json")
+    from _sql_helpers import _query_all
 
-    results = []
-    for meter_id, info in meters.items():
-        if dma and not _match_dma(dma, info.get("dma", "")):
-            continue
-        if is_residential is not None and info.get("isResidential") != is_residential:
-            continue
-        if building and building.lower() not in info.get("buildingName", "").lower():
-            continue
-        results.append({"meter_id": meter_id, **info})
-        if len(results) >= limit:
-            break
+    where = []
+    if dma:
+        where.append(f"LOWER(dma) LIKE '%{dma.lower()}%'")
+    if is_residential is not None:
+        where.append(f"isResidential = {1 if is_residential else 0}")
+    if building:
+        where.append(f"LOWER(buildingName) LIKE '%{building.lower()}%'")
 
+    sql = "SELECT * FROM meters"
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += f" LIMIT {int(limit)}"
+
+    rows = _query_all(sql)
+    # Surface meter_id (camelCase) for backward-compat with the JSON shape
+    results = [{"meter_id": r.get("meterId"), **r} for r in rows]
     return json.dumps(results, ensure_ascii=False, indent=2)
 
 
