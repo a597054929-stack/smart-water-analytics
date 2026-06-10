@@ -32,6 +32,7 @@ from __future__ import annotations
 import argparse
 import json
 import shutil
+import sqlite3
 import sys
 import time
 from collections.abc import Callable
@@ -466,7 +467,16 @@ def stage_transform(log, db_path: Path) -> dict[str, Any]:
                 cur.execute("CREATE INDEX IF NOT EXISTS idx_meter_daily_meterId ON meter_daily(meterId)")
                 cur.execute("CREATE INDEX IF NOT EXISTS idx_meter_daily_date ON meter_daily(date)")
 
-            # 2. Import corrections.json -> corrections table (L1 event file)
+            # 2. Import corrections.json -> corrections table (L1 event file).
+            # Create the table on demand because the legacy sql_loader.load_all
+            # uses the v1 schema (10 tables) and doesn't include corrections.
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS corrections (
+                    meterId TEXT, startDate TEXT, endDate TEXT,
+                    factor REAL, reason TEXT,
+                    PRIMARY KEY (meterId, startDate, endDate)
+                )
+            """)
             n_corr = 0
             if corr_path.exists():
                 try:
