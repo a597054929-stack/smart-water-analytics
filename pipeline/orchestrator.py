@@ -232,171 +232,6 @@ def stage_ingest(src: Path, log, db_path: Path = None) -> dict[str, pd.DataFrame
     return artifacts
 
 
-def stage_clean(artifacts: dict[str, pd.DataFrame], log) -> dict[str, Any]:
-    """Apply the data quality rules to meter_daily. Returns a quality report."""
-    df = artifacts.get("meter_daily", pd.DataFrame())
-    if df.empty:
-        log.warning("clean: meter_daily is empty, skipping")
-        return {"status": "skipped"}
-    with plog.stage("clean") as slog:
-        cleaned, report = dq.clean_daily_readings(df, value_col="total")
-        artifacts["meter_daily"] = cleaned
-        slog.info(
-            "clean complete",
-            extra={
-                "stage": "clean",
-                "metrics": {"rows_in": report.get("rows_in"), "rows_out": report.get("rows_out")},
-            },
-        )
-    return report
-
-
-def stage_detect_anomalies(artifacts: dict[str, pd.DataFrame], log) -> dict[str, Any]:
-    """Hook for re-running the anomaly detector.
-
-    The portfolio keeps the pre-computed `anomalies.json` from the upstream
-    process. This stage validates the artifact and reports stats so the
-    pipeline has a uniform shape.
-
-    Additionally computes a residual analysis: pairs the `predictions`
-    artifact (one row per meter-day with `predicted`) against the
-    `meter_daily` artifact (one row per meter-day with the actual
-    `total`) and reports RMSE/MAE + coverage. Downgrade paths:
-
-    - No `predictions` rows  → skip residual analysis (no fitted model)
-    - No `meter_daily` rows  → skip (the real-data converter doesn't
-      emit meter_daily.json; only the mock branch does)
-    - All-zero residuals     → skip (degenerate model output)
-    - n_compared < 1         → skip
-    """
-    df = artifacts.get("anomalies", pd.DataFrame())
-    if df.empty:
-        log.warning("detect_anomalies: no anomalies to process")
-        return {"status": "empty"}
-    with plog.stage("detect_anomalies") as slog:
-        validated = val.validate_dataframe(df, "anomalies", "detect_anomalies")
-        # Distribution stats
-        by_type = validated["type"].value_counts().to_dict()
-        by_dma = validated["dma"].value_counts().to_dict()
-        result: dict[str, Any] = {
-            "n": int(len(validated)),
-            "by_type": {k: int(v) for k, v in by_type.items()},
-            "by_dma": {k: int(v) for k, v in by_dma.items()},
-        }
-
-        # Residual analysis: predicted vs actual, where both exist.
-        pred_df = artifacts.get("predictions", pd.DataFrame())
-        actual_df = artifacts.get("meter_daily", pd.DataFrame())
-        if pred_df.empty or actual_df.empty:
-            slog.info(
-                "detect_anomalies residual analysis skipped (missing predictions or meter_daily)",
-                extra={
-                    "stage": "detect_anomalies",
-                    "metrics": {
-                        "has_predictions": not pred_df.empty,
-                        "has_meter_daily": not actual_df.empty,
-                        "reason": "real-data mode (no meter_daily.json) or no predictions",
-                    },
-                },
-            )
-            result["residual"] = {"status": "skipped"}
-        else:
-            joined = pred_df[["meterId", "date", "predicted"]].merge(
-                actual_df[["meterId", "date", "total"]],
-                on=["meterId", "date"],
-                how="inner",
-            )
-            joined = joined.dropna(subset=["predicted", "total"])
-            n_compared = int(len(joined))
-            if n_compared < 1:
-                result["residual"] = {"status": "skipped", "n_compared": 0}
-            else:
-                resid = (joined["total"] - joined["predicted"]).astype(float)
-                rmse = float((resid ** 2).mean() ** 0.5)
-                mae = float(resid.abs().mean())
-                bias = float(resid.mean())
-                result["residual"] = {
-                    "status": "ok",
-                    "n_compared": n_compared,
-                    "rmse": round(rmse, 3),
-                    "mae": round(mae, 3),
-                    "bias": round(bias, 3),
-                    "unit": "m³",
-                }
-
-        slog.info(
-            "detect_anomalies complete",
-            extra={
-                "stage": "detect_anomalies",
-                "metrics": {
-                    "n": int(len(validated)),
-                    "by_type": {k: int(v) for k, v in by_type.items()},
-                    "by_dma": {k: int(v) for k, v in by_dma.items()},
-                    "residual": result.get("residual"),
-                },
-            },
-        )
-        return result
-
-
-def stage_predict(artifacts: dict[str, pd.DataFrame], log) -> dict[str, Any]:
-    """Hook for re-running the predictor.
-
-    The portfolio keeps the pre-computed `predictions.json` /
-    `predictions_by_building.json`. This stage validates them against
-    the registered Pandera schemas (`PredictionRowSchema` and
-    `PredictionsBuildingRowSchema`) so a downstream consumer can trust
-    the shape of the rows.
-    """
-    with plog.stage("predict") as slog:
-        out: dict[str, Any] = {}
-        for name in ("predictions", "predictions_building"):
-            df = artifacts.get(name, pd.DataFrame())
-            if df.empty:
-                out[name] = {"n": 0, "status": "skipped"}
-                continue
-            try:
-                validated = val.validate_dataframe(df, name, "predict")
-            except val.ValidationError as e:
-                raise val.ValidationError(
-                    f"predict: {name} failed schema validation: {e}"
-                ) from e
-            n = int(len(validated))
-            if n < 1:
-                raise val.ValidationError(f"predict: {name} has 0 rows after validation")
-            out[name] = {"n": n, "status": "ok"}
-        slog.info(
-            "predict complete",
-            extra={"stage": "predict", "metrics": out},
-        )
-        return out
-
-
-def stage_load_sql(artifacts: dict[str, pd.DataFrame], log, db_path: Path, src: Path) -> dict[str, int]:
-    """Reload everything from JSON into SQLite (fresh DB).
-
-    `src` is the JSON output directory; previously this stage hard-coded
-    OUTPUT_DIR which silently loaded hourly_meter.db from the mock-data path
-    when the user ran with --src pointing at real data. Now we honor --src.
-
-    DEPRECATED in Phase 4: stage_ingest now does this in the same pass
-    (C4-2). Kept here for backward compat with the 7-stage STAGES list
-    (cutover happens in C4-6).
-    """
-    with plog.stage("load_sql") as slog:
-        loader = sql_loader.SqlLoader(db_path=db_path, drop=True)
-        result = loader.load_all(src)
-        loader.close()
-        slog.info(
-            "load_sql complete",
-            extra={
-                "stage": "load_sql",
-                "metrics": {"db": str(db_path), "src": str(src), "tables": len(result), "rows": sum(result.values())},
-            },
-        )
-    return result
-
-
 def stage_validate(log, db_path: Path) -> dict[str, Any]:
     """Pandera schema validation across all populated tables in SQLite.
 
@@ -556,22 +391,6 @@ def stage_transform(log, db_path: Path) -> dict[str, Any]:
         }
 
 
-def stage_drift(artifacts: dict[str, pd.DataFrame], log) -> dict[str, Any]:
-    """DEPRECATED in Phase 4: stage_publish now does this + persists
-    drift_reports to SQLite. Kept for backward compat with the 7-stage
-    STAGES list (cutover happens in C4-6)."""
-    with plog.stage("drift") as slog:
-        df = artifacts.get("anomalies", pd.DataFrame())
-        if df.empty:
-            slog.warning("drift: nothing to compare")
-            return {"overall_status": "skipped"}
-        out = drift.run_drift_check(
-            df,
-            columns=["total", "anomalyScore", "type", "dma"],
-        )
-        return out
-
-
 def stage_publish(log, db_path: Path) -> dict[str, Any]:
     """Publish = drift detection + persist to drift_reports table.
 
@@ -611,125 +430,13 @@ def stage_publish(log, db_path: Path) -> dict[str, Any]:
         return {"drift": out, "drift_rows_written": n}
 
 
-def stage_data_health(artifacts: dict[str, pd.DataFrame], log) -> dict[str, Any]:
-    """Pattern detection on the cleaned daily data.
-
-    Runs three checks on ``artifacts["meter_daily"]`` (the
-    ``[date, meterId, total]`` DataFrame that stage_ingest loads):
-
-    - ``detect_per_meter_outliers`` ??per-meter z-score > 4.0.
-    - ``detect_daily_jumps`` ??value at least 20? the meter's own
-      median (catches the 712720 / 4??6??pattern, which is 100-500?).
-    - ``detect_negative_pairs`` ??daily total < 1% of the meter's own
-      median (catches cancellation-style errors).
-
-    Output is split into:
-      - ``summary``: counts per check (cheap to scan)
-      - ``recent_*``: top-50 entries from the last 30 days, sorted by
-        score descending (the part humans actually look at)
-      - ``*_all``: full lists (for notebooks that want the whole picture)
-
-    The result is stored in ``artifacts["data_health"]`` and
-    checkpointed as ``checkpoints/stage_data_health.json``. The
-    notebook ``02_health_check.ipynb`` consumes it.
-    """
-    with plog.stage("data_health") as slog:
-        df = artifacts.get("meter_daily", pd.DataFrame())
-        if df.empty:
-            slog.warning("data_health: meter_daily is empty, skipping")
-            out = {
-                "summary": {"per_meter_outliers": 0, "daily_jumps": 0, "negative_pairs": 0},
-                "recent_per_meter_outliers": [],
-                "recent_daily_jumps": [],
-                "recent_negative_pairs": [],
-                "per_meter_outliers_all": [],
-                "daily_jumps_all": [],
-                "negative_pairs_all": [],
-            }
-            artifacts["data_health"] = out
-            return out
-
-        outliers = dq.detect_per_meter_outliers(df)
-        jumps = dq.detect_daily_jumps(df)
-        pairs = dq.detect_negative_pairs(df)
-
-        # Find the cutoff: last 30 days of data. Use the maximum date in
-        # the cleaned data so the "recent" window is meaningful even on
-        # partial-date datasets.
-        if "date" in df.columns and not df.empty:
-            try:
-                latest = pd.to_datetime(df["date"]).max()
-                cutoff = (latest - pd.Timedelta(days=30)).strftime("%Y-%m-%d")
-            except Exception:
-                cutoff = "1970-01-01"
-        else:
-            cutoff = "1970-01-01"
-
-        def _recent_top(entries: list[dict], top: int = 50) -> list[dict]:
-            r = [e for e in entries if e["date"] >= cutoff]
-            r.sort(key=lambda e: -e["score"])
-            return r[:top]
-
-        out = {
-            "summary": {
-                "per_meter_outliers": len(outliers),
-                "daily_jumps": len(jumps),
-                "negative_pairs": len(pairs),
-                "recent_window_days": 30,
-                "cutoff_date": cutoff,
-            },
-            "recent_per_meter_outliers": _recent_top(outliers),
-            "recent_daily_jumps": _recent_top(jumps),
-            "recent_negative_pairs": _recent_top(pairs),
-            "per_meter_outliers_all": outliers,
-            "daily_jumps_all": jumps,
-            "negative_pairs_all": pairs,
-        }
-        artifacts["data_health"] = out
-        slog.info(
-            "data_health complete",
-            extra={
-                "stage": "data_health",
-                "metrics": {
-                    "summary": out["summary"],
-                    "recent_counts": {
-                        "per_meter_outliers": len(out["recent_per_meter_outliers"]),
-                        "daily_jumps": len(out["recent_daily_jumps"]),
-                        "negative_pairs": len(out["recent_negative_pairs"]),
-                    },
-                },
-            },
-        )
-        return out
-
-
-# ── Checkpointing ────────────────────────────────────────────
-
-def _write_checkpoint(name: str, payload: dict, ckpt_dir: Path) -> None:
-    ckpt_dir.mkdir(parents=True, exist_ok=True)
-    with (ckpt_dir / f"{name}.json").open("w", encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False, indent=2, default=str)
-
-
-def _read_checkpoint(name: str, ckpt_dir: Path) -> dict | None:
-    p = ckpt_dir / f"{name}.json"
-    if not p.exists():
-        return None
-    with p.open("r", encoding="utf-8") as f:
-        return json.load(f)
-
-
-def _clear_checkpoints(ckpt_dir: Path) -> None:
-    if ckpt_dir.exists():
-        shutil.rmtree(ckpt_dir)
-
-
 # ── Run ──────────────────────────────────────────────────────
 
-# Phase 4 cutover: STAGES is now 4 entries instead of 7. Each stage
-# reads/writes SQLite directly — no in-memory artifacts dict, no JSON
-# checkpoints, no latest_run.json sidecar. SQLite is the working state.
-STAGES: list[tuple[str, Callable]] = [
+# Phase 4 cutover: STAGES is now 4 entries (was 7). Each stage
+# reads/writes SQLite directly — no in-memory artifacts dict, no
+# JSON checkpoints, no latest_run.json sidecar. Module-level so
+# the CLI's run() log line and other consumers can reference it.
+_STAGES: list[tuple[str, Callable]] = [
     ("ingest",    stage_ingest),
     ("validate",  stage_validate),
     ("transform", stage_transform),
@@ -770,7 +477,7 @@ def run(
             "metrics": {
                 "src": str(src),
                 "db_path": str(db_path),
-                "n_stages": len(STAGES),
+                "n_stages": len(_STAGES),
             },
         },
     )
@@ -779,7 +486,7 @@ def run(
     stage_results: dict[str, Any] = {}
     failed: list[str] = []
 
-    for name, fn in STAGES:
+    for name, fn in _STAGES:
         try:
             if name == "ingest":
                 # ingest is the only stage that takes src.

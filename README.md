@@ -339,7 +339,7 @@ Beyond the business logic, this project ships with a serious engineering baselin
 - **Tool sandbox** — `@safe_tool_call` decorator adds timeout (threading-based, Windows compatible), path blacklist (`.env`, `/etc`, `C:/Windows`), and JSONL audit log (`logs/tool_audit.log`) to all 15 agent tools.
 - **Memory compression** — Two-tier conversation memory: recent 6 turns verbatim + older turns summarized via LLM. Three-layer fallback on LLM failure.
 - **30-case agent harness** — Offline mock-LLM tests covering tool selection (10), ambiguous input (8), privilege escalation rejection (7), and edge cases (5). Runs in ~3 seconds.
-- **151 tests** — pipeline, agent tools, memory, sandbox, harness, regression, adversarial, evaluator.
+- **149 tests** — pipeline, agent tools, memory, sandbox, harness, regression, adversarial, evaluator.
 
 Full architecture map: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 

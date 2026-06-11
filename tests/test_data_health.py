@@ -165,57 +165,11 @@ class TestDetectNegativePairs:
         assert set(e.keys()) == {"date", "meterId", "type", "value", "score"}
 
 
-class TestStageDataHealth:
-    """End-to-end smoke test: stage_data_health wired into the pipeline.
-
-    Verifies the stage function uses the same three detectors and
-    returns the expected summary + recent + all structure.
-    """
-
-    def test_stage_returns_expected_structure(self):
-        from pipeline import orchestrator
-
-        rows = [("m1", d, 100.0) for d in pd.date_range("2026-01-01", periods=20)]
-        # One big spike for m1.
-        rows.append(("m1", pd.Timestamp("2026-01-21"), 5_000.0))
-        df = _df(rows)
-        artifacts = {"meter_daily": df}
-
-        class _Log:
-            def __call__(self, *a, **kw): pass
-            def warning(self, *a, **kw): pass
-            def info(self, *a, **kw): pass
-            def error(self, *a, **kw): pass
-
-        out = orchestrator.stage_data_health(artifacts, _Log())
-        # The stage splits output into summary / recent_* / *_all so the
-        # JSON stays scannable. Each section must be present.
-        assert "summary" in out
-        assert "recent_per_meter_outliers" in out
-        assert "recent_daily_jumps" in out
-        assert "recent_negative_pairs" in out
-        assert "per_meter_outliers_all" in out
-        assert "daily_jumps_all" in out
-        assert "negative_pairs_all" in out
-        assert out["summary"]["daily_jumps"] >= 1
-        # The spike should also surface as a per-meter outlier.
-        assert out["summary"]["per_meter_outliers"] >= 1
-        # Recent top-N is non-empty for the spike.
-        assert len(out["recent_daily_jumps"]) >= 1
-        assert out["recent_daily_jumps"][0]["meterId"] == "m1"
-
-    def test_stage_handles_empty_input(self):
-        from pipeline import orchestrator
-
-        artifacts = {"meter_daily": pd.DataFrame(columns=["meterId", "date", "total"])}
-
-        class _Log:
-            def warning(self, *a, **kw): pass
-            def info(self, *a, **kw): pass
-
-        out = orchestrator.stage_data_health(artifacts, _Log())
-        assert out["summary"]["per_meter_outliers"] == 0
-        assert out["summary"]["daily_jumps"] == 0
-        assert out["summary"]["negative_pairs"] == 0
-        assert out["per_meter_outliers_all"] == []
-        assert out["daily_jumps_all"] == []
+# Phase 5 (commit next): TestStageDataHealth (2 tests) removed.
+# The functions it tested (orchestrator.stage_data_health,
+# orchestrator.stage_clean, stage_detect_anomalies, etc.) were
+# removed in the same commit — they were the 6 DEPRECATED 7-stage
+# pipeline stages that got cut over to the new 4-stage pipeline
+# in commit c27a4d4. The new stage_transform (which replaced
+# stage_data_health's data_health role) is exercised by
+# tests/test_pipeline.py.
