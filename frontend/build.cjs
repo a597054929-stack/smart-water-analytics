@@ -1,4 +1,5 @@
 const fs=require('fs'),path=require('path');
+const { execSync } = require('child_process');
 
 const outDir=path.resolve(__dirname,'./dist');
 const dataDir=path.resolve(__dirname,'../backend/data/output');
@@ -19,6 +20,23 @@ for (const f of fs.readdirSync(distDataDir)) {
 const dataDirReal = path.resolve(__dirname, '../backend/data/output_real');
 const useRealData = process.env.USE_REAL_DATA === '1' && fs.existsSync(dataDirReal);
 const activeDataDir = useRealData ? dataDirReal : dataDir;
+
+// Phase 5: re-add the SQLite -> JSON export bridge (was removed in
+// C4-7 to make stage_publish the producer of these files, but
+// stage_publish doesn't yet emit JSON). The bridge runs as a pre-step
+// when USE_REAL_DATA=1. Failure mode: if export fails (no db yet),
+// keep going with existing JSONs as a fallback.
+if (useRealData) {
+  try {
+    execSync('python scripts/export_json_for_frontend.py', {
+      cwd: path.resolve(__dirname, '..'),
+      stdio: 'inherit',
+    });
+    console.log('[build] export_json_for_frontend.py OK');
+  } catch (e) {
+    console.error('[build] SQLite export failed, using existing JSONs:', e.message);
+  }
+}
 
 const dataFiles = useRealData ? [
   // Real data: 13 individual JSONs
