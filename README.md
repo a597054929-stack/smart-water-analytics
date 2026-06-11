@@ -218,6 +218,70 @@ portfolio/
 ??? package.json
 ```
 
+## HTTP Static File Server (Agent Backend)
+
+The agent's HTTP server (`agent/server.py`) doubles as a static file server for the dashboard bundle. It serves the entire SPA + a set of v2 SQLite-derived JSON data files.
+
+### Core libraries
+
+- **FastAPI 0.136** — async HTTP framework; route + dependency injection
+- **Starlette 1.0 StaticFiles** — `os.path.realpath` + `commonpath` check on every lookup (path-traversal safe); `FileResponse` with `os.stat_result` for `Content-Length` / `ETag` / `Last-Modified` headers
+- **uvicorn 0.x** — ASGI server; default `h11` HTTP/1.1 with `Connection: keep-alive` (HTTP/1.1 default; uvicorn sends it explicitly)
+- **pydantic v2** — request/response models (`ChatRequest`, `ChatResponse`, etc.)
+- **anyio** — `asyncio.to_thread` for offloading blocking LLM calls so the event loop stays free for SSE flushing
+
+### Concurrency model
+
+```
+                ┌─────────────────────────────────────┐
+   client ───►  │ uvicorn (1 process, 1 event loop)  │
+                │                                     │
+                │ FastAPI app (async routes only)     │
+                │                                     │
+                │   /api/chat ──► async def            │  ←── SSE streaming on event loop
+                │     └─► asyncio.to_thread(LLM)     │  ←── LLM in worker thread
+                │                                     │      (so event loop free)
+                │   /api/health ─► async def          │  ←── coroutine, no blocking
+                │                                     │
+                │   /data/* ──► StaticFiles           │  ←── os.sendfile, zero-copy
+                │            (lookup_path + sendfile) │      on Linux
+                │                                     │
+                │   / (dashboard) ─► async def        │  ←── FileResponse
+                └─────────────────────────────────────┘
+```
+
+- **uvicorn worker = 1 process, async event loop** (no `workers=N`). For multi-core scaling use `uvicorn --workers N` (each worker is its own process with its own `chat_history` — see #5 in "Known issues" below).
+- **Slow requests don't block fast ones**: every async route is a coroutine on the event loop. The only sync I/O is the LLM call, which is wrapped in `await asyncio.to_thread(...)` so the worker thread does the blocking while the event loop flushes SSE events to the client.
+- **Static file streaming**: `FileResponse` is built on `os.sendfile` (Linux) / `os.read` chunked loop (Windows). Each connection uses ~64 KB kernel buffer regardless of file size — verified with 10 concurrent 18 MB downloads (`daily_totals.json`): server RSS grew <30 MB total.
+
+### One-line start
+
+```bash
+cd agent && python server.py                  # 0.0.0.0:8000
+cd agent && python server.py --port 9000      # custom port
+cd agent && python server.py --host 127.0.0.1 --port 9000   # custom both
+```
+
+### LOC
+
+| File | LOC | Role |
+| --- | --- | --- |
+| `agent/server.py` | 599 | FastAPI app + uvicorn launcher (594 + 5 CLI arg block) |
+| `tests/test_http_static_server.py` | 333 | 14 audit tests (path traversal × 3, 404 × 2, 200 + Content-Type, streaming, keep-alive × 2, 50-concurrent, regression × 3) |
+| **Total core code** | **932** | |
+
+### Audit regression net
+
+`pytest tests/test_http_static_server.py -v` → 14 passed. Covers:
+
+- **Path traversal** — `/data/../.env`, `/data/../../../../etc/passwd`, `/data/..%2F..%2Fetc%2Fpasswd` (URL-encoded) all 404
+- **404** — `/data/nonexistent.json` and sub-paths
+- **200 + Content-Type** — `application/json` auto-detected by Starlette; includes ETag, Last-Modified, Content-Length
+- **Streaming** — 10 concurrent 18 MB downloads; server RSS <30 MB
+- **Keep-Alive** — socket reuse works; static file responses include `Connection: keep-alive`
+- **Concurrency** — 50 concurrent `/api/health` all 200
+- **Regression** — asserts `Starlette.StaticFiles.lookup_path` uses `realpath` + `commonpath`; `FileResponse.__init__` takes `stat_result`; `server.py` uses `asyncio.to_thread` for blocking LLM
+
 ## MLOps Pipeline
 
 The `pipeline/` module turns raw JSON artifacts into a production-grade
@@ -339,7 +403,7 @@ Beyond the business logic, this project ships with a serious engineering baselin
 - **Tool sandbox** — `@safe_tool_call` decorator adds timeout (threading-based, Windows compatible), path blacklist (`.env`, `/etc`, `C:/Windows`), and JSONL audit log (`logs/tool_audit.log`) to all 15 agent tools.
 - **Memory compression** — Two-tier conversation memory: recent 6 turns verbatim + older turns summarized via LLM. Three-layer fallback on LLM failure.
 - **30-case agent harness** — Offline mock-LLM tests covering tool selection (10), ambiguous input (8), privilege escalation rejection (7), and edge cases (5). Runs in ~3 seconds.
-- **149 tests** — pipeline, agent tools, memory, sandbox, harness, regression, adversarial, evaluator.
+- **163 tests** — pipeline, agent tools, memory, sandbox, harness, regression, adversarial, evaluator.
 
 Full architecture map: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 

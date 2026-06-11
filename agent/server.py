@@ -22,6 +22,7 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 app = FastAPI(title="Smart Water AI Assistant")
@@ -32,6 +33,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Serve the dashboard's data files (frontend/dist/data/*) at /data/*.
+# The dashboard's inlined JS fetches meter_info.json, anomalies.json, etc.
+# from /data/. Without this mount, every data file 404s.
+_DATA_DIR = os.path.normpath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "frontend", "dist", "data")
+)
+if os.path.isdir(_DATA_DIR):
+    app.mount("/data", StaticFiles(directory=_DATA_DIR), name="data")
 
 
 class ChatRequest(BaseModel):
@@ -288,8 +298,15 @@ async def chat(req: ChatRequest):
             if req.mode == "multi":
                 from multi_agent import run_multi_agent
                 yield f"data: {json.dumps({'type': 'tool', 'name': 'planner'})}\n\n"
+                # Flush so the frontend sees the planner start immediately
+                # instead of staring at "Thinking..." for 10-30 seconds.
+                # SSE comments (lines starting with ":") are valid keepalives.
+                yield ": ping\n\n"
 
-                result = run_multi_agent(question, context=req.context)
+                # Run the blocking LLM call in a worker thread so the
+                # event loop stays free to flush SSE events.
+                import asyncio
+                result = await asyncio.to_thread(run_multi_agent, question, req.context)
 
                 for tool_name in result.get("tools_called", []):
                     yield f"data: {json.dumps({'type': 'tool', 'name': tool_name})}\n\n"
@@ -570,8 +587,13 @@ async def get_metrics():
 
 
 if __name__ == "__main__":
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--host", default="0.0.0.0")
+    ap.add_argument("--port", type=int, default=8000)
+    args = ap.parse_args()
     print("Starting Smart Water AI Assistant...")
-    print("  API: http://localhost:8000/api/chat (streaming)")
-    print("  Sync: http://localhost:8000/api/chat/sync")
-    print("  Health: http://localhost:8000/api/health")
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    print(f"  API: http://{args.host}:{args.port}/api/chat (streaming)")
+    print(f"  Sync: http://{args.host}:{args.port}/api/chat/sync")
+    print(f"  Health: http://{args.host}:{args.port}/api/health")
+    uvicorn.run(app, host=args.host, port=args.port)
