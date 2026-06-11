@@ -35,6 +35,16 @@ if str(AGENT_DIR) not in sys.path:
     sys.path.insert(0, str(AGENT_DIR))
 
 
+# Phase 5 C5-2: agent tools now read from v2 SQLite tables
+# (data_errors, corrections, hourly_meter) that don't exist in the
+# default mock DB (analytics.db, 10 tables). Point at the real DB
+# (analytics_real.db, 13 tables) for the whole test session so tools
+# like query_data_quality can run without per-test env-var plumbing.
+_REAL_DB = ROOT / "backend" / "data" / "analytics_real.db"
+if _REAL_DB.exists() and not os.environ.get("WATER_DB_PATH"):
+    os.environ["WATER_DB_PATH"] = str(_REAL_DB)
+
+
 @pytest.fixture
 def tmp_ckpt(tmp_path: Path) -> Path:
     """A fresh checkpoint dir per test. Used by orchestrator tests."""

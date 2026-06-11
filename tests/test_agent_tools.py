@@ -68,7 +68,9 @@ def test_get_anomaly_stats():
 
 def test_get_predictions():
     from agent.agent_tools import get_predictions
-    out = get_predictions.invoke({"meter_id": "3586950", "limit": 5})
+    # Use a meterId that's in the v2 real-data predictions table
+    # (mock meterIds 3586950 are no longer present after Phase 2).
+    out = get_predictions.invoke({"meter_id": "652421", "limit": 5})
     data = json.loads(out)
     # Returns a dict with meterId + predictions list
     assert isinstance(data, dict)

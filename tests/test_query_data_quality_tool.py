@@ -56,22 +56,17 @@ def test_tool_filters_by_reason_substring():
         assert "fire-test" in e["reason"].lower()
 
 
-def test_tool_handles_missing_file():
-    """If data_errors.json is absent, tool returns total_errors=0 (no crash)."""
-    # Temporarily point DATA_DIR at an empty directory
-    from agent import agent_tools
-    original = agent_tools.DATA_DIR
-    test_dir = ROOT / "tests" / "__no_data_dir__"
-    try:
-        os.makedirs(test_dir, exist_ok=True)
-        agent_tools.DATA_DIR = str(test_dir)
-        out = json.loads(agent_tools.query_data_quality.invoke({}))
-        assert out["total_errors"] == 0
-        assert out["recent"] == []
-    finally:
-        agent_tools.DATA_DIR = original
-        if test_dir.exists():
-            os.rmdir(test_dir)
+def test_tool_handles_no_matching_records():
+    """Phase 2: query_data_quality reads from SQLite, not JSON. The
+    old 'missing file' test (pointing DATA_DIR at an empty dir) is no
+    longer applicable. Replaced with a filter that matches no records
+    — the tool should return total_errors=0 cleanly without crashing.
+    """
+    from agent.agent_tools import query_data_quality
+    out = json.loads(query_data_quality.invoke({"meter_id": "000000000"}))
+    assert out["total_errors"] == 0
+    assert out["recent"] == []
+    assert out["by_reason"] == {}
 
 
 def test_tool_is_registered_in_all_tools():

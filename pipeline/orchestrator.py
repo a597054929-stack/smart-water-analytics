@@ -904,8 +904,13 @@ def main() -> int:
     print(f"stages     : {summary['stages']}")
     print(f"failed     : {summary['failed']}")
     print(f"status     : {summary['status']}")
-    print("\ningest (rows):")
-    _print_table(summary["ingest"], indent=1)
+    # Phase 4: 'ingest' is no longer a top-level key in the summary.
+    # Ingest's per-artifact row counts moved into stage_results['ingest']
+    # as a dict[str, DataFrame] (we just print the dict keys, not the
+    # contents — printing a DataFrame would be unreadable in the CLI).
+    print("\ningest artifacts:")
+    for name in (summary.get("stage_results") or {}).get("ingest", {}):
+        print(f"  {name}")
     return 0 if summary["status"] == "ok" else 1
 
 
