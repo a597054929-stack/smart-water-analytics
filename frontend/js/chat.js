@@ -10,13 +10,19 @@ const TOOL_NAMES = {
   'query_meters': 'Looking up meters',
   'get_anomaly_stats': 'Computing anomaly stats',
   'get_predictions': 'Fetching predictions',
-  'get_building_predictions': 'Fetching building predictions',
   'get_data_overview': 'Getting data overview',
-  'query_daily_dma': 'Querying daily DMA data',
-  'query_weekly': 'Querying weekly data',
+  'query_consumption': 'Querying consumption',
   'query_rank_changes': 'Checking rankings',
   'query_monthly_diff': 'Analyzing NRW data',
   'generate_chart': 'Generating chart',
+  'analyze_anomaly': 'Analyzing anomaly',
+  'generate_report': 'Generating report',
+  'query_data_quality': 'Checking data quality',
+  'sql_query': 'Running SQL query',
+  'sql_chart': 'Generating chart from SQL',
+  'list_tables_tool': 'Listing tables',
+  'get_table_schema_tool': 'Fetching table schema',
+  'get_current_page_context': 'Reading page context',
 };
 
 function toggleChat() {

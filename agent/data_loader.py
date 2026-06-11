@@ -1,5 +1,6 @@
 """Load water analytics JSON data for the LangChain Agent."""
-import json, os
+import json
+import os
 
 # Data directory - defaults to mock data in portfolio, override with env var.
 # Only honors WATER_DATA_DIR if it's an absolute path; relative values are
@@ -13,7 +14,7 @@ DATA_DIR = _env_dir if (_env_dir and os.path.isabs(_env_dir)) else _DEFAULT_DATA
 
 def load_json(filename):
     path = os.path.join(DATA_DIR, filename)
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         return json.load(f)
 
 

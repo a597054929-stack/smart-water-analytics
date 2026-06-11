@@ -46,30 +46,11 @@ else:
 
 _data_cache = {}
 
-def _load(filename):
-    if filename not in _data_cache:
-        with open(os.path.join(DATA_DIR, filename), encoding="utf-8") as f:
-            _data_cache[filename] = json.load(f)
-    return _data_cache[filename]
-
-
-def _load_errors():
-    """Load data_errors.json — try DATA_DIR first, then the sibling output_real/.
-
-    data_errors.json is a real-data-only artefact (the mock data is clean
-    by construction). If WATER_DATA_DIR is set to `output/`, we still want
-    the tool to find the real-data errors by looking in `output_real/`.
-    Returns [] if the file doesn't exist in either location.
-    """
-    candidates = [os.path.join(DATA_DIR, "data_errors.json")]
-    parent = os.path.dirname(DATA_DIR.rstrip("/").rstrip("\\"))
-    for sibling in ("output_real", "output"):
-        candidates.append(os.path.join(parent, sibling, "data_errors.json"))
-    for path in candidates:
-        if os.path.exists(path):
-            with open(path, encoding="utf-8") as f:
-                return json.load(f)
-    return []
+# Phase 5 (B6): removed _load() and _load_errors(). They were dead code
+# after Phase 2 — every tool now reads from SQLite via _sql_helpers.
+# The lone try/except _load("predictions_fitted.json") in
+# get_predictions (line 312 pre-removal) was always FileNotFoundError-
+# silenced dead code. See commit message for full removal list.
 
 
 def _match_dma(query, dma_name):
@@ -294,18 +275,24 @@ def get_predictions(query_type: str = "meter", meter_id: str = "",
         )
         if not rows:
             return f"No prediction found for meter {meter_id}"
-        # TODO(phase4): merge predictions_fitted.json — currently no SQLite
-        # equivalent. predictions_fitted.json not in schema_v2.sql; will be
-        # added as a fitted_predictions table in Phase 4 publish.
-        try:
-            fitted = _load("predictions_fitted.json")
-            for f in fitted.get("fitted", []):
-                if f.get("meterId") == meter_id:
-                    rows.append({"fitted": f.get("fitted", [])})
-                    break
-        except (FileNotFoundError, KeyError):
-            pass
-        return json.dumps(rows, ensure_ascii=False, indent=2)
+        # Build the legacy shape: a dict with meterId + predictions[] (the
+        # SQL rows flattened) + optional fitted[] merged from the legacy
+        # predictions_fitted.json (not in v2 schema).
+        result: dict = {
+            "meterId":     meter_id,
+            "predictions": [
+                {"date": r.get("date"), "predicted": r.get("predicted"),
+                 "lower": r.get("lower"), "upper": r.get("upper")}
+                for r in rows
+            ],
+        }
+        # Phase 5 (B6): removed the predictions_fitted.json try/except
+        # merge — predictions_fitted is not in schema_v2.sql and the
+        # _load() helper it relied on is gone. The 'fitted' key was
+        # always missing in the merged result (FileNotFoundError was
+        # silently swallowed). If fitted predictions become a real
+        # v2 SQLite table, add the merge here from that table.
+        return json.dumps(result, ensure_ascii=False, indent=2)
 
     # Top N by latest predicted value
     rows = _query_all(
