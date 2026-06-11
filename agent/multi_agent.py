@@ -1,32 +1,28 @@
+# -*- coding: utf-8 -*-
 """
-Multi-Agent Architecture — Planner + Executor + Synthesizer
+Multi-Agent Architecture - Planner + Executor + Synthesizer
 
 Architecture:
   User Question
-      │
-      ▼
-  ┌──────────────┐
-  │  Planner      │  Analyzes question → creates execution plan
-  │  (LLM)       │  Output: list of tool calls with parameters
-  └──────┬───────┘
-         │
-         ▼
-  ┌──────────────┐
-  │  Executor     │  Runs each tool call in sequence
-  │  (Tools)      │  Collects all results
-  └──────┬───────┘
-         │
-         ▼
-  ┌──────────────┐
-  │  Synthesizer  │  Combines results into coherent answer
-  │  (LLM)       │  May also generate charts
-  └──────────────┘
+      |
+      ?
+  +--------------+
+  |  Planner      |  Analyzes question -> creates execution plan
+  |  (LLM)       |  Output: list of tool calls with parameters
+  +------+-------+
+         |
+         ?
+  +--------------+
+  |  Executor     |  Runs each tool call in sequence
+  |  (Tools)      |  Collects all results
+  +------+-------+
+         |
+         ?
+  +--------------+
+  |  Synthesizer  |  Combines results into coherent answer
+  |  (LLM)       |  May also generate charts
+  +--------------+"""
 
-Interview points:
-1. Why multi-agent? → "Separation of planning from execution improves reliability"
-2. Why not single agent? → "Single agents sometimes skip steps or call wrong tools"
-3. How does planning help? → "Explicit plan can be validated before execution"
-"""
 
 import sys, json
 sys.stdout.reconfigure(encoding="utf-8")
@@ -39,12 +35,12 @@ from config import get_llm_config
 from agent_tools import ALL_TOOLS
 
 
-# ── Tool Registry ─────────────────────────────────────────────
+# -- Tool Registry ---------------------------------------------
 
 TOOL_REGISTRY = {tool.name: tool for tool in ALL_TOOLS}
 
 
-# ── Planner ───────────────────────────────────────────────────
+# -- Planner ---------------------------------------------------
 
 PLANNER_PROMPT = """You are a planning agent. Your job is to analyze the user question
 and create a structured execution plan.
@@ -61,33 +57,38 @@ If asking back, return a single JSON object:
      "options": ["opt1", "opt2", ...], "default": "opt1"}
 
 Available tools:
-- query_anomalies(dma, month, anomaly_type, limit)
+- query_anomalies(mode, dma, month, anomaly_type, meter_id, limit)
+  # mode: list / stats / analyze
 - query_meters(dma, is_residential, building, limit)
 - get_anomaly_stats(month, dma)
-- get_predictions(meter_id, limit)
-- get_building_predictions(building, limit)
+- get_predictions(query_type, meter_id, building, limit)
+  # query_type: meter (default) or building — building mode is the
+  # replacement for the old get_building_predictions tool
 - get_data_overview()
-- sql_chart(sql, chart_type, title, x_column, y_column, y_label)   # SQL + chart in one call (bar/line/pie)
-- query_consumption(mode, date, dma, month1, month2, limit)   # daily/weekly/compare
-- query_weekly()
+- query_consumption(mode, date, dma, month1, month2, limit)
+  # mode: daily (default) / weekly / compare (replaces the old
+  # query_weekly, query_daily_dma, compare_months tools)
 - query_rank_changes(limit)
 - query_monthly_diff(month)
-- sql_chart(sql, chart_type, title, x_column, y_column, y_label)   # SQL + chart in one call (bar/line/pie)
-  *** USE THIS for ANY chart that requires custom data (top-N, building totals, trends, etc.) ***
 - generate_chart(chart_type, dma, days)   # FIXED chart types ONLY: "weekly_trend" / "anomaly_by_dma" / "anomaly_type" / "daily_usage"
-  *** DO NOT use generate_chart for custom data or arbitrary queries — use sql_chart instead ***
-- compare_months(month1, month2, dma)
+  *** DO NOT use generate_chart for custom data or arbitrary queries - use sql_chart instead ***
 - analyze_anomaly(meter_id)
 - generate_report(dma, month)
-- query_data_quality(date, meter_id, reason)
+- query_data_quality(date, meter_id, reason)   # reads data_errors table
+- sql_query(sql, limit)   # direct SQL read against the v2 tables
+- sql_chart(sql, chart_type, title, x_column, y_column, y_label)
+  *** USE THIS for ANY chart that requires custom data (top-N,
+      building totals, trends, property breakdown, etc.) ***
+- list_tables_tool()   # lists all v2 tables (use sparingly — schemas below)
+- get_table_schema_tool(table_name)   # column metadata for a v2 table
 
-Database schema (analytics_real.db — 10 tables, copy these column names):
+Database schema (analytics_real.db - 13 tables, copy these column names):
 - meters: meterId, id, contractId, propertyType, isResidential, buildingName, dma, supplyMode, mainCode
   (Use meters for: DMA, building, property type of a meter)
 - hourly_meter: meterId, datetime, consumption, reading   (30 days, hourly granularity)
   (Use hourly_meter for: per-meter time series, JOIN meters to get names)
 - daily_dma: date, dma, total, residential, nonResidential, resCount, nonResCount, meterCount, rain
-  *** NOTE: daily_dma does NOT have meterId — it's aggregated at DMA level ***
+  *** NOTE: daily_dma does NOT have meterId - it's aggregated at DMA level ***
   (Use daily_dma for: total consumption per DMA per day, never per meter)
 - weekly: weekStart, weekEnd, label, dates, totalByDma, grandTotal, weekdayAvg, weekendAvg, wdByDmaRes
   (Use weekly for: weekly summary, weather correlation)
@@ -103,114 +104,129 @@ Database schema (analytics_real.db — 10 tables, copy these column names):
   (Use predictions_building for: per-building 7-day forecast)
 - search_index: id, contract, building, dma, type
   (Use search_index for: fuzzy lookup by contract/building)
-- data_errors (read via JSON tools, not SQL): dropped meter-day records
+- data_errors: ts, meterId, date, reason, rawValue
+  (Use data_errors for: dropped / suspicious records surfaced by the
+   query_data_quality tool. This is a real SQLite table — use
+   sql_query to JOIN it with meters / anomalies.)
+- corrections: meterId, startDate, endDate, factor, reason
+  (Use corrections for: admin override log of per-meter scaling
+   factors applied to historical data. PRIMARY KEY (meterId,
+   startDate, endDate).)
+- meter_daily: meterId, date, total
+  (Use meter_daily for: pre-aggregated per-meter daily consumption,
+   ~626K rows for the real dataset. Use this when you need a
+   meter's full daily series without the SQL GROUP BY cost of
+   hourly_meter.)
 
 Common JOIN patterns:
 - meters + hourly_meter (on meterId): per-meter time series with names
 - meters + anomalies (on meterId): anomalies with building/property context
-- meters + daily_dma (on dma): NOT possible — daily_dma has no meterId
-- For per-meter daily usage: aggregate hourly_meter by date
+- meters + daily_dma (on dma): NOT possible - daily_dma has no meterId
+- For per-meter daily usage: use meter_daily directly (pre-aggregated)
+- anomalies + data_errors (on meterId, date): cross-reference detected
+  anomalies with the records the converter dropped as data errors
 
 Rules (tool selection):
 - Output ONLY the JSON array, no other text
 - Include only tools relevant to the question
 - Set reasonable parameter defaults if not specified
-- For comparison questions, include compare_months
+- For comparison questions (e.g. "this month vs last month"): use
+  query_consumption(mode="compare", month1=..., month2=...)
 - For investigation questions, include analyze_anomaly
 - Always end with generate_report if the user asks for a summary
 - NEVER use generate_chart for custom data queries. generate_chart
   only supports 4 hardcoded types: weekly_trend, anomaly_by_dma,
   anomaly_type, daily_usage. For ANY other chart (top-N, building
   totals, trends by meter, property breakdown) use sql_chart.
-  WRONG: generate_chart(chart_type="bar")  ← will return error
+  WRONG: generate_chart(chart_type="bar")  <- will return error
   RIGHT: sql_chart(sql="SELECT ...", chart_type="bar", ...)
 
-Tool call budget (soft hints — execution layer enforces hard limits):
-- **Don't repeat the same tool call** — if you already called
-  query_anomalies(dma="路氹城區"), don't call it again with the
+Tool call budget (soft hints - execution layer enforces hard limits):
+- **Don't repeat the same tool call** - if you already called
+  query_anomalies(dma="????"), don't call it again with the
   same params. The executor dedupes by (tool, params) anyway.
-- **Don't re-query schema** — all 10 table schemas are listed
+- **Don't re-query schema** - all 13 table schemas are listed
   above. Don't call list_tables_tool or get_table_schema_tool
   unless you genuinely need a column you don't see.
-- **Don't cross-validate** — once you got an answer from
+- **Don't cross-validate** - once you got an answer from
   query_anomalies, don't also call get_data_overview to "double
   check" the same number. Data is stable within a 30-min window.
-- **Aim for 1-3 tool calls per question** — multi-tool plans
+- **Aim for 1-3 tool calls per question** - multi-tool plans
   are fine for multi-step reasoning (compare 2 months needs 2
   queries), but avoid calling the same query 5+ times.
 
-SQL ROUTING — when to use sql_query instead of JSON tools:
+SQL ROUTING - when to use sql_query instead of JSON tools:
 Use sql_query when the question needs cross-table JOINs, custom GROUP BY,
 ORDER BY, LIMIT, or time granularity finer than the pre-aggregated JSONs.
 
 SQL examples (copy these patterns):
 - Top N meters by usage in a DMA:
-  sql_query("SELECT m.meterId, m.buildingName, SUM(h.consumption) AS total FROM hourly_meter h JOIN meters m ON h.meterId=m.meterId WHERE m.dma='路氹城區' GROUP BY m.meterId ORDER BY total DESC LIMIT 10")
+  sql_query("SELECT m.meterId, m.buildingName, SUM(h.consumption) AS total FROM hourly_meter h JOIN meters m ON h.meterId=m.meterId WHERE m.dma='????' GROUP BY m.meterId ORDER BY total DESC LIMIT 10")
 
 - Building total usage:
-  sql_query("SELECT m.buildingName, SUM(h.consumption) AS total FROM hourly_meter h JOIN meters m ON h.meterId=m.meterId WHERE m.buildingName LIKE '%永利皇宮%' GROUP BY m.buildingName")
+  sql_query("SELECT m.buildingName, SUM(h.consumption) AS total FROM hourly_meter h JOIN meters m ON h.meterId=m.meterId WHERE m.buildingName LIKE '%????%' GROUP BY m.buildingName")
 
 - Property type breakdown:
   sql_query("SELECT m.propertyType, SUM(h.consumption) AS total FROM hourly_meter h JOIN meters m ON h.meterId=m.meterId GROUP BY m.propertyType ORDER BY total DESC")
 
 - Anomaly count by type:
-  sql_query("SELECT type, COUNT(*) AS cnt FROM anomalies WHERE dma='路氹城區' GROUP BY type ORDER BY cnt DESC")
+  sql_query("SELECT type, COUNT(*) AS cnt FROM anomalies WHERE dma='????' GROUP BY type ORDER BY cnt DESC")
 
 - Anomalies in a month:
-  sql_query("SELECT COUNT(*) AS cnt FROM anomalies WHERE dma='路氹城區' AND date LIKE '2026-05%'")
+  sql_query("SELECT COUNT(*) AS cnt FROM anomalies WHERE dma='????' AND date LIKE '2026-05%'")
 
 - Daily trend for a DMA:
-  sql_query("SELECT substr(h.datetime,1,10) AS day, SUM(h.consumption) AS total FROM hourly_meter h JOIN meters m ON h.meterId=m.meterId WHERE m.dma='路氹城區' GROUP BY day ORDER BY day")
+  sql_query("SELECT substr(h.datetime,1,10) AS day, SUM(h.consumption) AS total FROM hourly_meter h JOIN meters m ON h.meterId=m.meterId WHERE m.dma='????' GROUP BY day ORDER BY day")
 
 - Single meter daily usage:
   sql_query("SELECT substr(h.datetime,1,10) AS day, SUM(h.consumption) AS total FROM hourly_meter h WHERE h.meterId='711758' GROUP BY day ORDER BY day")
 
 - Top anomalies by score:
-  sql_query("SELECT meterId, buildingName, anomalyScore, type, date FROM anomalies WHERE dma='路氹城區' ORDER BY anomalyScore DESC LIMIT 10")
+  sql_query("SELECT meterId, buildingName, anomalyScore, type, date FROM anomalies WHERE dma='????' ORDER BY anomalyScore DESC LIMIT 10")
 
 - Fire system usage:
   sql_query("SELECT m.propertyType, SUM(h.consumption) AS total FROM hourly_meter h JOIN meters m ON h.meterId=m.meterId WHERE m.propertyType LIKE '%Fire%' GROUP BY m.propertyType")
 
-CHART ROUTING — when user asks for a chart / graph / 图:
-- "路氹城區前10用水柱状图"  →  sql_chart(sql="SELECT m.meterId, ... ORDER BY total DESC LIMIT 10", chart_type="bar", title="路氹城區 Top 10 用水", y_label="m³")
-- "物业类型用水饼图"       →  sql_chart(sql="SELECT m.propertyType, ... GROUP BY m.propertyType", chart_type="pie", title="物业类型用水占比")
-- "路氹城區日用水趋势图"   →  sql_chart(sql="SELECT substr(h.datetime,1,10) AS day, ... GROUP BY day", chart_type="line", title="路氹城區日用水趋势", y_label="m³")
-- "周趋势图" (fixed)       →  generate_chart(chart_type="weekly_trend", dma="路氹城區")
-- "异常类型分布图" (fixed) →  generate_chart(chart_type="anomaly_type")
+CHART ROUTING - when user asks for a chart / graph / ?:
+- "?????10?????"  ->  sql_chart(sql="SELECT m.meterId, ... ORDER BY total DESC LIMIT 10", chart_type="bar", title="???? Top 10 ??", y_label="m?")
+- "????????"       ->  sql_chart(sql="SELECT m.propertyType, ... GROUP BY m.propertyType", chart_type="pie", title="????????")
+- "??????????"   ->  sql_chart(sql="SELECT substr(h.datetime,1,10) AS day, ... GROUP BY day", chart_type="line", title="?????????", y_label="m?")
+- "????" (fixed)       ->  generate_chart(chart_type="weekly_trend", dma="????")
+- "???????" (fixed) ->  generate_chart(chart_type="anomaly_type")
 
 Example (chart):
-User: 路氹城區前10用水量的水表柱状图
-Output: [{"tool": "sql_chart", "params": {"sql": "SELECT m.meterId, m.buildingName, SUM(h.consumption) AS total FROM hourly_meter h JOIN meters m ON h.meterId=m.meterId WHERE m.dma='路氹城區' GROUP BY m.meterId ORDER BY total DESC LIMIT 10", "chart_type": "bar", "title": "路氹城區 Top 10 用水水表", "x_column": "meterId", "y_column": "total", "y_label": "m³"}}]
+User: ?????10?????????
+Output: [{"tool": "sql_chart", "params": {"sql": "SELECT m.meterId, m.buildingName, SUM(h.consumption) AS total FROM hourly_meter h JOIN meters m ON h.meterId=m.meterId WHERE m.dma='????' GROUP BY m.meterId ORDER BY total DESC LIMIT 10", "chart_type": "bar", "title": "???? Top 10 ????", "x_column": "meterId", "y_column": "total", "y_label": "m?"}}]
 
-Use JSON tools when the pre-aggregated files already cover the query:
+Use JSON tools when the pre-aggregated tables already cover the query:
 - query_anomalies: anomaly list/stats for a DMA+month
 - query_meters: meter metadata search
 - get_anomaly_stats: anomaly summary by DMA/type
-- get_predictions / get_building_predictions: forecast data
-- query_consumption: daily/weekly/compare (uses weekly.json + daily_dma.json)
+- get_predictions(query_type="meter" or "building"): forecast data
+- query_consumption(mode="daily"|"weekly"|"compare"): daily/weekly/compare
 - query_rank_changes: top50 ranking changes (by daysInTop20, avgTotal, trend)
 - query_monthly_diff: main-sub meter NRW diff
 - get_data_overview: overall statistics (only for vague "show me everything")
 - generate_chart: fixed chart types only (weekly_trend, anomaly_by_dma, anomaly_type, daily_usage)
 - generate_report: text summary
-- sql_chart: use when user wants a chart FROM SQL data (e.g. "柱状图" + custom query)
+- sql_chart: use when user wants a chart FROM SQL data (e.g. "???" + custom query)
 
 Tool selection rules (specific common cases):
-- "前N水表 / Top N meters by usage" (短期, e.g. 最近 30 天):
+- "?N?? / Top N meters by usage" (??, e.g. ?? 30 ?):
   USE sql_query with hourly_meter + meters JOIN
-- "前N水表 / Top N meters by long-term ranking" (长期, e.g. 排名变化):
-  USE query_rank_changes (pre-aggregated rank_changes.json, has daysInTop20 + avgTotal)
-- "建筑粒度用水趋势" (per-building): USE daily_dma JOIN meters (aggregate by buildingName)
-- "水表粒度日用量" (per-meter daily): USE hourly_meter GROUP BY date
-- "周趋势图" (weekly trend): USE query_consumption(mode="weekly") — pre-aggregated, faster
-- "月度对比" (month compare): USE compare_months — pre-aggregated
-- "前10建筑用水" (top buildings): USE sql_query with GROUP BY buildingName
-- "物业类型用水占比" (property type): USE sql_query with GROUP BY propertyType
-- "NRW / 主分表差": USE query_monthly_diff — pre-aggregated, no SQL needed
-- "异常分析" (anomaly deep-dive): USE analyze_anomaly (single meter) or query_anomalies (list)
+- "?N?? / Top N meters by long-term ranking" (??, e.g. ????):
+  USE query_rank_changes (pre-aggregated rank_changes, has daysInTop20 + avgTotal)
+- "????????" (per-building): USE daily_dma JOIN meters (aggregate by buildingName)
+- "???????" (per-meter daily): USE meter_daily directly, or sql_query on hourly_meter GROUP BY date
+- "????" (weekly trend): USE query_consumption(mode="weekly") - pre-aggregated, faster
+- "????" (month compare): USE query_consumption(mode="compare", month1=..., month2=...)
+- "?10????" (top buildings): USE sql_query with GROUP BY buildingName
+- "????????" (property type): USE sql_query with GROUP BY propertyType
+- "NRW / ????": USE query_monthly_diff - pre-aggregated, no SQL needed
+- "????" (anomaly deep-dive): USE analyze_anomaly (single meter) or query_anomalies (list)
 
 When to ask back (clarify instead of guessing):
-- The user asks 查异常 / 查数据 / 查表 but does not specify DMA,
+- The user asks ??? / ??? / ?? but does not specify DMA,
   time period, or meter ID.
 - The user question is materially ambiguous: different choices lead
   to different tools or different answers.
@@ -220,47 +236,47 @@ When to ask back (clarify instead of guessing):
 How to ask back:
 - Return a SINGLE JSON object (not an array of tool calls):
   {"action": "clarify",
-   "question": "你想查哪个区域、哪个时段的异常？\n1) 澳門低區\n2) 澳門填海A區\n3) 澳大橫琴區\n4) 路氹城區\n默认：路氹城區（最近 30 天）",
-   "options": ["澳門低區", "澳門填海A區", "澳大橫琴區", "路氹城區"],
-   "default": "路氹城區"}
+   "question": "????????????????\n1) ????\n2) ????A?\n3) ?????\n4) ????\n?????????? 30 ??",
+   "options": ["????", "????A?", "?????", "????"],
+   "default": "????"}
 - question field uses natural language (not a form-like prompt)
-- Always include a default time period (e.g. "最近 30 天" or "5 月")
+- Always include a default time period (e.g. "?? 30 ?" or "5 ?")
 - Provide 2-4 numbered options
 - Mark the most likely as default
 - Hard cap: 1 question covering ALL missing dimensions
 - DMA names are always the 4 real Macau names below, never abbreviations.
 
 When to ask back (clarify instead of guessing):
-- Always include a default time period (e.g., "最近 30 天" or "5 月").
-  Don't make the user specify time if they forgot — just default to
+- Always include a default time period (e.g., "?? 30 ?" or "5 ?").
+  Don't make the user specify time if they forgot - just default to
   recent data and say so in the question.
 - Cover ALL missing dimensions in one question (DMA + time + meter if
   applicable). Do not split into multiple clarification turns.
 
 When NOT to ask back:
-- The question is clear (e.g., 查澳門低區的异常 - DMA is specified, proceed).
-- The ambiguity is minor (e.g., 上周 - assume previous 7 days,
+- The question is clear (e.g., ???????? - DMA is specified, proceed).
+- The ambiguity is minor (e.g., ?? - assume previous 7 days,
   proceed with parenthetical assuming last 7 days).
 
 DMA zones (use these exact names, never abbreviations):
-- 澳門低區
-- 澳門填海A區
-- 澳大橫琴區
-- 路氹城區
-- If the user says 氹仔/路氹/路環, map to 路氹城區.
-- If the user says 澳門, map to 澳門低區.
+- ????
+- ????A?
+- ?????
+- ????
+- If the user says ??/??/??, map to ????.
+- If the user says ??, map to ????.
 
 Example (clarify):
-User: 查异常
+User: ???
 Output: {"action": "clarify",
-         "question": "你想查哪个区域、哪个时段的异常？\n1) 澳門低區\n2) 澳門填海A區\n3) 澳大橫琴區\n4) 路氹城區\n默认：路氹城區（最近 30 天）",
-         "options": ["澳門低區", "澳門填海A區", "澳大橫琴區", "路氹城區"],
-         "default": "路氹城區"}
+         "question": "????????????????\n1) ????\n2) ????A?\n3) ?????\n4) ????\n?????????? 30 ??",
+         "options": ["????", "????A?", "?????", "????"],
+         "default": "????"}
 
 Example (proceed):
-User: 查澳門低區异常
-Output: [{"tool": "get_anomaly_stats", "params": {"dma": "澳門低區"}},
-         {"tool": "query_anomalies", "params": {"dma": "澳門低區", "limit": 10}}]
+User: ???????
+Output: [{"tool": "get_anomaly_stats", "params": {"dma": "????"}},
+         {"tool": "query_anomalies", "params": {"dma": "????", "limit": 10}}]
 """
 
 
@@ -332,20 +348,20 @@ def plan(question: str, llm) -> dict:
     return {"action": "plan", "steps": [{"tool": "get_data_overview", "params": {}}]}
 
 
-# ── Executor ──────────────────────────────────────────────────
+# -- Executor --------------------------------------------------
 
 def execute(plan_steps: list, max_tools: int = 8, max_consecutive_failures: int = 2) -> list:
     """Execute a plan by calling tools in sequence.
 
     Three execution-layer guards (P0 fixes from 2026-06-09):
-    1. Dedup by (tool_name, frozenset(params)) — LLM sometimes
-       repeats the same call (e.g. "query_anomalies dma=路氹城區"
+    1. Dedup by (tool_name, frozenset(params)) - LLM sometimes
+       repeats the same call (e.g. "query_anomalies dma=????"
        called 10 times for the same question). Different params
-       like dma=路氹城區 vs dma=澳大橫琴區 are NOT deduped.
-    2. Circuit breaker — if max_consecutive_failures tools in a row
+       like dma=???? vs dma=????? are NOT deduped.
+    2. Circuit breaker - if max_consecutive_failures tools in a row
        all error, abort the rest of the plan. Avoids burning 20+
        tool calls on a broken plan.
-    3. Hard cap on total tools (max_tools) — prevents runaway plans
+    3. Hard cap on total tools (max_tools) - prevents runaway plans
        from N>M where the LLM hallucinates dozens of steps.
     """
     results = []
@@ -402,7 +418,7 @@ def execute(plan_steps: list, max_tools: int = 8, max_consecutive_failures: int 
     return results
 
 
-# ── Synthesizer ───────────────────────────────────────────────
+# -- Synthesizer -----------------------------------------------
 
 SYNTHESIZER_PROMPT = """You are a data synthesis agent. You receive raw tool results
 and must combine them into a clear, helpful answer for the user.
@@ -447,10 +463,10 @@ def synthesize(question: str, plan_steps: list, results: list, llm) -> str:
     return content
 
 
-# ── Main Pipeline ─────────────────────────────────────────────
+# -- Main Pipeline ---------------------------------------------
 
 def run_multi_agent(question: str, context: dict | None = None) -> dict:
-    """Run the full multi-agent pipeline: Plan → Execute → Synthesize.
+    """Run the full multi-agent pipeline: Plan -> Execute -> Synthesize.
 
     Args:
         question: the user's natural-language question.
@@ -532,7 +548,7 @@ def run_multi_agent(question: str, context: dict | None = None) -> dict:
     }
 
 
-# ── CLI ───────────────────────────────────────────────────────
+# -- CLI -------------------------------------------------------
 
 def main():
     import argparse

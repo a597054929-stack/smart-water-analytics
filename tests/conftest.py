@@ -92,10 +92,13 @@ def pipeline_output():
 # ── Mock LLM for harness tests (added 2026-06-08, see ADR-0004) ──
 
 # Keywords for tool selection. The order matters — more specific first.
+# Phase 5 (A2): updated to v2 tool names. The old compare_months /
+# query_weekly / query_daily_dma / get_building_predictions tools were
+# merged into query_consumption(mode=...) and get_predictions(query_type=...).
 _PLANNER_KEYWORDS = [
     # (kw_substring, tool_name, default_params)
-    ("对比", "compare_months", {}),
-    ("compare", "compare_months", {}),
+    ("对比", "query_consumption", {"mode": "compare"}),
+    ("compare", "query_consumption", {"mode": "compare"}),
     ("睇下", "query_anomalies", {"dma": "Zone-3"}),
     ("drop", "get_data_overview", {}),
     ("delete", "get_data_overview", {}),
@@ -105,24 +108,24 @@ _PLANNER_KEYWORDS = [
     ("母子表", "query_monthly_diff", {}),
     ("monthly_diff", "query_monthly_diff", {}),
     ("月差", "query_monthly_diff", {}),
-    ("building_predictions", "get_building_predictions", {}),
-    ("建筑预测", "get_building_predictions", {}),
-    ("大厦", "get_building_predictions", {}),
-    ("预测", "get_predictions", {}),
-    ("predict", "get_predictions", {}),
+    ("建筑预测", "get_predictions", {"query_type": "building"}),
+    ("大厦", "get_predictions", {"query_type": "building"}),
+    ("building", "get_predictions", {"query_type": "building"}),
+    ("预测", "get_predictions", {"query_type": "meter"}),
+    ("predict", "get_predictions", {"query_type": "meter"}),
     ("anomal", "query_anomalies", {"dma": "Zone-3"}),
     ("异常", "query_anomalies", {"dma": "Zone-3"}),
     ("rank", "query_rank_changes", {}),
     ("排名", "query_rank_changes", {}),
-    ("weekly", "query_weekly", {}),
-    ("周", "query_weekly", {}),
-    ("daily_dma", "query_daily_dma", {}),
-    ("meter 7", "get_predictions", {"meter_id": "753832"}),
+    ("weekly", "query_consumption", {"mode": "weekly"}),
+    ("周", "query_consumption", {"mode": "weekly"}),
+    ("daily_dma", "query_consumption", {"mode": "daily"}),
+    ("meter 7", "get_predictions", {"query_type": "meter", "meter_id": "753832"}),
     ("meter", "query_meters", {}),
     ("水表", "query_meters", {}),
     ("overview", "get_data_overview", {}),
     ("总览", "get_data_overview", {}),
-    ("用水", "query_daily_dma", {}),
+    ("用水", "query_consumption", {"mode": "daily"}),
 ]
 
 

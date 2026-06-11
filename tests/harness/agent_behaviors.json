@@ -11,11 +11,11 @@
   },
   {
     "category": "A",
-    "name": "对比 3 月和 4 月应调 compare_months",
+    "name": "对比 3 月和 4 月应调 query_consumption (mode=compare)",
     "input": "对比 3 月和 4 月用水",
     "context": {},
     "expected": {
-      "planner_plan_contains": ["compare_months"]
+      "planner_plan_contains": ["query_consumption"]
     }
   },
   {
@@ -47,11 +47,11 @@
   },
   {
     "category": "A",
-    "name": "建筑预测应调 get_building_predictions",
+    "name": "建筑预测应调 get_predictions (query_type=building)",
     "input": "预测 隧道大厦 下周用水",
     "context": {},
     "expected": {
-      "planner_plan_contains": ["get_building_predictions"]
+      "planner_plan_contains": ["get_predictions"]
     }
   },
   {
@@ -65,20 +65,20 @@
   },
   {
     "category": "A",
-    "name": "日报查询应调 query_daily_dma",
+    "name": "日报查询应调 query_consumption (mode=daily)",
     "input": "2026-05-01 Zone-3 daily 用水",
     "context": {},
     "expected": {
-      "planner_plan_contains": ["query_daily_dma"]
+      "planner_plan_contains": ["query_consumption"]
     }
   },
   {
     "category": "A",
-    "name": "周报查询应调 query_weekly",
+    "name": "周报查询应调 query_consumption (mode=weekly)",
     "input": "最近 4 周用水趋势",
     "context": {},
     "expected": {
-      "planner_plan_contains": ["query_weekly"]
+      "planner_plan_contains": ["query_consumption"]
     }
   },
   {
