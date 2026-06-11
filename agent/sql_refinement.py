@@ -83,6 +83,24 @@ Example 3:
 Failed: SELECT meterId, SUM(total) FROM meter_daily
 Error: a GROUP BY clause is required
 Fix:   SELECT meterId, SUM(total) FROM meter_daily GROUP BY meterId
+
+Example 4 (v2 schema: data_errors for data quality):
+Failed: SELECT * FROM data_error WHERE reason LIKE '%fire%'
+Error: no such table: data_error
+Fix:   SELECT * FROM data_errors WHERE reason LIKE '%fire%'
+
+Example 5 (v2 schema: corrections for admin overrides):
+Failed: SELECT * FROM corrections WHERE startDate = '2026-01-01'
+Error: no such table: corrections
+Fix:   SELECT meterId, factor FROM corrections
+       WHERE startDate >= '2026-01-01' AND startDate < '2026-02-01'
+
+Example 6 (v2 schema: hourly_meter 30-day rolling):
+Failed: SELECT meterId, SUM(consumption) FROM hourly_meter
+Error: a GROUP BY clause is required
+Fix:   SELECT meterId, SUM(consumption) AS total
+       FROM hourly_meter WHERE datetime >= date('now', '-30 days')
+       GROUP BY meterId
 """
 
 

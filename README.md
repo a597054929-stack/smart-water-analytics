@@ -9,7 +9,7 @@ A full-stack data analytics platform for monitoring and predicting urban water c
 ### AI & Machine Learning
 - **Anomaly Detection** ??14-day rolling window with Z-score analysis and tanh compression. Classifies anomalies into spike, drop, zero, and watch categories with configurable sensitivity thresholds.
 - **LightGBM Prediction** ??7-day consumption forecast for individual meters and building aggregations using LightGBM with 13 hand-crafted features (weekday, month, lag-1/7, rolling-7/14 mean/std/max/min, day-over-day change, is_weekend, trend index, deviation ratio). R? mean 0.84 vs LinearRegression 0.05 (17? improvement). Provides feature importance for interpretability.
-- **AI Chat Integration** ??Natural language interface powered by LangChain backend. Users can query anomalies, rankings, predictions, NRW metrics, and data integrity in plain language. 16 tools total; ask-back clarification for ambiguous questions; self-refinement SQL loop for bad-query recovery.
+- **AI Chat Integration** ??Natural language interface powered by LangChain backend. Users can query anomalies, rankings, predictions, NRW metrics, and data integrity in plain language. 15 tools total; ask-back clarification for ambiguous questions; self-refinement SQL loop for bad-query recovery.
 
 ### Data Analytics
 - **DMA Zone Monitoring** ??Real-time consumption breakdown across 4 district metered areas with residential/non-residential splits.
@@ -30,7 +30,7 @@ A full-stack data analytics platform for monitoring and predicting urban water c
 | Data Processing | Node.js (xlsx library) |
 | Machine Learning | Python, scikit-learn, LightGBM, NumPy |
 | Visualization | ECharts 5 (charts), Leaflet.js (maps) |
-| AI Backend | LangChain + FastAPI (ReAct agent, 16 tools, multi-agent, self-refinement SQL, ask-back clarification) |
+| AI Backend | LangChain + FastAPI (ReAct agent, 15 tools, multi-agent, self-refinement SQL, ask-back clarification) |
 | MLOps Pipeline | Pandera (schemas), SQLite, scipy (KS-test drift) |
 | Build | Custom Node.js build script (CSS/JS inlining) |
 
@@ -240,7 +240,7 @@ Stages:
 
 ## AI Agent
 
-16 LangChain tools: 11 read from the JSON files (incl. `query_data_quality` for the integrity log), 3 query the SQLite database directly via text-to-SQL, 1 reads the live page context, 1 is a chart-builder. The system prompt teaches the model when to use which category (aggregations ??SQL, summarized data ??JSON, integrity questions ??`query_data_quality`).
+15 LangChain tools: 8 read from SQLite (incl. `query_data_quality` for the integrity log), 3 query the SQLite database directly via text-to-SQL, 1 reads the live page context, 1 is a chart-builder, 2 are SQL-helper meta-tools. The system prompt teaches the model when to use which category (aggregations → SQL, summarized data → JSON-via-SQLite, integrity questions → `query_data_quality`).
 
 ### Three layers of resilience (added 2026-06-05/06)
 
@@ -336,7 +336,7 @@ Beyond the business logic, this project ships with a serious engineering baselin
 - **Shared test fixtures** — `tests/conftest.py` exposes `tmp_ckpt` / `db_path` / `pipeline_output` / `mock_llm` for any new test file.
 - **In-process metrics** — `GET /api/metrics` returns Prometheus-style counters for chat requests, tool calls, failures, and questions logged.
 - **Sensitive data protection** — Password-gated masking for building names, contract IDs, and meter IDs in real-data mode (`USE_REAL_DATA=1`). Mock mode stays fully open.
-- **Tool sandbox** — `@safe_tool_call` decorator adds timeout (threading-based, Windows compatible), path blacklist (`.env`, `/etc`, `C:/Windows`), and JSONL audit log (`logs/tool_audit.log`) to all 18 agent tools.
+- **Tool sandbox** — `@safe_tool_call` decorator adds timeout (threading-based, Windows compatible), path blacklist (`.env`, `/etc`, `C:/Windows`), and JSONL audit log (`logs/tool_audit.log`) to all 15 agent tools.
 - **Memory compression** — Two-tier conversation memory: recent 6 turns verbatim + older turns summarized via LLM. Three-layer fallback on LLM failure.
 - **30-case agent harness** — Offline mock-LLM tests covering tool selection (10), ambiguous input (8), privilege escalation rejection (7), and edge cases (5). Runs in ~3 seconds.
 - **153 tests** — pipeline, agent tools, memory, sandbox, harness, regression, adversarial, evaluator.

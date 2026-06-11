@@ -4,6 +4,27 @@ All notable changes to the Smart Water Analytics project.
 
 ## [Unreleased]
 
+### Agent: PLANNER_PROMPT + harness + dead code v2 sync (2026-06-11)
+- **PLANNER_PROMPT v2** — `agent/multi_agent.py` removed 3 deleted tool refs
+  (get_building_predictions / query_weekly / compare_months, merged into
+  get_predictions(query_type=...) and query_consumption(mode=...)),
+  removed duplicate sql_chart block, schema 10 張表 → 13 張表
+  with corrections / data_errors / meter_daily added, fixed "data_errors via
+  JSON tools" (it IS SQLite). 30/30 harness pass.
+- **mock_llm fixture** — `tests/conftest.py` _PLANNER_KEYWORDS updated:
+  9 stale tool refs → v2 names with proper mode/query_type defaults.
+  Previously mock gave deleted tool names, hiding real routing regressions.
+- **harness 4 case** — `tests/harness/agent_behaviors.json` planner_plan_contains
+  updated for the 4 cases that expected deleted tools.
+- **Dead code** — `agent/agent_tools.py` removed _load() / _load_errors()
+  (zero callers after Phase 2), removed silent FileNotFoundError catch on
+  predictions_fitted.json. `agent/data_loader.py` removed from git index
+  (6 functions, 0 callers). `agent/_audit_tail.py` TOOL_CN: 3 stale
+  entries removed.
+- **Frontend** — `frontend/js/chat.js` TOOL_NAMES: 3 stale removed, 8 v2
+  tools added. `dist/dashboard.html` rebuilt.
+- **Docs** — README.md 4 places 16/18 → 15; ARCHITECTURE.md 5 places:
+  10 張表 → 13 + 5 tool refs cleaned.
 ### QA Eval: 93.3% pass rate (2026-06-09, v2 with P0/P1/P3 fixes)
 - **execute() guards (P0-1)** — `agent/multi_agent.py` now enforces 3 execution-layer guards: dedup by `(tool_name, frozenset(params.items()))`, circuit breaker at 2 consecutive failures, hard cap at `max_tools=8`. Eliminates the "42 tool calls for one question" pathology.
 - **SQL self-refinement dedup (P0-2)** — `agent/sql_refinement.py` `_refine_sql()` now aborts early when (a) two consecutive errors are identical (LLM rewrite loop) or (b) SQL unchanged between attempts (LLM not rewriting). Keeps `_MAX_RETRIES=2`.
