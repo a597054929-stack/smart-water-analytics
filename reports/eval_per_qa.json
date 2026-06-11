@@ -1,17 +1,17 @@
 {
-  "generated_at": "2026-06-05T16:19:00.947491Z",
+  "generated_at": "2026-06-11T05:05:10.174307Z",
   "n_pairs": 30,
-  "pass_rate": 0.767,
-  "tool_accuracy": 0.7,
-  "avg_kw_recall": 0.867,
-  "avg_latency_s": 19.159,
+  "pass_rate": 0.9,
+  "tool_accuracy": 0.833,
+  "avg_kw_recall": 0.95,
+  "avg_latency_s": 17.952,
   "failure_rate": 0.0,
-  "threshold": 0.6,
+  "threshold": 0.8,
   "verdict": "pass",
   "per_qa": [
     {
       "question": "How many anomalies are in 路氹城區?",
-      "expected_tool": "sql_query",
+      "expected_tool": "query_anomalies",
       "expected_behavior": "",
       "expected_keywords": [
         "路氹城區"
@@ -20,31 +20,30 @@
         "query_anomalies",
         "query_anomalies"
       ],
-      "tool_match": false,
+      "tool_match": true,
       "kw_recall": 1.0,
-      "elapsed_s": 9.273,
-      "answer_chars": 145,
+      "elapsed_s": 8.589,
+      "answer_chars": 270,
       "error": null,
-      "pass_": false
+      "pass_": true
     },
     {
       "question": "What are the top 5 highest-scoring anomalies?",
-      "expected_tool": "sql_query",
+      "expected_tool": "query_anomalies",
       "expected_behavior": "",
       "expected_keywords": [
-        "anomalyScore",
-        "DESC"
+        "anomalyScore"
       ],
       "tool_calls": [
         "query_anomalies",
         "query_anomalies"
       ],
-      "tool_match": false,
-      "kw_recall": 0.5,
-      "elapsed_s": 12.018,
-      "answer_chars": 1245,
+      "tool_match": true,
+      "kw_recall": 1.0,
+      "elapsed_s": 16.59,
+      "answer_chars": 1172,
       "error": null,
-      "pass_": false
+      "pass_": true
     },
     {
       "question": "Show me anomalies in 路氹城區",
@@ -55,20 +54,18 @@
       ],
       "tool_calls": [
         "query_anomalies",
-        "query_anomalies",
-        "query_anomalies",
         "query_anomalies"
       ],
       "tool_match": true,
       "kw_recall": 1.0,
-      "elapsed_s": 13.522,
-      "answer_chars": 310,
+      "elapsed_s": 23.463,
+      "answer_chars": 1211,
       "error": null,
       "pass_": true
     },
     {
       "question": "What are the anomaly statistics for 澳門低區?",
-      "expected_tool": "get_anomaly_stats",
+      "expected_tool": "query_anomalies",
       "expected_behavior": "",
       "expected_keywords": [
         "澳門低區",
@@ -78,12 +75,12 @@
         "query_anomalies",
         "query_anomalies"
       ],
-      "tool_match": false,
+      "tool_match": true,
       "kw_recall": 1.0,
-      "elapsed_s": 9.635,
-      "answer_chars": 307,
+      "elapsed_s": 8.501,
+      "answer_chars": 360,
       "error": null,
-      "pass_": false
+      "pass_": true
     },
     {
       "question": "Give me an overview of the data",
@@ -99,14 +96,14 @@
       ],
       "tool_match": true,
       "kw_recall": 1.0,
-      "elapsed_s": 8.054,
-      "answer_chars": 847,
+      "elapsed_s": 10.476,
+      "answer_chars": 879,
       "error": null,
       "pass_": true
     },
     {
       "question": "How many residential meters do we have?",
-      "expected_tool": "query_meters",
+      "expected_tool": "sql_query",
       "expected_behavior": "",
       "expected_keywords": [
         "residential"
@@ -119,17 +116,17 @@
       ],
       "tool_match": true,
       "kw_recall": 1.0,
-      "elapsed_s": 9.612,
-      "answer_chars": 104,
+      "elapsed_s": 14.165,
+      "answer_chars": 138,
       "error": null,
       "pass_": true
     },
     {
-      "question": "Predict next week consumption for meter 753832",
+      "question": "Predict next week consumption for meter 3586950",
       "expected_tool": "get_predictions",
       "expected_behavior": "",
       "expected_keywords": [
-        "753832"
+        "3586950"
       ],
       "tool_calls": [
         "get_predictions",
@@ -137,28 +134,25 @@
       ],
       "tool_match": true,
       "kw_recall": 1.0,
-      "elapsed_s": 6.489,
-      "answer_chars": 155,
+      "elapsed_s": 8.628,
+      "answer_chars": 185,
       "error": null,
       "pass_": true
     },
     {
       "question": "Show predictions for a building",
-      "expected_tool": "get_predictions",
+      "expected_tool": "sql_query",
       "expected_behavior": "",
       "expected_keywords": [
         "building"
       ],
-      "tool_calls": [
-        "get_predictions",
-        "get_predictions"
-      ],
-      "tool_match": true,
+      "tool_calls": [],
+      "tool_match": false,
       "kw_recall": 1.0,
-      "elapsed_s": 14.136,
-      "answer_chars": 620,
+      "elapsed_s": 6.368,
+      "answer_chars": 353,
       "error": null,
-      "pass_": true
+      "pass_": false
     },
     {
       "question": "What is the weekly trend?",
@@ -168,13 +162,15 @@
         "week"
       ],
       "tool_calls": [
+        "get_current_page_context",
         "query_consumption",
+        "get_current_page_context",
         "query_consumption"
       ],
       "tool_match": true,
       "kw_recall": 1.0,
-      "elapsed_s": 23.038,
-      "answer_chars": 1375,
+      "elapsed_s": 21.742,
+      "answer_chars": 1433,
       "error": null,
       "pass_": true
     },
@@ -191,8 +187,8 @@
       ],
       "tool_match": true,
       "kw_recall": 1.0,
-      "elapsed_s": 16.847,
-      "answer_chars": 1253,
+      "elapsed_s": 21.766,
+      "answer_chars": 1290,
       "error": null,
       "pass_": true
     },
@@ -210,8 +206,8 @@
       ],
       "tool_match": true,
       "kw_recall": 1.0,
-      "elapsed_s": 24.627,
-      "answer_chars": 730,
+      "elapsed_s": 20.459,
+      "answer_chars": 828,
       "error": null,
       "pass_": true
     },
@@ -220,8 +216,8 @@
       "expected_tool": "query_consumption",
       "expected_behavior": "",
       "expected_keywords": [
-        "January",
-        "February"
+        "2026-01",
+        "2026-02"
       ],
       "tool_calls": [
         "query_consumption",
@@ -232,11 +228,11 @@
         "query_consumption"
       ],
       "tool_match": true,
-      "kw_recall": 0.0,
-      "elapsed_s": 20.003,
-      "answer_chars": 434,
+      "kw_recall": 1.0,
+      "elapsed_s": 19.493,
+      "answer_chars": 510,
       "error": null,
-      "pass_": false
+      "pass_": true
     },
     {
       "question": "Draw a trend chart for 路氹城區",
@@ -251,48 +247,32 @@
       ],
       "tool_match": true,
       "kw_recall": 1.0,
-      "elapsed_s": 22.178,
-      "answer_chars": 1123,
+      "elapsed_s": 14.446,
+      "answer_chars": 444,
       "error": null,
       "pass_": true
     },
     {
-      "question": "Investigate meter 753832 anomalies",
+      "question": "Investigate meter 3164813 anomalies",
       "expected_tool": "analyze_anomaly",
       "expected_behavior": "",
       "expected_keywords": [
-        "753832"
+        "3164813"
       ],
       "tool_calls": [
         "query_anomalies",
+        "get_predictions",
         "query_anomalies",
-        "query_meters",
         "get_predictions",
         "query_meters",
-        "get_predictions",
-        "sql_query",
-        "sql_query",
-        "sql_query",
-        "sql_query",
-        "list_tables_tool",
-        "list_tables_tool",
-        "sql_query",
-        "sql_query",
-        "get_table_schema_tool",
-        "get_table_schema_tool",
-        "sql_query",
-        "sql_query",
-        "sql_query",
-        "sql_query",
-        "sql_query",
-        "sql_query",
         "query_data_quality",
+        "query_meters",
         "query_data_quality"
       ],
       "tool_match": false,
       "kw_recall": 1.0,
-      "elapsed_s": 88.746,
-      "answer_chars": 889,
+      "elapsed_s": 14.998,
+      "answer_chars": 319,
       "error": null,
       "pass_": false
     },
@@ -304,15 +284,15 @@
         "路氹城區"
       ],
       "tool_calls": [
-        "get_data_overview",
-        "get_data_overview"
+        "generate_report",
+        "generate_report"
       ],
-      "tool_match": false,
-      "kw_recall": 0.0,
-      "elapsed_s": 18.953,
-      "answer_chars": 99,
+      "tool_match": true,
+      "kw_recall": 1.0,
+      "elapsed_s": 18.787,
+      "answer_chars": 872,
       "error": null,
-      "pass_": false
+      "pass_": true
     },
     {
       "question": "What is the total daily consumption by DMA?",
@@ -332,8 +312,8 @@
       ],
       "tool_match": true,
       "kw_recall": 1.0,
-      "elapsed_s": 18.692,
-      "answer_chars": 873,
+      "elapsed_s": 26.148,
+      "answer_chars": 638,
       "error": null,
       "pass_": true
     },
@@ -355,8 +335,8 @@
       ],
       "tool_match": true,
       "kw_recall": 0.5,
-      "elapsed_s": 25.628,
-      "answer_chars": 780,
+      "elapsed_s": 21.001,
+      "answer_chars": 687,
       "error": null,
       "pass_": true
     },
@@ -376,8 +356,8 @@
       ],
       "tool_match": true,
       "kw_recall": 1.0,
-      "elapsed_s": 14.928,
-      "answer_chars": 947,
+      "elapsed_s": 15.654,
+      "answer_chars": 620,
       "error": null,
       "pass_": true
     },
@@ -395,8 +375,8 @@
       ],
       "tool_match": true,
       "kw_recall": 1.0,
-      "elapsed_s": 8.437,
-      "answer_chars": 902,
+      "elapsed_s": 11.658,
+      "answer_chars": 1057,
       "error": null,
       "pass_": true
     },
@@ -414,8 +394,8 @@
       ],
       "tool_match": true,
       "kw_recall": 1.0,
-      "elapsed_s": 8.168,
-      "answer_chars": 800,
+      "elapsed_s": 12.529,
+      "answer_chars": 975,
       "error": null,
       "pass_": true
     },
@@ -432,8 +412,8 @@
       ],
       "tool_match": true,
       "kw_recall": 1.0,
-      "elapsed_s": 20.756,
-      "answer_chars": 1654,
+      "elapsed_s": 22.327,
+      "answer_chars": 1274,
       "error": null,
       "pass_": true
     },
@@ -446,16 +426,12 @@
       ],
       "tool_calls": [
         "query_meters",
-        "query_meters",
-        "get_data_overview",
-        "query_meters",
-        "get_data_overview",
         "query_meters"
       ],
       "tool_match": true,
       "kw_recall": 1.0,
-      "elapsed_s": 14.31,
-      "answer_chars": 264,
+      "elapsed_s": 16.375,
+      "answer_chars": 621,
       "error": null,
       "pass_": true
     },
@@ -472,8 +448,8 @@
       ],
       "tool_match": true,
       "kw_recall": 1.0,
-      "elapsed_s": 13.372,
-      "answer_chars": 1227,
+      "elapsed_s": 20.925,
+      "answer_chars": 1202,
       "error": null,
       "pass_": true
     },
@@ -489,38 +465,41 @@
         "query_consumption",
         "query_consumption",
         "query_consumption",
-        "query_consumption",
-        "list_tables_tool",
-        "list_tables_tool",
-        "get_table_schema_tool",
-        "get_table_schema_tool",
-        "sql_query",
-        "sql_query",
-        "sql_query",
-        "sql_query"
+        "query_consumption"
       ],
       "tool_match": true,
       "kw_recall": 1.0,
-      "elapsed_s": 40.652,
-      "answer_chars": 866,
+      "elapsed_s": 23.904,
+      "answer_chars": 740,
       "error": null,
       "pass_": true
     },
     {
       "question": "Generate a comprehensive report",
-      "expected_tool": "generate_report",
+      "expected_tool": "get_data_overview",
       "expected_behavior": "",
       "expected_keywords": [
-        "anomalies",
-        "consumption"
+        "meters",
+        "anomalies"
       ],
-      "tool_calls": [],
-      "tool_match": false,
-      "kw_recall": 0.0,
-      "elapsed_s": 6.245,
-      "answer_chars": 403,
+      "tool_calls": [
+        "get_data_overview",
+        "get_data_overview",
+        "generate_report",
+        "generate_report",
+        "generate_report",
+        "generate_report",
+        "generate_report",
+        "generate_report",
+        "generate_report",
+        "generate_report"
+      ],
+      "tool_match": true,
+      "kw_recall": 1.0,
+      "elapsed_s": 29.919,
+      "answer_chars": 1375,
       "error": null,
-      "pass_": false
+      "pass_": true
     },
     {
       "question": "氹仔漏水",
@@ -532,9 +511,9 @@
       ],
       "tool_calls": [],
       "tool_match": false,
-      "kw_recall": 1.0,
-      "elapsed_s": 8.568,
-      "answer_chars": 90,
+      "kw_recall": 0.5,
+      "elapsed_s": 7.608,
+      "answer_chars": 112,
       "error": null,
       "pass_": true
     },
@@ -546,13 +525,22 @@
         "主分表差",
         "1)"
       ],
-      "tool_calls": [],
+      "tool_calls": [
+        "query_monthly_diff",
+        "query_monthly_diff",
+        "get_data_overview",
+        "get_data_overview",
+        "query_anomalies",
+        "query_anomalies",
+        "query_anomalies",
+        "query_anomalies"
+      ],
       "tool_match": false,
-      "kw_recall": 1.0,
-      "elapsed_s": 6.898,
-      "answer_chars": 104,
+      "kw_recall": 0.5,
+      "elapsed_s": 39.792,
+      "answer_chars": 830,
       "error": null,
-      "pass_": true
+      "pass_": false
     },
     {
       "question": "氹仔的 NRW",
@@ -564,28 +552,12 @@
       ],
       "tool_calls": [
         "query_monthly_diff",
-        "query_monthly_diff",
-        "list_tables_tool",
-        "list_tables_tool",
-        "get_table_schema_tool",
-        "get_table_schema_tool",
-        "sql_query",
-        "sql_query",
-        "get_table_schema_tool",
-        "get_table_schema_tool",
-        "sql_query",
-        "sql_query",
-        "sql_query",
-        "sql_query",
-        "sql_query",
-        "sql_query",
-        "sql_query",
-        "sql_query"
+        "query_monthly_diff"
       ],
       "tool_match": false,
       "kw_recall": 1.0,
-      "elapsed_s": 62.385,
-      "answer_chars": 541,
+      "elapsed_s": 27.879,
+      "answer_chars": 370,
       "error": null,
       "pass_": true
     },
@@ -599,12 +571,14 @@
       ],
       "tool_calls": [
         "query_data_quality",
-        "query_data_quality"
+        "get_data_overview",
+        "query_data_quality",
+        "get_data_overview"
       ],
       "tool_match": true,
       "kw_recall": 1.0,
-      "elapsed_s": 12.684,
-      "answer_chars": 636,
+      "elapsed_s": 17.744,
+      "answer_chars": 675,
       "error": null,
       "pass_": true
     },
@@ -622,8 +596,8 @@
       ],
       "tool_match": true,
       "kw_recall": 1.0,
-      "elapsed_s": 15.907,
-      "answer_chars": 628,
+      "elapsed_s": 16.63,
+      "answer_chars": 665,
       "error": null,
       "pass_": true
     }
