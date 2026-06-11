@@ -237,7 +237,7 @@
     {
       "id": "report_all",
       "question": "Generate a comprehensive report",
-      "expected_tool": "get_data_overview",
+      "expected_tool": "generate_report",
       "expected_keywords": [
         "meters",
         "anomalies"
