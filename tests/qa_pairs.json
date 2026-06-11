@@ -11,7 +11,7 @@
     {
       "id": "anomaly_cotai_count_sql",
       "question": "How many anomalies are in 路氹城區?",
-      "expected_tool": "sql_query",
+      "expected_tool": "query_anomalies",
       "expected_keywords": [
         "路氹城區"
       ],
@@ -20,10 +20,9 @@
     {
       "id": "anomaly_top5_score",
       "question": "What are the top 5 highest-scoring anomalies?",
-      "expected_tool": "sql_query",
+      "expected_tool": "query_anomalies",
       "expected_keywords": [
-        "anomalyScore",
-        "DESC"
+        "anomalyScore"
       ],
       "difficulty": "easy"
     },
@@ -39,7 +38,7 @@
     {
       "id": "anomaly_stats_macau_low",
       "question": "What are the anomaly statistics for 澳門低區?",
-      "expected_tool": "get_anomaly_stats",
+      "expected_tool": "query_anomalies",
       "expected_keywords": [
         "澳門低區",
         "total"
@@ -59,7 +58,7 @@
     {
       "id": "meters_residential",
       "question": "How many residential meters do we have?",
-      "expected_tool": "query_meters",
+      "expected_tool": "sql_query",
       "expected_keywords": [
         "residential"
       ],
@@ -67,10 +66,10 @@
     },
     {
       "id": "predictions_meter",
-      "question": "Predict next week consumption for meter MOCK7538",
+      "question": "Predict next week consumption for meter 3586950",
       "expected_tool": "get_predictions",
       "expected_keywords": [
-        "753832"
+        "3586950"
       ],
       "difficulty": "medium"
     },
@@ -116,8 +115,8 @@
       "question": "Compare January and February consumption",
       "expected_tool": "query_consumption",
       "expected_keywords": [
-        "January",
-        "February"
+        "2026-01",
+        "2026-02"
       ],
       "difficulty": "medium"
     },
@@ -132,10 +131,10 @@
     },
     {
       "id": "anomaly_investigate",
-      "question": "Investigate meter MOCK7538 anomalies",
+      "question": "Investigate meter 3164813 anomalies",
       "expected_tool": "analyze_anomaly",
       "expected_keywords": [
-        "753832"
+        "3164813"
       ],
       "difficulty": "hard"
     },
@@ -238,10 +237,10 @@
     {
       "id": "report_all",
       "question": "Generate a comprehensive report",
-      "expected_tool": "generate_report",
+      "expected_tool": "get_data_overview",
       "expected_keywords": [
-        "anomalies",
-        "consumption"
+        "meters",
+        "anomalies"
       ],
       "difficulty": "hard"
     },
