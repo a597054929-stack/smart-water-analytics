@@ -103,13 +103,12 @@ def anomaly_type_chart() -> dict:
 
 def daily_usage_chart(dma: str = "Zone-3", days: int = 30) -> dict:
     """Daily consumption trend line chart."""
-    # Find the actual DMA key in the table (real data uses Chinese names)
-    sample_rows = _query_all(
-        "SELECT DISTINCT dma FROM daily_dma WHERE dma LIKE ? ORDER BY dma LIMIT 1",
-        # f-string for safety; user input already validated at safe_tool_call
+    # Find the actual DMA key in the table (real data uses Chinese names).
+    # The DISTINCT list lets _find_dma_key fuzzy-match the caller's input
+    # (e.g. "Cotai" / "路氹" / "Zone-3") to the canonical name in SQLite.
+    all_dmas = _query_all(
+        "SELECT DISTINCT dma FROM daily_dma WHERE dma IS NOT NULL AND dma != ''"
     )
-    # Use LIKE to fuzzy-match
-    all_dmas = _query_all("SELECT DISTINCT dma FROM daily_dma WHERE dma IS NOT NULL AND dma != ''")
     dma_keys = {r["dma"] for r in all_dmas}
     actual_key = _find_dma_key(dma_keys, dma) if dma_keys else dma
 
