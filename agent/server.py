@@ -22,7 +22,7 @@ from datetime import UTC
 import uvicorn
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -534,7 +534,12 @@ async def chat(req: ChatRequest):
             chat_history.append({"role": "assistant", "content": final_answer})
             if len(chat_history) > 6:
                 chat_history[:] = chat_history[-6:]
-            save_history(chat_history)
+            # Phase 6 vuln 4: offload file write to a worker thread so
+            # the event loop stays free to flush SSE events to the
+            # client. The chat() handler runs on the event loop and
+            # sync I/O here would block SSE delivery.
+            import asyncio
+            await asyncio.to_thread(save_history, chat_history)
 
         except Exception as e:
             record_chat_failure()
@@ -598,7 +603,9 @@ async def chat_sync(req: ChatRequest):
         chat_history.append({"role": "assistant", "content": answer})
         if len(chat_history) > 6:
             chat_history[:] = chat_history[-6:]
-        save_history(chat_history)
+        # Phase 6 vuln 4: see chat() handler note above
+        import asyncio
+        await asyncio.to_thread(save_history, chat_history)
 
         clarify = _detect_clarify(answer)
         return ChatResponse(answer=answer, chart=chart, clarify=clarify, context_used=req.context)
@@ -626,8 +633,12 @@ async def index():
             "frontend/dist/dashboard.html</p>",
             status_code=503,
         )
-    with open(_DASHBOARD_HTML, encoding="utf-8") as f:
-        return HTMLResponse(f.read())
+    # Phase 6 vuln 5: FileResponse with sendfile/streaming,
+    # consistent with /data/* which uses the same pattern via
+    # StaticFiles. The dashboard.html is 144 KB so the prior
+    # f.read() wasn't a memory problem, but it broke the
+    # "one response pattern" contract.
+    return FileResponse(_DASHBOARD_HTML, media_type="text/html")
 
 
 # ── API Endpoints ─────────────────────────────────────────────
@@ -645,7 +656,9 @@ async def health():
                dependencies=[Depends(_verify_api_key), Depends(_enforce_rate_limit)])
 async def reset():
     chat_history.clear()
-    save_history(chat_history)
+    # Phase 6 vuln 4: see chat() handler note above
+    import asyncio
+    await asyncio.to_thread(save_history, chat_history)
     return {"status": "ok", "message": "Conversation reset"}
 
 
