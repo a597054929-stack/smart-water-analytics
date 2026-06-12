@@ -27,9 +27,15 @@ from pydantic import BaseModel
 
 app = FastAPI(title="Smart Water AI Assistant")
 
+# Phase 6 vuln 1: CORS whitelist from env. Default = dev-friendly
+# (vite dev server at :5173 + same-origin dashboard at :8000). Set
+# CORS_ALLOWED_ORIGINS to a comma-separated list in production.
+_CORS_DEFAULT = "http://localhost:5173,http://localhost:8000"
+_cors_env = os.environ.get("CORS_ALLOWED_ORIGINS", _CORS_DEFAULT)
+_cors_origins = [o.strip() for o in _cors_env.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -42,6 +48,18 @@ _DATA_DIR = os.path.normpath(
 )
 if os.path.isdir(_DATA_DIR):
     app.mount("/data", StaticFiles(directory=_DATA_DIR), name="data")
+else:
+    # Phase 6 vuln 6: warn loudly instead of silently skipping the
+    # mount. Operators need to know the dashboard bundle isn't being
+    # served (otherwise they'll spend an hour debugging 404s on
+    # /data/meter_info.json).
+    import logging
+    logging.warning(
+        "CORS_ALLOWED_ORIGINS-style: _DATA_DIR %s does not exist; "
+        "/data/* routes will 404. Build the dashboard first: "
+        "`cd frontend && node build.cjs`",
+        _DATA_DIR,
+    )
 
 
 class ChatRequest(BaseModel):
