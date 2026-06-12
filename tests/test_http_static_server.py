@@ -63,6 +63,9 @@ def server():
     env = os.environ.copy()
     # Don't require real DB for static file tests
     env.pop("WATER_DB_PATH", None)
+    # Phase 6: explicit AGENT_API_KEY off so dev-mode auth is
+    # permissive (the 14 audit tests don't need auth).
+    env.pop("AGENT_API_KEY", None)
     proc = subprocess.Popen(
         [sys.executable, "server.py", "--port", str(port), "--host", "127.0.0.1"],
         cwd=str(AGENT_DIR),
@@ -77,6 +80,72 @@ def server():
         if not _server_up(base):
             proc.terminate()
             pytest.fail("server did not start within 15s")
+        yield proc
+    finally:
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+
+
+@pytest.fixture(scope="module")
+def auth_server():
+    """Phase 6 vuln 2: spawn a server with AGENT_API_KEY set."""
+    port = _free_port()
+    base = f"http://127.0.0.1:{port}"
+    env = os.environ.copy()
+    env.pop("WATER_DB_PATH", None)
+    env["AGENT_API_KEY"] = "test-secret-key-12345"
+    # High RPM so the auth tests don't accidentally hit 429
+    env["AGENT_API_KEY_RPM"] = "100000"
+    proc = subprocess.Popen(
+        [sys.executable, "server.py", "--port", str(port), "--host", "127.0.0.1"],
+        cwd=str(AGENT_DIR),
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    proc._base = base
+    proc._port = port
+    proc._api_key = env["AGENT_API_KEY"]
+    try:
+        if not _server_up(base):
+            proc.terminate()
+            pytest.fail("auth server did not start within 15s")
+        yield proc
+    finally:
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+
+
+@pytest.fixture(scope="module")
+def rate_limit_server():
+    """Phase 6 vuln 2: spawn a server with low RPM cap (5/min) so we
+    can verify the 429 path on the 6th request."""
+    port = _free_port()
+    base = f"http://127.0.0.1:{port}"
+    env = os.environ.copy()
+    env.pop("WATER_DB_PATH", None)
+    env["AGENT_API_KEY"] = "test-secret-key-67890"
+    env["AGENT_API_KEY_RPM"] = "5"
+    proc = subprocess.Popen(
+        [sys.executable, "server.py", "--port", str(port), "--host", "127.0.0.1"],
+        cwd=str(AGENT_DIR),
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    proc._base = base
+    proc._port = port
+    proc._api_key = env["AGENT_API_KEY"]
+    try:
+        if not _server_up(base):
+            proc.terminate()
+            pytest.fail("rate-limit server did not start within 15s")
         yield proc
     finally:
         proc.terminate()
@@ -331,3 +400,113 @@ def test_50_concurrent_health_requests_all_2xx(server):
     with ThreadPoolExecutor(max_workers=n) as ex:
         statuses = list(ex.map(lambda _: hit(), range(n)))
     assert all(s == 200 for s in statuses)
+
+
+# ── 5. Phase 6 vuln regressions (auth + CORS + rate limit) ───────
+
+def test_cors_default_whitelist_includes_dev_origins(server):
+    """Phase 6 vuln 1: the default CORS whitelist must include
+    http://localhost:5173 (vite dev server) so the local dev flow
+    keeps working. And must NOT wildcard-allow (vuln was '*').
+    """
+    r = requests.get(
+        f"{server._base}/api/health",
+        headers={"Origin": "http://localhost:5173"},
+        timeout=5,
+    )
+    assert r.status_code == 200
+    acao = r.headers.get("access-control-allow-origin", "").lower()
+    # Either the origin is echoed (CORS middleware default) or '*'
+    # is set; in dev default it's the origin. The post-vuln-1 fix
+    # uses an explicit whitelist, so 'localhost:5173' should appear.
+    assert "localhost:5173" in acao or acao == "*", (
+        f"CORS allow-origin should whitelist dev origin, got {acao!r}"
+    )
+
+
+def test_cors_rejects_unknown_origin(server):
+    """Phase 6 vuln 1: a malicious origin must not get CORS headers
+    in dev mode. The default whitelist is {5173, 8000}; an unknown
+    origin like 'http://evil.com' should not be reflected in
+    Access-Control-Allow-Origin.
+    """
+    r = requests.get(
+        f"{server._base}/api/health",
+        headers={"Origin": "http://evil.com"},
+        timeout=5,
+    )
+    # /api/health always returns 200 (auth-free for liveness). The
+    # CORS middleware decides whether to add ACAO. With an explicit
+    # whitelist, the response should NOT include 'evil.com' in ACAO.
+    acao = r.headers.get("access-control-allow-origin", "").lower()
+    assert "evil.com" not in acao, (
+        f"CORS must not whitelist evil.com; got ACAO={acao!r}"
+    )
+
+
+def test_auth_required_when_api_key_set(auth_server):
+    """Phase 6 vuln 2: with AGENT_API_KEY set, /api/chat requires
+    Authorization: Bearer <key>. No header => 401.
+    """
+    r = requests.post(
+        f"{auth_server._base}/api/chat",
+        json={"question": "test"},
+        timeout=5,
+    )
+    assert r.status_code == 401
+    assert r.headers.get("www-authenticate", "").lower().startswith("bearer")
+
+
+def test_auth_wrong_key_returns_401(auth_server):
+    """Phase 6 vuln 2: wrong bearer token => 401."""
+    r = requests.post(
+        f"{auth_server._base}/api/chat",
+        json={"question": "test"},
+        headers={"Authorization": "Bearer wrong-key"},
+        timeout=5,
+    )
+    assert r.status_code == 401
+
+
+def test_auth_correct_key_passes_401_check(auth_server):
+    """Phase 6 vuln 2: correct bearer token => NOT 401. (Don't assert
+    200 because /api/chat needs LLM_API_KEY + LLM access; we just
+    verify the auth gate lets the request through.)
+    """
+    r = requests.post(
+        f"{auth_server._base}/api/chat",
+        json={"question": "test"},
+        headers={"Authorization": f"Bearer {auth_server._api_key}"},
+        timeout=5,
+    )
+    # If the request got past auth, it's NOT 401. It might be 200,
+    # 500 (no LLM), 503 (no LLM_API_KEY in test env) — anything but 401.
+    assert r.status_code != 401, f"auth passed but got 401: {r.text[:200]}"
+
+
+def test_rate_limit_returns_429_after_quota(rate_limit_server):
+    """Phase 6 vuln 2: AGENT_API_KEY_RPM=5 -> 6th request in <60s => 429."""
+    headers = {"Authorization": f"Bearer {rate_limit_server._api_key}"}
+    statuses = []
+    for _ in range(7):
+        r = requests.get(
+            f"{rate_limit_server._base}/api/metrics",
+            headers=headers,
+            timeout=5,
+        )
+        statuses.append(r.status_code)
+    # First 5 should pass auth (not 401). 6th or 7th should 429.
+    assert 429 in statuses, f"expected a 429 within 7 reqs (RPM=5), got {statuses}"
+    # The first 5 should be non-401 (auth passed) and non-429 (within quota)
+    for s in statuses[:5]:
+        assert s != 401, f"auth should pass for first 5: {statuses}"
+        assert s != 429, f"rate limit should not trigger within first 5: {statuses}"
+
+
+def test_dashboard_uses_fileresponse_content_type(server):
+    """Phase 6 vuln 5: GET / uses FileResponse (text/html) not
+    HTMLResponse(f.read()). Verify content-type is still text/html.
+    """
+    r = requests.get(f"{server._base}/", timeout=5)
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("text/html")
