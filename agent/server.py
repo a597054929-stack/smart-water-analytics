@@ -11,6 +11,7 @@ Features:
 import json
 import os
 import sys
+import time
 from collections import Counter
 
 sys.stdout.reconfigure(encoding="utf-8")
@@ -19,9 +20,10 @@ sys.stdout.reconfigure(encoding="utf-8")
 from datetime import UTC
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -60,6 +62,72 @@ else:
         "`cd frontend && node build.cjs`",
         _DATA_DIR,
     )
+
+
+# ── Phase 6 vuln 2: API key auth + per-IP rate limit ───────────
+# Set AGENT_API_KEY in production to require a Bearer token on
+# /api/chat, /api/chat/sync, /api/metrics, and /api/history. When
+# the env var is unset, auth is disabled (dev mode) but rate
+# limiting still applies.
+_AGENT_API_KEY = os.environ.get("AGENT_API_KEY", "")
+_RPM_LIMIT = int(os.environ.get("AGENT_API_KEY_RPM", "30"))   # per IP per minute
+_bearer = HTTPBearer(auto_error=False)
+
+
+def _verify_api_key(
+    creds: HTTPAuthorizationCredentials | None = Depends(_bearer),
+) -> str:
+    """HTTPBearer dep. If AGENT_API_KEY is set, require a matching
+    Authorization: Bearer <key> header. If unset, allow anyone (dev).
+    """
+    if not _AGENT_API_KEY:
+        return "dev-no-auth"
+    if creds is None or creds.scheme.lower() != "bearer":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing or malformed Authorization: Bearer header",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    if creds.credentials != _AGENT_API_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid API key",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return "ok"
+
+
+# Per-IP in-memory rate limiter. Sliding 60s window.
+# For multi-worker / multi-process this is per-worker only — fine for
+# small ops. A production deployment with N workers should use Redis
+# or similar. Phase 6 plan notes this as out of scope.
+class _RateLimiter:
+    def __init__(self, rpm: int) -> None:
+        self.rpm = rpm
+        self.hits: dict[str, list[float]] = {}
+
+    def check(self, ip: str) -> bool:
+        now = time.time()
+        window = [t for t in self.hits.get(ip, []) if t > now - 60]
+        if len(window) >= self.rpm:
+            self.hits[ip] = window
+            return False
+        window.append(now)
+        self.hits[ip] = window
+        return True
+
+
+_rate_limiter = _RateLimiter(_RPM_LIMIT)
+
+
+def _enforce_rate_limit(request: Request) -> None:
+    """FastAPI dep. Reject if IP exceeds the per-minute quota."""
+    ip = request.client.host if request.client else "unknown"
+    if not _rate_limiter.check(ip):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Rate limit exceeded: max {_RPM_LIMIT} req/min per IP",
+        )
 
 
 class ChatRequest(BaseModel):
@@ -288,7 +356,8 @@ def _extract_chart(messages):
     return None
 
 
-@app.post("/api/chat", tags=["chat"], summary="Streaming chat with SSE (tool events + final answer)")
+@app.post("/api/chat", tags=["chat"], summary="Streaming chat with SSE (tool events + final answer)",
+          dependencies=[Depends(_verify_api_key), Depends(_enforce_rate_limit)])
 async def chat(req: ChatRequest):
     """Streaming chat — SSE events for tool calls and final answer."""
     question = req.question.strip()
@@ -476,7 +545,8 @@ async def chat(req: ChatRequest):
 
 # ── Non-streaming fallback ────────────────────────────────────
 
-@app.post("/api/chat/sync", response_model=ChatResponse)
+@app.post("/api/chat/sync", response_model=ChatResponse,
+               dependencies=[Depends(_verify_api_key), Depends(_enforce_rate_limit)])
 async def chat_sync(req: ChatRequest):
     """Non-streaming chat (for compatibility)."""
     question = req.question.strip()
@@ -564,22 +634,29 @@ async def index():
 
 @app.get("/api/health", response_model=HealthResponse, tags=["utility"], summary="Liveness + conversation turn count")
 async def health():
+    # Phase 6 vuln 2: keep /api/health auth-free so liveness probes
+    # (k8s/ALB) work without provisioning an API key. Other
+    # sensitive routes (chat, chat_sync, history, metrics) are
+    # gated via Depends(_verify_api_key).
     return {"status": "ok", "history_turns": len(chat_history) // 2}
 
 
-@app.post("/api/reset", response_model=ResetResponse, tags=["utility"], summary="Clear in-memory conversation history")
+@app.post("/api/reset", response_model=ResetResponse, tags=["utility"], summary="Clear in-memory conversation history",
+               dependencies=[Depends(_verify_api_key), Depends(_enforce_rate_limit)])
 async def reset():
     chat_history.clear()
     save_history(chat_history)
     return {"status": "ok", "message": "Conversation reset"}
 
 
-@app.get("/api/history", response_model=HistoryResponse, tags=["utility"], summary="Last 6 conversation turns (user + assistant pairs)")
+@app.get("/api/history", response_model=HistoryResponse, tags=["utility"], summary="Last 6 conversation turns (user + assistant pairs)",
+               dependencies=[Depends(_verify_api_key), Depends(_enforce_rate_limit)])
 async def get_history():
     return {"history": chat_history}
 
 
-@app.get("/api/questions", response_model=QuestionsResponse, tags=["analytics"], summary="Full question log for usage analysis")
+@app.get("/api/questions", response_model=QuestionsResponse, tags=["analytics"], summary="Full question log for usage analysis",
+               dependencies=[Depends(_verify_api_key), Depends(_enforce_rate_limit)])
 async def get_questions():
     """Return the full question log for analysis."""
     if os.path.exists(QUESTION_LOG_FILE):
@@ -588,7 +665,8 @@ async def get_questions():
     return {"questions": []}
 
 
-@app.get("/api/metrics", response_model=MetricsResponse, tags=["analytics"], summary="In-process counters for chat/tool/failure rates")
+@app.get("/api/metrics", response_model=MetricsResponse, tags=["analytics"], summary="In-process counters for chat/tool/failure rates",
+               dependencies=[Depends(_verify_api_key), Depends(_enforce_rate_limit)])
 async def get_metrics():
     """Return current process metrics counters.
 
