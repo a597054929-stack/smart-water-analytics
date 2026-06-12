@@ -13,6 +13,7 @@ import os
 import sys
 import time
 from collections import Counter
+from pathlib import Path
 
 sys.stdout.reconfigure(encoding="utf-8")
 
@@ -45,9 +46,9 @@ app.add_middleware(
 # Serve the dashboard's data files (frontend/dist/data/*) at /data/*.
 # The dashboard's inlined JS fetches meter_info.json, anomalies.json, etc.
 # from /data/. Without this mount, every data file 404s.
-_DATA_DIR = os.path.normpath(
+_DATA_DIR = Path(os.path.normpath(
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "frontend", "dist", "data")
-)
+))
 if os.path.isdir(_DATA_DIR):
     app.mount("/data", StaticFiles(directory=_DATA_DIR), name="data")
 else:
@@ -622,6 +623,12 @@ async def chat_sync(req: ChatRequest):
 _DASHBOARD_HTML = os.path.normpath(
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "frontend", "dist", "dashboard.html")
 )
+# Phase 7: file browser UI (the /files page). Single self-contained
+# HTML with embedded CSS + JS (Lucide icons inline). Static — no auth,
+# no rate limit; the data behind it is already fetchable at /data/*.
+_FILES_HTML = os.path.normpath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "frontend", "dist", "files.html")
+)
 
 
 @app.get("/", tags=["frontend"], summary="Serve the dashboard HTML (chat + tabs)")
@@ -630,7 +637,9 @@ async def index():
         return HTMLResponse(
             "<h1>Dashboard not built</h1>"
             "<p>Run <code>cd frontend && node build.cjs</code> to build "
-            "frontend/dist/dashboard.html</p>",
+            "frontend/dist/dashboard.html</p>"
+            "<p>Phase 7: a self-contained file browser is also "
+            "available at <a href=\"/files\">/files</a>.</p>",
             status_code=503,
         )
     # Phase 6 vuln 5: FileResponse with sendfile/streaming,
@@ -639,6 +648,21 @@ async def index():
     # f.read() wasn't a memory problem, but it broke the
     # "one response pattern" contract.
     return FileResponse(_DASHBOARD_HTML, media_type="text/html")
+
+
+@app.get("/files", tags=["frontend"], summary="Phase 7 file browser (modern UI, dark/light, search, preview)")
+async def files_page():
+    """Serve the static file browser UI. Self-contained HTML; the
+    page itself does all the interactive work via fetch('/api/files')
+    + fetch('/data/<name>')."""
+    if not os.path.exists(_FILES_HTML):
+        return HTMLResponse(
+            "<h1>File browser not built</h1>"
+            "<p>frontend/dist/files.html is missing. The file should "
+            "have been committed as part of the repo.</p>",
+            status_code=503,
+        )
+    return FileResponse(_FILES_HTML, media_type="text/html")
 
 
 # ── API Endpoints ─────────────────────────────────────────────
@@ -650,6 +674,84 @@ async def health():
     # sensitive routes (chat, chat_sync, history, metrics) are
     # gated via Depends(_verify_api_key).
     return {"status": "ok", "history_turns": len(chat_history) // 2}
+
+
+# ── Phase 7: file browser UI support ──────────────────────────
+# Auth-free (file listing is the same data visible at /data/*).
+# Rate-limited like the other auth-free routes would be, but
+# listing is cheap (single dir scan) so we skip the rate limiter
+# to keep the UI snappy.
+class FileEntry(BaseModel):
+    name: str
+    size: int
+    mtime: float
+    type: str  # "json" | "db" | "html" | "png" | "unknown"
+    mime: str
+    # icon: name from the Lucide icon set the frontend will render.
+    # Server-side categorisation keeps the client small and
+    # the API response consistent across calls.
+    icon: str
+
+
+_MIME_ICONS: list[tuple[str, str, str]] = [
+    # (prefix, type, lucide icon)
+    ("image/", "image", "file-image"),
+    ("video/", "video", "file-video"),
+    ("audio/", "audio", "file-audio"),
+    ("text/html", "html", "file-code"),
+    ("text/", "text", "file-text"),
+    ("application/json", "json", "file-json"),
+    ("application/javascript", "js", "file-code"),
+    ("application/sql", "db", "database"),
+    ("application/octet-stream", "db", "database"),
+]
+
+
+def _classify(name: str, mime: str) -> tuple[str, str]:
+    """Return (type, lucide-icon) for a filename + guessed mime type."""
+    import mimetypes
+    if not mime:
+        mime, _ = mimetypes.guess_type(name)
+    for prefix, t, icon in _MIME_ICONS:
+        if mime and mime.startswith(prefix):
+            return t, icon
+    # fallbacks by extension
+    if name.endswith(".db"):
+        return "db", "database"
+    if name.endswith(".json"):
+        return "json", "file-json"
+    if name.endswith(".html") or name.endswith(".htm"):
+        return "html", "file-code"
+    if name.endswith(".geojson"):
+        return "json", "map"
+    return "unknown", "file"
+
+
+@app.get("/api/files", tags=["utility"], summary="List data files served at /data/* (auth-free, used by /files UI)")
+async def list_files():
+    """Return a flat list of files in _DATA_DIR with metadata for the
+    /files browser UI. Auth-free (file listing reveals nothing that
+    isn't already fetchable at /data/<name>)."""
+    import mimetypes
+
+    if not _DATA_DIR.is_dir():
+        return {"directory": str(_DATA_DIR), "files": []}
+
+    files: list[FileEntry] = []
+    for path in sorted(_DATA_DIR.iterdir()):
+        if not path.is_file():
+            continue
+        mime, _ = mimetypes.guess_type(path.name)
+        type_, icon = _classify(path.name, mime or "")
+        files.append(FileEntry(
+            name=path.name,
+            size=path.stat().st_size,
+            mtime=path.stat().st_mtime,
+            type=type_,
+            mime=mime or "application/octet-stream",
+            icon=icon,
+        ))
+    return {"directory": str(_DATA_DIR), "files": [f.model_dump() for f in files]}
 
 
 @app.post("/api/reset", response_model=ResetResponse, tags=["utility"], summary="Clear in-memory conversation history",

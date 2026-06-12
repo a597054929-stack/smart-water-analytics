@@ -510,3 +510,74 @@ def test_dashboard_uses_fileresponse_content_type(server):
     r = requests.get(f"{server._base}/", timeout=5)
     assert r.status_code == 200
     assert r.headers["content-type"].startswith("text/html")
+
+# ── 5b. Phase 7: file browser UI ──────────────────────────────
+
+def test_api_files_lists_real_data_dir(server):
+    """Phase 7: /api/files returns a list of files in _DATA_DIR with
+    metadata (name, size, mtime, type, mime, icon). Used by the
+    /files browser page. Auth-free (file listing is the same data
+    visible at /data/*).
+    """
+    r = requests.get(f"{server._base}/api/files", timeout=5)
+    assert r.status_code == 200
+    data = r.json()
+    assert "files" in data
+    assert "directory" in data
+    assert isinstance(data["files"], list)
+    if data["files"]:  # only assert shape when the dir has files
+        f = data["files"][0]
+        for key in ("name", "size", "mtime", "type", "mime", "icon"):
+            assert key in f, f"missing {key!r} in file entry: {f}"
+        assert isinstance(f["size"], int)
+        assert isinstance(f["mtime"], (int, float))
+        assert f["icon"]  # non-empty Lucide icon name
+
+
+def test_files_page_serves_modern_html(server):
+    """Phase 7: GET /files serves files.html with text/html.
+    Self-contained: has data-theme attr, Lucide icons, search input,
+    preview dialog.
+    """
+    r = requests.get(f"{server._base}/files", timeout=5)
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("text/html")
+    body = r.text
+    # Self-contained features
+    assert 'data-theme' in body, "files.html must support light/dark theme"
+    assert '<symbol id="i-' in body, "files.html must have inline Lucide icons"
+    assert 'id="search"' in body, "files.html must have search filter input"
+    assert '<dialog' in body, "files.html must have a preview dialog"
+    # Dark mode CSS variables must be present
+    assert '[data-theme="dark"]' in body
+    # localStorage theme persistence
+    assert 'localStorage' in body
+    # Responsive (mobile media query)
+    assert '@media' in body
+
+
+def test_files_page_uses_fileresponse_streaming(server):
+    """Phase 7: /files uses FileResponse (consistent with /data/* and
+    / from vuln 5 fix). Server reads via sendfile/streaming.
+    """
+    r = requests.get(f"{server._base}/files", timeout=5, stream=True)
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("text/html")
+    # Read in chunks (not whole file) to exercise streaming
+    total = 0
+    for chunk in r.iter_content(chunk_size=4096):
+        total += len(chunk)
+    assert total > 1000  # files.html is ~24 KB; we got it all
+
+
+def test_api_files_auth_free_with_api_key_set(auth_server):
+    """Phase 7: /api/files must NOT require auth (it is a file listing,
+    same as /api/health). The /files browser needs to work without
+    the user manually entering an API key.
+    """
+    r = requests.get(f"{auth_server._base}/api/files", timeout=5)
+    # If auth were required, this would be 401. Should be 200.
+    assert r.status_code == 200, (
+        f"/api/files must be auth-free; got {r.status_code} {r.text[:200]}"
+    )
+

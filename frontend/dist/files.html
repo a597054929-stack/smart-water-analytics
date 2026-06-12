@@ -1,0 +1,687 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Data Files · Smart Water</title>
+
+<!-- Lucide icons: inline SVG sprite (offline-friendly, no CDN). One
+     <symbol> per icon, referenced by <use href="#name"/> below. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+    </symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
+    </symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+    </symbol>
+    <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M18 6 6 18M6 6l12 12"/>
+    </symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>
+    </symbol>
+    <symbol id="i-file" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/>
+    </symbol>
+    <symbol id="i-file-json" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="M10 12a1 1 0 0 0-1 1v1a1 1 0 0 1-1 1 1 1 0 0 1 0-2h2M15 12a1 1 0 0 0 1 1v1a1 1 0 0 0 1 1 1 1 0 0 0 0-2h-2"/>
+    </symbol>
+    <symbol id="i-file-code" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="m9 18 3-3-3-3M12 15h3"/>
+    </symbol>
+    <symbol id="i-file-text" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="14" y2="17"/><line x1="8" y1="9" x2="10" y2="9"/>
+    </symbol>
+    <symbol id="i-file-image" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><circle cx="10" cy="13" r="2"/><path d="m20 17-1.09-1.09a2 2 0 0 0-2.82 0L10 22"/>
+    </symbol>
+    <symbol id="i-database" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/>
+    </symbol>
+    <symbol id="i-map" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21 3 6"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/>
+    </symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7"/><circle cx="12" cy="12" r="3"/>
+    </symbol>
+    <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+    </symbol>
+    <symbol id="i-loader" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="spin">
+      <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+    </symbol>
+  </defs>
+</svg>
+
+<style>
+/* ─── Theme tokens ─────────────────────────────────────────── */
+:root,
+[data-theme="light"] {
+  --bg: #fafafa;
+  --bg-elev: #ffffff;
+  --fg: #18181b;
+  --fg-muted: #71717a;
+  --border: #e4e4e7;
+  --accent: #2563eb;
+  --accent-fg: #ffffff;
+  --hover: #f4f4f5;
+  --shadow: 0 1px 2px rgba(0,0,0,.05), 0 1px 3px rgba(0,0,0,.05);
+  --shadow-lg: 0 10px 15px -3px rgba(0,0,0,.1), 0 4px 6px -2px rgba(0,0,0,.05);
+  --radius: 10px;
+  --radius-sm: 6px;
+  --font: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --mono: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+  --row-hover: rgba(37, 99, 235, .06);
+}
+[data-theme="dark"] {
+  --bg: #09090b;
+  --bg-elev: #18181b;
+  --fg: #fafafa;
+  --fg-muted: #a1a1aa;
+  --border: #27272a;
+  --accent: #60a5fa;
+  --accent-fg: #09090b;
+  --hover: #27272a;
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 1px 3px rgba(0,0,0,.3);
+  --shadow-lg: 0 10px 15px -3px rgba(0,0,0,.5), 0 4px 6px -2px rgba(0,0,0,.3);
+  --row-hover: rgba(96, 165, 250, .08);
+}
+
+/* ─── Reset + base ─────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+html { background: var(--bg); }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font: 14px/1.5 var(--font);
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+  transition: background .15s, color .15s;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+button { font-family: inherit; }
+
+/* ─── Layout shell ─────────────────────────────────────────── */
+.shell {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px 20px 80px;
+}
+header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 28px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+header h1 {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: -.01em;
+}
+header h1 small {
+  color: var(--fg-muted);
+  font-weight: 400;
+  font-size: 12px;
+  margin-left: 8px;
+  letter-spacing: 0;
+}
+header .spacer { flex: 1; }
+
+.search {
+  position: relative;
+  width: min(360px, 100%);
+}
+.search input {
+  width: 100%;
+  height: 36px;
+  padding: 0 36px 0 36px;
+  background: var(--bg-elev);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+.search input::placeholder { color: var(--fg-muted); }
+.search input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+.search .icon {
+  position: absolute;
+  top: 50%;
+  left: 10px;
+  transform: translateY(-50%);
+  color: var(--fg-muted);
+  pointer-events: none;
+}
+.search .icon svg { width: 16px; height: 16px; display: block; }
+.search .clear {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  background: none;
+  border: 0;
+  color: var(--fg-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: none;
+}
+.search .clear:hover { color: var(--fg); background: var(--hover); }
+.search.has-value .clear { display: block; }
+.search .clear svg { width: 14px; height: 14px; display: block; }
+
+.theme-btn {
+  background: var(--bg-elev);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  height: 36px;
+  width: 36px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.theme-btn:hover { background: var(--hover); }
+.theme-btn svg { width: 18px; height: 18px; }
+[data-theme="light"] .theme-btn .icon-moon,
+[data-theme="dark"]  .theme-btn .icon-sun { display: none; }
+
+/* ─── Stats bar ─────────────────────────────────────────── */
+.stats {
+  display: flex;
+  gap: 24px;
+  font-size: 12px;
+  color: var(--fg-muted);
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.stats strong { color: var(--fg); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* ─── Table (file list) ────────────────────────────────────── */
+.table-wrap {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+table.files {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+table.files th,
+table.files td {
+  padding: 12px 16px;
+  text-align: left;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--border);
+}
+table.files th {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--fg-muted);
+  font-weight: 500;
+  background: var(--bg);
+}
+table.files tr:last-child td { border-bottom: 0; }
+table.files tr.row { transition: background .12s; cursor: pointer; }
+table.files tr.row:hover { background: var(--row-hover); }
+table.files td.icon-cell { width: 40px; padding-left: 16px; padding-right: 0; }
+table.files td.icon-cell svg { width: 18px; height: 18px; color: var(--fg-muted); }
+table.files td.name { font-weight: 500; word-break: break-all; }
+table.files td.name .badge {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--hover);
+  color: var(--fg-muted);
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  vertical-align: middle;
+}
+table.files td.size, table.files td.mtime {
+  color: var(--fg-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+table.files td.actions { text-align: right; white-space: nowrap; }
+table.files td.actions button {
+  background: none;
+  border: 0;
+  color: var(--fg-muted);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 4px;
+}
+table.files td.actions button:hover { color: var(--fg); background: var(--hover); }
+table.files td.actions svg { width: 16px; height: 16px; display: block; }
+
+.empty {
+  padding: 60px 20px;
+  text-align: center;
+  color: var(--fg-muted);
+}
+.empty .icon { display: block; margin: 0 auto 12px; color: var(--fg-muted); }
+.empty .icon svg { width: 40px; height: 40px; }
+
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ─── Modal (preview) ─────────────────────────────────────── */
+dialog.preview {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  max-width: min(900px, 95vw);
+  max-height: 90vh;
+  width: 100%;
+}
+dialog.preview::backdrop {
+  background: rgba(0, 0, 0, .55);
+  backdrop-filter: blur(2px);
+}
+dialog.preview .panel {
+  background: var(--bg-elev);
+  color: var(--fg);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+  overflow: hidden;
+}
+dialog.preview header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  margin: 0;
+}
+dialog.preview header h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  word-break: break-all;
+  flex: 1;
+}
+dialog.preview header h2 small {
+  color: var(--fg-muted);
+  font-weight: 400;
+  margin-left: 8px;
+  font-size: 12px;
+}
+dialog.preview .close-btn {
+  background: none;
+  border: 0;
+  color: var(--fg-muted);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 4px;
+}
+dialog.preview .close-btn:hover { color: var(--fg); background: var(--hover); }
+dialog.preview .close-btn svg { width: 18px; height: 18px; display: block; }
+
+dialog.preview .body {
+  padding: 16px 18px;
+  overflow: auto;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--fg);
+  background: var(--bg);
+}
+dialog.preview .body img {
+  display: block;
+  max-width: 100%;
+  max-height: 70vh;
+  margin: 0 auto;
+  background: #fff;
+}
+dialog.preview .empty {
+  padding: 40px;
+  font-style: italic;
+}
+
+dialog.preview .footer {
+  padding: 10px 18px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--fg-muted);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+dialog.preview .footer a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+dialog.preview .footer svg { width: 14px; height: 14px; }
+
+/* ─── Responsive ──────────────────────────────────────────── */
+@media (max-width: 720px) {
+  header { gap: 10px; }
+  .search { order: 3; width: 100%; }
+  header .spacer { display: none; }
+  /* table -> card stack on mobile */
+  table.files thead { display: none; }
+  table.files, table.files tbody { display: block; }
+  table.files tr.row {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas:
+      "icon name  actions"
+      "icon meta  meta";
+    gap: 4px 12px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  table.files tr.row:last-child { border-bottom: 0; }
+  table.files td { padding: 0; border: 0; }
+  table.files td.icon-cell { grid-area: icon; align-self: center; }
+  table.files td.name { grid-area: name; }
+  table.files td.meta-cell { grid-area: meta; }
+  table.files td.meta-cell .size,
+  table.files td.meta-cell .mtime {
+    display: inline;
+    margin-right: 10px;
+  }
+  table.files td.actions { grid-area: actions; align-self: center; }
+  table.files td.size, table.files td.mtime { display: none; }
+  .stats { gap: 14px; }
+}
+
+/* keep the meta-line readable on mobile */
+table.files td.meta-cell {
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+</style>
+</head>
+<body>
+<div class="shell">
+  <header>
+    <h1>
+      Data Files
+      <small id="dir-label">/data/</small>
+    </h1>
+    <div class="spacer"></div>
+    <div class="search" id="search-wrap">
+      <span class="icon"><svg><use href="#i-search"/></svg></span>
+      <input id="search" type="search" placeholder="Filter by name or type…" autocomplete="off" spellcheck="false">
+      <button class="clear" id="clear-btn" type="button" title="Clear">
+        <svg><use href="#i-x"/></svg>
+      </button>
+    </div>
+    <button class="theme-btn" id="theme-btn" type="button" title="Toggle theme" aria-label="Toggle theme">
+      <span class="icon-sun"><svg><use href="#i-sun"/></svg></span>
+      <span class="icon-moon"><svg><use href="#i-moon"/></svg></span>
+    </button>
+  </header>
+
+  <div class="stats" id="stats">
+    <span>Loading <strong id="stat-loading">…</strong></span>
+  </div>
+
+  <div class="table-wrap">
+    <table class="files" id="files-table">
+      <thead>
+        <tr>
+          <th class="icon-cell" aria-label="Type"></th>
+          <th>Name</th>
+          <th class="size-cell">Size</th>
+          <th class="mtime-cell">Modified</th>
+          <th class="actions-cell" aria-label="Actions"></th>
+        </tr>
+      </thead>
+      <tbody id="files-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<dialog class="preview" id="preview">
+  <div class="panel">
+    <header>
+      <h2 id="preview-name">file.txt <small id="preview-meta">· 1 KB · text/plain</small></h2>
+      <button class="close-btn" type="button" title="Close" aria-label="Close">
+        <svg><use href="#i-x"/></svg>
+      </button>
+    </header>
+    <div class="body" id="preview-body">Loading…</div>
+    <div class="footer">
+      <span id="preview-footer-text">—</span>
+      <a id="preview-dl" href="#" download>
+        <svg><use href="#i-download"/></svg> download
+      </a>
+    </div>
+  </div>
+</dialog>
+
+<script>
+(() => {
+  'use strict';
+
+  // ─── Theme: respect system + persisted preference ──────────
+  const STORAGE_KEY = 'sw:theme';
+  const root = document.documentElement;
+  function applyTheme(t) {
+    root.setAttribute('data-theme', t);
+  }
+  const stored = localStorage.getItem(STORAGE_KEY);
+  if (stored === 'light' || stored === 'dark') {
+    applyTheme(stored);
+  } else {
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    applyTheme(prefersDark ? 'dark' : 'light');
+  }
+  document.getElementById('theme-btn').addEventListener('click', () => {
+    const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    applyTheme(next);
+    localStorage.setItem(STORAGE_KEY, next);
+  });
+
+  // ─── Helpers ──────────────────────────────────────────────
+  const $ = (sel) => document.querySelector(sel);
+  const tbody = $('#files-tbody');
+  const search = $('#search');
+  const searchWrap = $('#search-wrap');
+  const clearBtn = $('#clear-btn');
+  const stats = $('#stats');
+
+  const fmtSize = (n) => {
+    if (n < 1024) return n + ' B';
+    const units = ['KB', 'MB', 'GB', 'TB'];
+    let i = -1; let v = n;
+    do { v /= 1024; i++; } while (v >= 1024 && i < units.length - 1);
+    return v.toFixed(v >= 100 ? 0 : v >= 10 ? 1 : 2) + ' ' + units[i];
+  };
+  const fmtTime = (epoch) => {
+    const d = new Date(epoch * 1000);
+    const pad = (n) => String(n).padStart(2, '0');
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate())
+      + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  };
+  const iconSvg = (name) => '<svg aria-hidden="true"><use href="#i-' + name + '"/></svg>';
+  const escHtml = (s) => String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+  // ─── State ────────────────────────────────────────────────
+  let allFiles = [];
+  let filter = '';
+
+  // ─── Render ───────────────────────────────────────────────
+  function render() {
+    const q = filter.trim().toLowerCase();
+    const visible = q
+      ? allFiles.filter(f => f.name.toLowerCase().includes(q) || f.type.toLowerCase().includes(q))
+      : allFiles;
+    stats.innerHTML =
+      '<span>Total <strong>' + allFiles.length + '</strong> files</span>' +
+      '<span><strong>' + fmtSize(allFiles.reduce((a, f) => a + f.size, 0)) + '</strong></span>' +
+      (q ? '<span>Showing <strong>' + visible.length + '</strong> match' + (visible.length === 1 ? '' : 'es') + ' for “' + escHtml(filter) + '”</span>' : '');
+    if (allFiles.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" class="empty">'
+        + iconSvg('folder') + 'No data files yet. Build with <code>cd frontend && node build.cjs</code>'
+        + '</td></tr>';
+      return;
+    }
+    if (visible.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" class="empty">'
+        + iconSvg('search') + 'No files match “' + escHtml(filter) + '”'
+        + '</td></tr>';
+      return;
+    }
+    tbody.innerHTML = visible.map(f =>
+      '<tr class="row" data-name="' + escHtml(f.name) + '">'
+      + '<td class="icon-cell">' + iconSvg(f.icon || 'file') + '</td>'
+      + '<td class="name">' + escHtml(f.name)
+      + (f.type && f.type !== 'unknown' ? ' <span class="badge">' + escHtml(f.type) + '</span>' : '')
+      + '</td>'
+      + '<td class="meta-cell"><span class="size">' + fmtSize(f.size) + '</span>'
+      + '<span class="mtime">' + fmtTime(f.mtime) + '</span></td>'
+      + '<td class="actions">'
+      + '<button class="prev-btn" title="Preview" aria-label="Preview"><svg><use href="#i-eye"/></svg></button>'
+      + '<a class="dl-btn" title="Download" aria-label="Download" '
+      + 'href="/data/' + encodeURIComponent(f.name) + '" download>'
+      + '<svg><use href="#i-download"/></svg></a>'
+      + '</td>'
+      + '</tr>'
+    ).join('');
+  }
+
+  // ─── Search (live filter) ──────────────────────────────────
+  search.addEventListener('input', (e) => {
+    filter = e.target.value;
+    searchWrap.classList.toggle('has-value', filter.length > 0);
+    render();
+  });
+  clearBtn.addEventListener('click', () => {
+    search.value = '';
+    filter = '';
+    searchWrap.classList.remove('has-value');
+    render();
+    search.focus();
+  });
+
+  // ─── Load ─────────────────────────────────────────────────
+  async function load() {
+    try {
+      const r = await fetch('/api/files');
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const data = await r.json();
+      $('#dir-label').textContent = data.directory.replace(/\\/g, '/').split('/').slice(-2).join('/') + '/';
+      allFiles = data.files;
+    } catch (e) {
+      stats.innerHTML = '<span style="color:#dc2626">Failed to load: ' + escHtml(e.message) + '</span>';
+      allFiles = [];
+    }
+    render();
+  }
+
+  // ─── Preview modal ────────────────────────────────────────
+  const dlg = $('#preview');
+  const previewName = $('#preview-name');
+  const previewMeta = $('#preview-meta');
+  const previewBody = $('#preview-body');
+  const previewDl = $('#preview-dl');
+
+  function closePreview() {
+    if (typeof dlg.close === 'function') dlg.close();
+    else dlg.removeAttribute('open');
+    previewBody.innerHTML = '';
+  }
+  dlg.querySelector('.close-btn').addEventListener('click', closePreview);
+  dlg.addEventListener('click', (e) => { if (e.target === dlg) closePreview(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && dlg.open) closePreview(); });
+
+  const PREVIEW_TEXT_MAX = 256 * 1024;   // 256 KB cap for text previews
+  const PREVIEW_IMG_MAX = 4 * 1024 * 1024; // 4 MB cap for images
+
+  async function preview(file) {
+    previewName.firstChild.nodeValue = file.name;
+    previewName.querySelector('small').textContent =
+      ' · ' + fmtSize(file.size) + ' · ' + file.mime;
+    previewBody.innerHTML = 'Loading…';
+    previewDl.href = '/data/' + encodeURIComponent(file.name);
+    previewDl.setAttribute('download', file.name);
+    if (typeof dlg.showModal === 'function') dlg.showModal();
+    else dlg.setAttribute('open', '');
+
+    if (file.size > PREVIEW_IMG_MAX && file.type === 'image') {
+      previewBody.innerHTML = '<div class="empty">Image too large to preview (' + fmtSize(file.size) + '). Use download.</div>';
+      return;
+    }
+    if (file.size > PREVIEW_TEXT_MAX && (file.type === 'json' || file.type === 'text' || file.type === 'html')) {
+      previewBody.innerHTML = '<div class="empty">File too large to preview (' + fmtSize(file.size) + '). Use download.</div>';
+      return;
+    }
+
+    try {
+      const r = await fetch('/data/' + encodeURIComponent(file.name));
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      if (file.type === 'image') {
+        const blob = await r.blob();
+        const url = URL.createObjectURL(blob);
+        previewBody.innerHTML = '<img alt="' + escHtml(file.name) + '" src="' + url + '">';
+      } else if (file.type === 'json' || file.type === 'html' || file.type === 'text' || file.type === 'js' || file.name.endsWith('.geojson')) {
+        const text = await r.text();
+        previewBody.textContent = text;
+      } else {
+        // binary / db — show metadata only
+        previewBody.innerHTML = '<div class="empty">Binary file (' + file.mime + '). No inline preview. Use download.</div>';
+      }
+    } catch (e) {
+      previewBody.innerHTML = '<div class="empty">Failed to load: ' + escHtml(e.message) + '</div>';
+    }
+  }
+
+  // Delegate preview button clicks
+  tbody.addEventListener('click', (e) => {
+    const prev = e.target.closest('.prev-btn');
+    if (prev) {
+      const tr = prev.closest('tr');
+      const f = allFiles.find(f => f.name === tr.dataset.name);
+      if (f) preview(f);
+    }
+  });
+  // Delegate row click (preview on click anywhere except the
+  // download link or button — buttons stop propagation)
+  tbody.addEventListener('click', (e) => {
+    if (e.target.closest('a,button')) return;
+    const tr = e.target.closest('tr.row');
+    if (!tr) return;
+    const f = allFiles.find(f => f.name === tr.dataset.name);
+    if (f) preview(f);
+  });
+
+  // ─── Boot ─────────────────────────────────────────────────
+  load();
+})();
+</script>
+</body>
+</html>
